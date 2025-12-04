@@ -1,4 +1,4 @@
-package com.myyak.global.config;
+package com.myyak.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
