@@ -37,10 +37,9 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
 
-                // 요청 권한 설정
+                // 요청 권한 설정 (개발 중 모든 접근 허용)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(PERMIT_ALL_PATTERNS).permitAll()
-                        .anyRequest().authenticated()
+                        .anyRequest().permitAll()
                 )
 
                 // 폼 로그인 비활성화
