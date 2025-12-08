@@ -27,23 +27,31 @@ public class ScanServiceImpl implements ScanService {
     private final ObjectMapper objectMapper;
     private final DrugInfoRepository drugInfoRepository;
 
-    @Value("${ai.gemini.api-key:}")
-    private String geminiApiKey;
+    @Value("${ai.openai.api-key:}")
+    private String openaiApiKey;
 
-    @Value("${ai.gemini.model:gemini-2.0-flash}")
-    private String geminiModel;
+    @Value("${ai.openai.model:gpt-4o-mini}")
+    private String openaiModel;
 
-    private static final String GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
 
             이미지에서 의약품 정보를 추출하여 JSON 형식으로 반환하세요.
 
+            ## 중요: confidence 판단 기준
+            - "high": 1개 이상의 약품명을 명확히 읽을 수 있음
+            - "medium": 약품명이 일부 흐리거나 추론이 필요함
+            - "low": 이미지에 약품 정보가 전혀 없거나 완전히 읽을 수 없음
+
+            약품명이 하나라도 보이면 success: true, confidence: "high" 또는 "medium"으로 설정하세요.
+            처방전/약봉투가 아닌 이미지이거나 텍스트가 전혀 없을 때만 confidence: "low"로 설정하세요.
+
             ## 출력 형식:
             {
               "success": true,
-              "confidence": "high" | "medium" | "low",
+              "confidence": "high",
               "medications": [
                 {
                   "name": "약품명 전체 (용량 포함)",
@@ -54,15 +62,15 @@ public class ScanServiceImpl implements ScanService {
                   "totalCount": 14
                 }
               ],
-              "notes": "인식 불확실한 부분 설명 (없으면 null)"
+              "notes": null
             }
 
             ## 필드 설명:
             - name: 약품명과 용량 (예: "아스피린프로텍트100mg")
-            - dosage: 1회 복용량 (알 개수)
-            - frequency: 하루 복용 횟수
+            - dosage: 1회 복용량 (알 개수, 기본값 1)
+            - frequency: 하루 복용 횟수 (기본값 1)
             - timings: 복용 시간대 배열
-            - durationDays: 총 복용 일수
+            - durationDays: 총 복용 일수 (기본값 7)
             - totalCount: 총 약 개수 (dosage × frequency × durationDays)
 
             ## timings 값 (복용 시간대):
@@ -76,17 +84,15 @@ public class ScanServiceImpl implements ScanService {
             - AS_NEEDED: 필요시
 
             ## 복용 시간 해석 규칙:
-            - "1일 2회" + "아침, 저녁" → frequency: 2, timings: ["AFTER_BREAKFAST", "AFTER_DINNER"]
-            - "1일 3회" + "아침, 점심, 저녁" → frequency: 3, timings: ["AFTER_BREAKFAST", "AFTER_LUNCH", "AFTER_DINNER"]
-            - "식후" → timings에 AFTER_XXX 사용
-            - "식전" → timings에 BEFORE_XXX 사용
-            - 시간대 정보가 없으면 frequency 기반으로 추론 (2회면 아침/저녁, 3회면 아침/점심/저녁)
+            - "1일 2회" → frequency: 2, timings: ["AFTER_BREAKFAST", "AFTER_DINNER"]
+            - "1일 3회" → frequency: 3, timings: ["AFTER_BREAKFAST", "AFTER_LUNCH", "AFTER_DINNER"]
+            - 시간대 정보 없으면 기본값: ["AFTER_BREAKFAST"]
 
             ## 주의사항:
             1. 반드시 유효한 JSON만 출력 (마크다운 코드블록 없이)
-            2. 인식 불가 필드는 null
-            3. 이미지가 흐려도 약품명 패턴으로 추론
-            4. 추론 시 confidence를 "medium"으로 설정
+            2. 읽을 수 없는 필드는 기본값 사용
+            3. 약품명이 부분적으로만 보여도 최대한 추론해서 입력
+            4. 한국어 약품명, 영어 약품명 모두 인식
             """;
 
     @Override
@@ -100,8 +106,8 @@ public class ScanServiceImpl implements ScanService {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);
         }
 
-        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
-            log.warn("Gemini API key is not configured. Returning mock data.");
+        if (openaiApiKey == null || openaiApiKey.isEmpty()) {
+            log.warn("OpenAI API key is not configured. Returning mock data.");
             return createMockResponse();
         }
 
@@ -109,18 +115,18 @@ public class ScanServiceImpl implements ScanService {
             byte[] imageBytes = image.getBytes();
             String base64Image = Base64.getEncoder().encodeToString(imageBytes);
 
-            Map<String, Object> requestBody = buildGeminiRequest(base64Image, contentType);
+            Map<String, Object> requestBody = buildOpenAIRequest(base64Image, contentType);
 
-            String apiUrl = GEMINI_API_BASE + geminiModel + ":generateContent";
             String response = webClient.post()
-                    .uri(apiUrl + "?key=" + geminiApiKey)
+                    .uri(OPENAI_API_URL)
+                    .header("Authorization", "Bearer " + openaiApiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
 
-            return parseGeminiResponse(response);
+            return parseOpenAIResponse(response);
         } catch (GeneralException e) {
             throw e;
         } catch (Exception e) {
@@ -129,41 +135,52 @@ public class ScanServiceImpl implements ScanService {
         }
     }
 
-    private Map<String, Object> buildGeminiRequest(String base64Image, String mimeType) {
-        Map<String, Object> inlineData = new HashMap<>();
-        inlineData.put("mimeType", mimeType);
-        inlineData.put("data", base64Image);
+    private Map<String, Object> buildOpenAIRequest(String base64Image, String mimeType) {
+        // 이미지 URL (base64 data URL)
+        String imageUrl = "data:" + mimeType + ";base64," + base64Image;
 
-        Map<String, Object> imagePart = new HashMap<>();
-        imagePart.put("inlineData", inlineData);
+        // 이미지 content
+        Map<String, Object> imageUrlObj = new HashMap<>();
+        imageUrlObj.put("url", imageUrl);
 
-        Map<String, Object> textPart = new HashMap<>();
-        textPart.put("text", VISION_PROMPT);
+        Map<String, Object> imageContent = new HashMap<>();
+        imageContent.put("type", "image_url");
+        imageContent.put("image_url", imageUrlObj);
 
-        Map<String, Object> content = new HashMap<>();
-        content.put("parts", List.of(imagePart, textPart));
+        // 텍스트 content
+        Map<String, Object> textContent = new HashMap<>();
+        textContent.put("type", "text");
+        textContent.put("text", VISION_PROMPT);
 
+        // 메시지
+        Map<String, Object> userMessage = new HashMap<>();
+        userMessage.put("role", "user");
+        userMessage.put("content", List.of(textContent, imageContent));
+
+        // 요청 본문
         Map<String, Object> request = new HashMap<>();
-        request.put("contents", List.of(content));
+        request.put("model", openaiModel);
+        request.put("messages", List.of(userMessage));
+        request.put("max_tokens", 2000);
 
         return request;
     }
 
-    private ScanResponseDTO.ScanResult parseGeminiResponse(String response) {
+    private ScanResponseDTO.ScanResult parseOpenAIResponse(String response) {
         try {
             JsonNode root = objectMapper.readTree(response);
-            JsonNode candidates = root.path("candidates");
+            JsonNode choices = root.path("choices");
 
-            if (candidates.isEmpty()) {
+            if (choices.isEmpty()) {
                 return createLowConfidenceResponse("AI 응답을 받지 못했습니다.");
             }
 
-            String text = candidates.get(0)
+            String text = choices.get(0)
+                    .path("message")
                     .path("content")
-                    .path("parts")
-                    .get(0)
-                    .path("text")
                     .asText();
+
+            log.info("OpenAI Vision 응답: {}", text);
 
             String jsonText = extractJsonFromText(text);
             JsonNode resultJson = objectMapper.readTree(jsonText);
@@ -222,7 +239,7 @@ public class ScanServiceImpl implements ScanService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to parse Gemini response: ", e);
+            log.error("Failed to parse OpenAI response: ", e);
             return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
         }
     }
