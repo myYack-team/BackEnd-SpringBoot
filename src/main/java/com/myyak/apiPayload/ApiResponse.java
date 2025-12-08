@@ -35,6 +35,11 @@ public class ApiResponse<T> {
         return new ApiResponse<>(true, SuccessStatus._OK.getCode(), SuccessStatus._OK.getMessage(), null);
     }
 
+    // 성공 응답 - 커스텀 상태 코드 + 데이터 (별칭)
+    public static <T> ApiResponse<T> of(BaseCode code, T result) {
+        return new ApiResponse<>(true, code.getReasonHttpStatus().getCode(), code.getReasonHttpStatus().getMessage(), result);
+    }
+
     // 실패 응답
     public static <T> ApiResponse<T> onFailure(String code, String message, T data) {
         return new ApiResponse<>(false, code, message, data);
