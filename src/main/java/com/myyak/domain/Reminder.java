@@ -8,7 +8,9 @@ import lombok.*;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "reminders")
+@Table(name = "reminders", indexes = {
+    @Index(name = "idx_reminder_user_med", columnList = "user_medication_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -20,15 +22,15 @@ public class Reminder extends BaseEntity {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "medication_id", nullable = false)
-    private Medication medication;
+    @JoinColumn(name = "user_medication_id", nullable = false)
+    private UserMedication userMedication;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private MedicationTiming timing;
+    private MedicationTiming timing;  // 아침 식전, 아침 식후, 점심 식전 등
 
     @Column(nullable = false)
-    private LocalTime time;
+    private LocalTime time;  // 실제 알림 시간
 
     @Builder.Default
     private Boolean enabled = true;
