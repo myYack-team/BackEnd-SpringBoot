@@ -51,3 +51,6 @@ out/
 *.log
 *.log.*
 *.gz
+
+# firebase 키
+/src/main/resources/firebase-service-account.json
