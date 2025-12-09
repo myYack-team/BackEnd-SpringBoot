@@ -1,6 +1,7 @@
 package com.myyak.domain;
 
 import com.myyak.domain.common.BaseEntity;
+import com.myyak.domain.enums.DrugType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,13 +9,10 @@ import java.time.LocalDate;
 
 /**
  * 약물 마스터 정보 테이블
- * 식약처 e약은요 API 데이터 기반
+ * 식약처 e약은요 API + 의약품 허가정보 API 데이터 기반
  */
 @Entity
-@Table(name = "drug_info", indexes = {
-    @Index(name = "idx_drug_item_name", columnList = "itemName"),
-    @Index(name = "idx_drug_entp_name", columnList = "entpName")
-})
+@Table(name = "drug_info")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -24,10 +22,10 @@ public class DrugInfo extends BaseEntity {
     @Id
     private String itemSeq;  // 품목기준코드 (API PK)
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String itemName;  // 제품명
 
-    @Column(length = 300)
+    @Column(columnDefinition = "TEXT")
     private String entpName;  // 업체명 (제약회사)
 
     @Column(columnDefinition = "TEXT")
@@ -58,6 +56,16 @@ public class DrugInfo extends BaseEntity {
 
     private LocalDate apiUpdateDate;  // API 수정일자
 
+    // 의약품 허가정보 API 추가 필드
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private DrugType drugType;  // 전문/일반 구분
+
+    @Column(columnDefinition = "TEXT")
+    private String ingredientName;  // 주성분명
+
+    private LocalDate permitDate;  // 허가일자
+
     public void updateFromApi(String itemName, String entpName, String efficacy,
                                String useMethod, String warning, String caution,
                                String interaction, String sideEffect, String storageMethod,
@@ -74,5 +82,17 @@ public class DrugInfo extends BaseEntity {
         this.imageUrl = imageUrl;
         this.openDate = openDate;
         this.apiUpdateDate = apiUpdateDate;
+    }
+
+    public void updateFromPermitApi(String itemName, String entpName, DrugType drugType,
+                                      String ingredientName, String imageUrl, LocalDate permitDate) {
+        this.itemName = itemName;
+        this.entpName = entpName;
+        this.drugType = drugType;
+        this.ingredientName = ingredientName;
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            this.imageUrl = imageUrl;
+        }
+        this.permitDate = permitDate;
     }
 }

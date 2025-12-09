@@ -5,6 +5,7 @@ import com.myyak.converter.DrugInfoConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
+import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +31,7 @@ public class DrugApiController {
     public ApiResponse<List<DrugInfoResponseDTO.DrugInfoSummary>> searchDrugs(
             @Parameter(description = "약 이름") @RequestParam String name) {
 
-        List<DrugInfo> drugInfos = drugInfoRepository.findByItemNameContaining(name);
+        List<DrugInfo> drugInfos = drugInfoRepository.searchByKeyword(name);
         List<DrugInfoResponseDTO.DrugInfoSummary> result = drugInfos.stream()
                 .map(DrugInfoConverter::toSummary)
                 .collect(Collectors.toList());
@@ -96,6 +97,35 @@ public class DrugApiController {
     public ApiResponse<StatsResult> getStats() {
         long count = drugInfoRepository.count();
         return ApiResponse.onSuccess(new StatsResult(count));
+    }
+
+    // === 의약품 허가정보 API (전문의약품 포함) ===
+
+    @Operation(summary = "약 검색 (허가정보 API)", description = "의약품 허가정보 API에서 직접 검색 (전문의약품 포함)")
+    @GetMapping("/search/permit-api")
+    public ApiResponse<List<DrugPermitApiResponse.DrugPermitItem>> searchDrugsFromPermitApi(
+            @Parameter(description = "약 이름") @RequestParam String name) {
+
+        List<DrugPermitApiResponse.DrugPermitItem> items = drugApiService.searchFromPermitApi(name);
+        return ApiResponse.onSuccess(items);
+    }
+
+    @Operation(summary = "허가정보 전체 배치 수집", description = "의약품 허가정보 API에서 전체 데이터를 수집합니다 (주의: 매우 오래 걸림)")
+    @PostMapping("/batch/permit/all")
+    public ApiResponse<BatchResult> fetchAllFromPermitApi() {
+        int count = drugApiService.fetchAllFromPermitApi();
+        return ApiResponse.onSuccess(new BatchResult(count, "허가정보 전체 수집 완료"));
+    }
+
+    @Operation(summary = "허가정보 페이지 범위 배치 수집", description = "의약품 허가정보 API에서 특정 페이지 범위의 데이터만 수집")
+    @PostMapping("/batch/permit/range")
+    public ApiResponse<BatchResult> fetchFromPermitApiByRange(
+            @Parameter(description = "시작 페이지") @RequestParam(defaultValue = "1") int startPage,
+            @Parameter(description = "끝 페이지") @RequestParam(defaultValue = "10") int endPage,
+            @Parameter(description = "페이지당 건수") @RequestParam(defaultValue = "100") int numOfRows) {
+
+        int count = drugApiService.fetchFromPermitApiByPageRange(startPage, endPage, numOfRows);
+        return ApiResponse.onSuccess(new BatchResult(count, "허가정보 페이지 범위 수집 완료"));
     }
 
     public record BatchResult(int savedCount, String message) {}

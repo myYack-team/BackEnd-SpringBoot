@@ -1,7 +1,9 @@
 package com.myyak.service.drugApiService;
 
 import com.myyak.domain.DrugInfo;
+import com.myyak.domain.enums.DrugType;
 import com.myyak.repository.DrugInfoRepository;
+import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +33,9 @@ public class DrugApiServiceImpl implements DrugApiService {
     private String apiKey;
 
     private static final String E_DRUG_API_URL = "http://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList";
+    private static final String PERMIT_API_URL = "http://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnInq07";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter PERMIT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     @Override
     @Transactional(readOnly = true)
@@ -241,6 +245,143 @@ public class DrugApiServiceImpl implements DrugApiService {
             return LocalDate.parse(dateStr, DATE_FORMATTER);
         } catch (DateTimeParseException e) {
             log.warn("날짜 파싱 실패: {}", dateStr);
+            return null;
+        }
+    }
+
+    // === 의약품 허가정보 API 메서드 ===
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DrugPermitApiResponse.DrugPermitItem> searchFromPermitApi(String itemName) {
+        String url = UriComponentsBuilder.fromHttpUrl(PERMIT_API_URL)
+                .queryParam("serviceKey", apiKey)
+                .queryParam("item_name", itemName)
+                .queryParam("type", "json")
+                .queryParam("numOfRows", 100)
+                .build()
+                .toUriString();
+
+        log.info("허가정보 API 호출: itemName={}", itemName);
+
+        try {
+            DrugPermitApiResponse response = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(DrugPermitApiResponse.class)
+                    .block();
+
+            if (response == null || response.getBody() == null || response.getBody().getItems() == null) {
+                log.warn("허가정보 API 응답이 비어있습니다: itemName={}", itemName);
+                return Collections.emptyList();
+            }
+
+            log.info("허가정보 API 응답 성공: totalCount={}", response.getBody().getTotalCount());
+            return response.getBody().getItems();
+
+        } catch (Exception e) {
+            log.error("허가정보 API 호출 실패: itemName={}, error={}", itemName, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
+    public int fetchAllFromPermitApi() {
+        return fetchFromPermitApiByPageRange(1, Integer.MAX_VALUE, 100);
+    }
+
+    @Override
+    public int fetchFromPermitApiByPageRange(int startPage, int endPage, int numOfRows) {
+        int totalSaved = 0;
+        int pageNo = startPage;
+
+        while (pageNo <= endPage) {
+            String url = UriComponentsBuilder.fromHttpUrl(PERMIT_API_URL)
+                    .queryParam("serviceKey", apiKey)
+                    .queryParam("type", "json")
+                    .queryParam("pageNo", pageNo)
+                    .queryParam("numOfRows", numOfRows)
+                    .build()
+                    .toUriString();
+
+            log.info("허가정보 배치 수집 중: pageNo={}", pageNo);
+
+            try {
+                DrugPermitApiResponse response = webClient.get()
+                        .uri(url)
+                        .retrieve()
+                        .bodyToMono(DrugPermitApiResponse.class)
+                        .block();
+
+                if (response == null || response.getBody() == null ||
+                        response.getBody().getItems() == null || response.getBody().getItems().isEmpty()) {
+                    log.info("허가정보 더 이상 데이터가 없습니다. 수집 종료: pageNo={}", pageNo);
+                    break;
+                }
+
+                List<DrugInfo> drugInfos = response.getBody().getItems().stream()
+                        .map(this::convertFromPermitApi)
+                        .collect(Collectors.toList());
+
+                // 기존 데이터가 있으면 업데이트, 없으면 새로 저장
+                for (DrugInfo drugInfo : drugInfos) {
+                    drugInfoRepository.findById(drugInfo.getItemSeq())
+                            .ifPresentOrElse(
+                                    existing -> existing.updateFromPermitApi(
+                                            drugInfo.getItemName(),
+                                            drugInfo.getEntpName(),
+                                            drugInfo.getDrugType(),
+                                            drugInfo.getIngredientName(),
+                                            drugInfo.getImageUrl(),
+                                            drugInfo.getPermitDate()
+                                    ),
+                                    () -> drugInfoRepository.save(drugInfo)
+                            );
+                }
+
+                totalSaved += drugInfos.size();
+
+                log.info("허가정보 페이지 {} 저장 완료: {}건 (누적: {}건)", pageNo, drugInfos.size(), totalSaved);
+
+                pageNo++;
+
+                // Rate limiting (1초 대기)
+                Thread.sleep(1000);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("허가정보 배치 작업 중단됨");
+                break;
+            } catch (Exception e) {
+                log.error("허가정보 배치 수집 실패: pageNo={}, error={}", pageNo, e.getMessage());
+                pageNo++;
+            }
+        }
+
+        log.info("허가정보 배치 수집 완료: 총 {}건 저장", totalSaved);
+        return totalSaved;
+    }
+
+    private DrugInfo convertFromPermitApi(DrugPermitApiResponse.DrugPermitItem item) {
+        return DrugInfo.builder()
+                .itemSeq(item.getItemSeq())
+                .itemName(item.getItemName())
+                .entpName(item.getEntpName())
+                .drugType(DrugType.fromApiValue(item.getSpcltyPblc()))
+                .ingredientName(item.getItemIngrName())
+                .imageUrl(item.getBigPrdtImgUrl())
+                .permitDate(parsePermitDate(item.getItemPermitDate()))
+                .build();
+    }
+
+    private LocalDate parsePermitDate(String dateStr) {
+        if (dateStr == null || dateStr.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(dateStr, PERMIT_DATE_FORMATTER);
+        } catch (DateTimeParseException e) {
+            log.warn("허가일자 파싱 실패: {}", dateStr);
             return null;
         }
     }
