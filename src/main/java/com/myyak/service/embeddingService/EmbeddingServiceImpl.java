@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -132,6 +133,7 @@ public class EmbeddingServiceImpl implements EmbeddingService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public EmbeddingResponseDTO.BatchEmbeddingResult createBatchEmbeddings(int batchSize) {
         long startTime = System.currentTimeMillis();
 
@@ -175,11 +177,11 @@ public class EmbeddingServiceImpl implements EmbeddingService {
                 }
 
                 DrugEmbedding embedding = DrugEmbedding.create(itemSeq, drugInfo.getItemName(), vector);
-                drugEmbeddingRepository.save(embedding);
+                drugEmbeddingRepository.saveAndFlush(embedding);
                 successCount++;
 
-                // Rate limit 방지 (100ms 딜레이)
-                Thread.sleep(100);
+                // Rate limit 방지 (50ms 딜레이)
+                Thread.sleep(50);
 
             } catch (Exception e) {
                 log.error("Failed to create embedding for {}: {}", itemSeq, e.getMessage());
