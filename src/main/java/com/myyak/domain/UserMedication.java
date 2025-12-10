@@ -14,8 +14,10 @@ import java.time.LocalDate;
 @Table(name = "user_medications", indexes = {
     @Index(name = "idx_user_med_user", columnList = "user_id"),
     @Index(name = "idx_user_med_drug", columnList = "drug_item_seq"),
-    @Index(name = "idx_user_med_active", columnList = "isActive")
+    @Index(name = "idx_user_med_active", columnList = "isActive"),
+    @Index(name = "idx_user_med_prescription", columnList = "prescription_id")
 })
+@Setter
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -72,6 +74,10 @@ public class UserMedication extends BaseEntity {
     // 메모 (사용자가 추가로 기록하고 싶은 내용)
     @Column(length = 500)
     private String memo;
+
+    // 처방전 ID (처방전과 연결)
+    @Column(name = "prescription_id")
+    private Long prescriptionId;
 
     /**
      * 약 이름 반환 (DrugInfo가 있으면 그것을, 없으면 customDrugName)

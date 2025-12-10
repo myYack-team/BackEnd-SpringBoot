@@ -7,6 +7,8 @@ import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.repository.DrugInfoRepository;
+import com.myyak.service.embeddingService.EmbeddingService;
+import com.myyak.web.dto.EmbeddingDTO.EmbeddingResponseDTO;
 import com.myyak.web.dto.ScanDTO.ScanResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class ScanServiceImpl implements ScanService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
     private final DrugInfoRepository drugInfoRepository;
+    private final EmbeddingService embeddingService;
 
     @Value("${ai.openai.api-key:}")
     private String openaiApiKey;
@@ -34,6 +37,7 @@ public class ScanServiceImpl implements ScanService {
     private String openaiModel;
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final double SIMILAR_DRUG_MIN_SIMILARITY = 0.5;
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
@@ -97,6 +101,20 @@ public class ScanServiceImpl implements ScanService {
 
     @Override
     public ScanResponseDTO.ScanResult scanPrescription(MultipartFile image) {
+        return processScan(image, false);
+    }
+
+    @Override
+    public ScanResponseDTO.ScanResult scanPrescriptionWithEmbedding(MultipartFile image) {
+        return processScan(image, true);
+    }
+
+    /**
+     * 공통 스캔 처리 메서드
+     * @param image 처방전 이미지
+     * @param useEmbedding 임베딩 기반 유사 약물 검색 사용 여부
+     */
+    private ScanResponseDTO.ScanResult processScan(MultipartFile image, boolean useEmbedding) {
         if (image == null || image.isEmpty()) {
             throw new GeneralException(ErrorStatus.SCAN_IMAGE_REQUIRED);
         }
@@ -108,7 +126,7 @@ public class ScanServiceImpl implements ScanService {
 
         if (openaiApiKey == null || openaiApiKey.isEmpty()) {
             log.warn("OpenAI API key is not configured. Returning mock data.");
-            return createMockResponse();
+            return createMockResponse(useEmbedding);
         }
 
         try {
@@ -126,7 +144,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyToMono(String.class)
                     .block();
 
-            return parseOpenAIResponse(response);
+            return parseOpenAIResponse(response, useEmbedding);
         } catch (GeneralException e) {
             throw e;
         } catch (Exception e) {
@@ -166,7 +184,7 @@ public class ScanServiceImpl implements ScanService {
         return request;
     }
 
-    private ScanResponseDTO.ScanResult parseOpenAIResponse(String response) {
+    private ScanResponseDTO.ScanResult parseOpenAIResponse(String response, boolean useEmbedding) {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode choices = root.path("choices");
@@ -224,7 +242,21 @@ public class ScanServiceImpl implements ScanService {
                         builder.drugItemSeq(matchedDrug.getItemSeq())
                                .efficacy(matchedDrug.getEfficacy())
                                .imageUrl(matchedDrug.getImageUrl())
-                               .entpName(matchedDrug.getEntpName());
+                               .entpName(matchedDrug.getEntpName())
+                               .matchedByEmbedding(false);
+                    }
+
+                    // 임베딩 모드 + DB 매칭 실패 시 → 가장 유사한 약물 1개를 메인 결과로 설정
+                    if (useEmbedding && matchedDrug == null && name != null && !name.isBlank()) {
+                        DrugInfo similarDrug = findMostSimilarDrug(name);
+                        if (similarDrug != null) {
+                            builder.drugItemSeq(similarDrug.getItemSeq())
+                                   .efficacy(similarDrug.getEfficacy())
+                                   .imageUrl(similarDrug.getImageUrl())
+                                   .entpName(similarDrug.getEntpName())
+                                   .matchedByEmbedding(true);
+                            log.info("약물 '{}' → 임베딩 매칭: '{}'", name, similarDrug.getItemName());
+                        }
                     }
 
                     medications.add(builder.build());
@@ -241,6 +273,37 @@ public class ScanServiceImpl implements ScanService {
         } catch (Exception e) {
             log.error("Failed to parse OpenAI response: ", e);
             return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
+        }
+    }
+
+    /**
+     * 임베딩 기반으로 가장 유사한 약물 1개 찾기
+     * @param drugName OCR로 인식된 약물명
+     * @return 가장 유사한 DrugInfo (없으면 null)
+     */
+    private DrugInfo findMostSimilarDrug(String drugName) {
+        try {
+            EmbeddingResponseDTO.SimilarDrugSearchResult searchResult =
+                    embeddingService.searchSimilarDrugs(drugName, 1);
+
+            if (searchResult.getResults().isEmpty()) {
+                return null;
+            }
+
+            EmbeddingResponseDTO.SimilarDrug topMatch = searchResult.getResults().get(0);
+
+            // 유사도가 최소 기준 이상인 경우에만 반환
+            if (topMatch.getSimilarity() < SIMILAR_DRUG_MIN_SIMILARITY) {
+                log.info("약물 '{}' 유사도 {}로 기준 미달", drugName, topMatch.getSimilarity());
+                return null;
+            }
+
+            // DrugInfo 조회
+            return drugInfoRepository.findById(topMatch.getItemSeq()).orElse(null);
+
+        } catch (Exception e) {
+            log.warn("임베딩 기반 약물 검색 실패: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -294,29 +357,37 @@ public class ScanServiceImpl implements ScanService {
                 .build();
     }
 
-    private ScanResponseDTO.ScanResult createMockResponse() {
+    private ScanResponseDTO.ScanResult createMockResponse(boolean useEmbedding) {
         return ScanResponseDTO.ScanResult.builder()
                 .success(true)
                 .confidence("high")
                 .medications(List.of(
+                        // DB 매칭 성공 예시
                         ScanResponseDTO.ScannedMedication.builder()
                                 .name("아스피린프로텍트100mg")
+                                .drugItemSeq("200003933")
                                 .dosage(1)
                                 .frequency(2)
                                 .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
                                 .durationDays(30)
                                 .totalCount(60)
+                                .entpName("바이엘코리아(주)")
+                                .matchedByEmbedding(false)
                                 .build(),
+                        // 임베딩 매칭 예시 (useEmbedding=true일 때)
                         ScanResponseDTO.ScannedMedication.builder()
-                                .name("메트포르민500mg")
+                                .name("메트포민500mg")  // OCR에서 오인식된 이름
+                                .drugItemSeq(useEmbedding ? "200808001" : null)
                                 .dosage(1)
                                 .frequency(2)
                                 .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
                                 .durationDays(30)
                                 .totalCount(60)
+                                .entpName(useEmbedding ? "대웅제약(주)" : null)
+                                .matchedByEmbedding(useEmbedding ? true : null)
                                 .build()
                 ))
-                .notes(null)
+                .notes(useEmbedding ? "임베딩 모드: OCR 오인식 시 유사 약물로 자동 매칭 (Mock)" : null)
                 .build();
     }
 }

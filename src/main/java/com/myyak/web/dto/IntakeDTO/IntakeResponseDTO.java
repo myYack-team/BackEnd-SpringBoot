@@ -87,4 +87,26 @@ public class IntakeResponseDTO {
         private List<ScheduleItem> schedules;
         private DailySummary summary;
     }
+
+    // 월별 복약 요약용 DTO
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DaySummaryItem {
+        private String date;
+        private Integer totalScheduled;
+        private Integer totalTaken;
+        private String status;  // COMPLETE, PARTIAL, MISSED, PENDING, NONE
+    }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MonthlySummaryResult {
+        private Integer year;
+        private Integer month;
+        private List<DaySummaryItem> days;
+    }
 }

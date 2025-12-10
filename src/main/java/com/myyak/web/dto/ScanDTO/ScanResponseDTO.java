@@ -15,7 +15,7 @@ public class ScanResponseDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ScannedMedication {
-        private String name;             // 처방전에서 추출한 약 이름
+        private String name;             // 처방전에서 추출한 약 이름 (OCR 결과)
         private String drugItemSeq;      // 매칭된 DrugInfo의 itemSeq (없으면 null)
         private Integer dosage;
         private Integer frequency;
@@ -27,6 +27,9 @@ public class ScanResponseDTO {
         private String efficacy;         // 효능/효과
         private String imageUrl;         // 약 이미지
         private String entpName;         // 제약회사
+
+        // 매칭 방식 표시 (true: 임베딩 유사도 기반, false: DB 키워드 검색)
+        private Boolean matchedByEmbedding;
     }
 
     @Getter

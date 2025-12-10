@@ -44,4 +44,16 @@ public class IntakeController {
         }
         return ApiResponse.onSuccess(intakeService.getIntakes(userId, date));
     }
+
+    @Operation(summary = "월별 복약 요약 조회", description = "특정 월의 복약 요약 정보를 조회합니다. 각 날짜별 복약 상태(COMPLETE, PARTIAL, MISSED, PENDING, NONE)를 반환합니다.")
+    @GetMapping("/monthly-summary")
+    public ApiResponse<IntakeResponseDTO.MonthlySummaryResult> getMonthlySummary(
+            @Parameter(description = "사용자 ID")
+            @RequestParam Long userId,
+            @Parameter(description = "연도 (예: 2024)")
+            @RequestParam int year,
+            @Parameter(description = "월 (1-12)")
+            @RequestParam int month) {
+        return ApiResponse.onSuccess(intakeService.getMonthlySummary(userId, year, month));
+    }
 }
