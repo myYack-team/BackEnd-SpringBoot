@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -317,5 +318,61 @@ public class EmbeddingServiceImpl implements EmbeddingService {
             this.embedding = embedding;
             this.similarity = similarity;
         }
+    }
+
+    @Override
+    @Async
+    @Transactional
+    public void createAllEmbeddingsAsync() {
+        log.info("=== 전체 임베딩 생성 시작 ===");
+        long startTime = System.currentTimeMillis();
+
+        List<String> pendingItemSeqs = drugEmbeddingRepository.findItemSeqsWithoutEmbedding();
+        int total = pendingItemSeqs.size();
+        int successCount = 0;
+        int failCount = 0;
+
+        log.info("생성 대상: {}개", total);
+
+        for (int i = 0; i < pendingItemSeqs.size(); i++) {
+            String itemSeq = pendingItemSeqs.get(i);
+
+            try {
+                DrugInfo drugInfo = drugInfoRepository.findById(itemSeq).orElse(null);
+                if (drugInfo == null) {
+                    failCount++;
+                    continue;
+                }
+
+                float[] vector = getEmbeddingFromOpenAI(drugInfo.getItemName());
+                if (vector == null) {
+                    failCount++;
+                    continue;
+                }
+
+                DrugEmbedding embedding = DrugEmbedding.create(itemSeq, drugInfo.getItemName(), vector);
+                drugEmbeddingRepository.saveAndFlush(embedding);
+                successCount++;
+
+                // 진행률 로그 (100개마다)
+                if ((i + 1) % 100 == 0) {
+                    double progress = (i + 1) * 100.0 / total;
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    log.info("[진행] {}/{} ({}%) - 성공: {}, 실패: {}, 경과: {}초",
+                            i + 1, total, String.format("%.1f", progress), successCount, failCount, elapsed);
+                }
+
+                // Rate limit 방지
+                Thread.sleep(10);
+
+            } catch (Exception e) {
+                log.error("임베딩 생성 실패 [{}]: {}", itemSeq, e.getMessage());
+                failCount++;
+            }
+        }
+
+        long totalTime = (System.currentTimeMillis() - startTime) / 1000;
+        log.info("=== 전체 임베딩 생성 완료 ===");
+        log.info("총 {}개 중 성공: {}, 실패: {}, 소요시간: {}초", total, successCount, failCount, totalTime);
     }
 }

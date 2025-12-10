@@ -38,4 +38,10 @@ public interface EmbeddingService {
      * @return 존재 여부
      */
     boolean hasEmbedding(String itemSeq);
+
+    /**
+     * 전체 약물 임베딩 생성 (비동기)
+     * 백그라운드에서 모든 약물의 임베딩을 순차적으로 생성
+     */
+    void createAllEmbeddingsAsync();
 }

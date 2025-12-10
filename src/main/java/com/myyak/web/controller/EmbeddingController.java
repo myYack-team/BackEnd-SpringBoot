@@ -60,4 +60,11 @@ public class EmbeddingController {
         boolean exists = embeddingService.hasEmbedding(itemSeq);
         return ApiResponse.onSuccess(exists);
     }
+
+    @Operation(summary = "전체 임베딩 생성 (비동기)", description = "모든 약물의 임베딩을 백그라운드에서 생성합니다. 서버 로그에서 진행 상황을 확인하세요.")
+    @PostMapping("/generate/all")
+    public ApiResponse<String> createAllEmbeddings() {
+        embeddingService.createAllEmbeddingsAsync();
+        return ApiResponse.onSuccess("전체 임베딩 생성이 백그라운드에서 시작되었습니다. 서버 로그를 확인하세요.");
+    }
 }

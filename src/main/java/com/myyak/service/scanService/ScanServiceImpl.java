@@ -19,7 +19,6 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -38,7 +37,6 @@ public class ScanServiceImpl implements ScanService {
     private String openaiModel;
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
-    private static final int SIMILAR_DRUG_TOP_K = 5;
     private static final double SIMILAR_DRUG_MIN_SIMILARITY = 0.5;
 
     private static final String VISION_PROMPT = """
@@ -244,15 +242,20 @@ public class ScanServiceImpl implements ScanService {
                         builder.drugItemSeq(matchedDrug.getItemSeq())
                                .efficacy(matchedDrug.getEfficacy())
                                .imageUrl(matchedDrug.getImageUrl())
-                               .entpName(matchedDrug.getEntpName());
+                               .entpName(matchedDrug.getEntpName())
+                               .matchedByEmbedding(false);
                     }
 
-                    // 임베딩 모드 + DB 매칭 실패 시 유사 약물 검색
+                    // 임베딩 모드 + DB 매칭 실패 시 → 가장 유사한 약물 1개를 메인 결과로 설정
                     if (useEmbedding && matchedDrug == null && name != null && !name.isBlank()) {
-                        List<ScanResponseDTO.SimilarDrugCandidate> similarDrugs = findSimilarDrugs(name);
-                        if (!similarDrugs.isEmpty()) {
-                            builder.similarDrugs(similarDrugs);
-                            log.info("약물 '{}' DB 매칭 실패, {}개의 유사 약물 추천", name, similarDrugs.size());
+                        DrugInfo similarDrug = findMostSimilarDrug(name);
+                        if (similarDrug != null) {
+                            builder.drugItemSeq(similarDrug.getItemSeq())
+                                   .efficacy(similarDrug.getEfficacy())
+                                   .imageUrl(similarDrug.getImageUrl())
+                                   .entpName(similarDrug.getEntpName())
+                                   .matchedByEmbedding(true);
+                            log.info("약물 '{}' → 임베딩 매칭: '{}'", name, similarDrug.getItemName());
                         }
                     }
 
@@ -274,27 +277,33 @@ public class ScanServiceImpl implements ScanService {
     }
 
     /**
-     * 임베딩 기반 유사 약물 검색
+     * 임베딩 기반으로 가장 유사한 약물 1개 찾기
+     * @param drugName OCR로 인식된 약물명
+     * @return 가장 유사한 DrugInfo (없으면 null)
      */
-    private List<ScanResponseDTO.SimilarDrugCandidate> findSimilarDrugs(String drugName) {
+    private DrugInfo findMostSimilarDrug(String drugName) {
         try {
             EmbeddingResponseDTO.SimilarDrugSearchResult searchResult =
-                    embeddingService.searchSimilarDrugs(drugName, SIMILAR_DRUG_TOP_K);
+                    embeddingService.searchSimilarDrugs(drugName, 1);
 
-            return searchResult.getResults().stream()
-                    .filter(drug -> drug.getSimilarity() >= SIMILAR_DRUG_MIN_SIMILARITY)
-                    .map(drug -> ScanResponseDTO.SimilarDrugCandidate.builder()
-                            .itemSeq(drug.getItemSeq())
-                            .itemName(drug.getItemName())
-                            .entpName(drug.getEntpName())
-                            .imageUrl(drug.getImageUrl())
-                            .similarity(drug.getSimilarity())
-                            .build())
-                    .collect(Collectors.toList());
+            if (searchResult.getResults().isEmpty()) {
+                return null;
+            }
+
+            EmbeddingResponseDTO.SimilarDrug topMatch = searchResult.getResults().get(0);
+
+            // 유사도가 최소 기준 이상인 경우에만 반환
+            if (topMatch.getSimilarity() < SIMILAR_DRUG_MIN_SIMILARITY) {
+                log.info("약물 '{}' 유사도 {}로 기준 미달", drugName, topMatch.getSimilarity());
+                return null;
+            }
+
+            // DrugInfo 조회
+            return drugInfoRepository.findById(topMatch.getItemSeq()).orElse(null);
 
         } catch (Exception e) {
-            log.warn("유사 약물 검색 실패: {}", e.getMessage());
-            return List.of();
+            log.warn("임베딩 기반 약물 검색 실패: {}", e.getMessage());
+            return null;
         }
     }
 
@@ -349,47 +358,36 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private ScanResponseDTO.ScanResult createMockResponse(boolean useEmbedding) {
-        // 임베딩 모드일 때는 DB 매칭 실패 + 유사 약물 추천 예시 포함
-        List<ScanResponseDTO.SimilarDrugCandidate> mockSimilarDrugs = useEmbedding
-                ? List.of(
-                        ScanResponseDTO.SimilarDrugCandidate.builder()
-                                .itemSeq("200003933")
-                                .itemName("아스피린프로텍트정100밀리그램")
-                                .entpName("바이엘코리아(주)")
-                                .similarity(0.92)
-                                .build(),
-                        ScanResponseDTO.SimilarDrugCandidate.builder()
-                                .itemSeq("200808001")
-                                .itemName("아스피린장용정100밀리그램")
-                                .entpName("한국바이엘약품(주)")
-                                .similarity(0.87)
-                                .build()
-                )
-                : null;
-
         return ScanResponseDTO.ScanResult.builder()
                 .success(true)
                 .confidence("high")
                 .medications(List.of(
+                        // DB 매칭 성공 예시
                         ScanResponseDTO.ScannedMedication.builder()
                                 .name("아스피린프로텍트100mg")
+                                .drugItemSeq("200003933")
                                 .dosage(1)
                                 .frequency(2)
                                 .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
                                 .durationDays(30)
                                 .totalCount(60)
+                                .entpName("바이엘코리아(주)")
+                                .matchedByEmbedding(false)
                                 .build(),
+                        // 임베딩 매칭 예시 (useEmbedding=true일 때)
                         ScanResponseDTO.ScannedMedication.builder()
-                                .name("메트포르민500mg")
+                                .name("메트포민500mg")  // OCR에서 오인식된 이름
+                                .drugItemSeq(useEmbedding ? "200808001" : null)
                                 .dosage(1)
                                 .frequency(2)
                                 .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
                                 .durationDays(30)
                                 .totalCount(60)
-                                .similarDrugs(mockSimilarDrugs)
+                                .entpName(useEmbedding ? "대웅제약(주)" : null)
+                                .matchedByEmbedding(useEmbedding ? true : null)
                                 .build()
                 ))
-                .notes(useEmbedding ? "임베딩 기반 유사 약물 검색 모드 (Mock)" : null)
+                .notes(useEmbedding ? "임베딩 모드: OCR 오인식 시 유사 약물로 자동 매칭 (Mock)" : null)
                 .build();
     }
 }
