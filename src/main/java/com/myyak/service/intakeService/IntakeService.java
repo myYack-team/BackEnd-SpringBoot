@@ -10,4 +10,6 @@ public interface IntakeService {
     IntakeResponseDTO.CreateResult recordIntake(Long userId, IntakeRequestDTO.CreateRequest request);
 
     IntakeResponseDTO.DailyIntakeResult getIntakes(Long userId, LocalDate date);
+
+    IntakeResponseDTO.MonthlySummaryResult getMonthlySummary(Long userId, int year, int month);
 }
