@@ -36,13 +36,23 @@ public class ScanServiceImpl implements ScanService {
     private final DrugInfoRepository drugInfoRepository;
     private final EmbeddingService embeddingService;
 
+    @Value("${ai.vision-provider:openai}")
+    private String visionProvider;
+
     @Value("${ai.openai.api-key:}")
     private String openaiApiKey;
 
     @Value("${ai.openai.model:gpt-4o-mini}")
     private String openaiModel;
 
+    @Value("${ai.gemini.api-key:}")
+    private String geminiApiKey;
+
+    @Value("${ai.gemini.model:gemini-3-pro-preview}")
+    private String geminiModel;
+
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final double SIMILAR_DRUG_MIN_SIMILARITY = 0.5;
     private static final String DEBUG_IMAGE_DIR = "C:\\tmp\\scan_debug";
 
@@ -93,6 +103,9 @@ public class ScanServiceImpl implements ScanService {
             - 용량(mg, ml 등)은 약품명에 붙어있으면 포함 가능
 
             ## 🔍 약품명 추론 전략 (핵심):
+            이미지가 구겨진 약봉투일 수 있습니다. 텍스트가 일부 가려져 있거나, 접혀 있거나, 왜곡되어 있어도
+            일반적인 의약품 명칭과 처방전 맥락을 고려해서 올바른 단어로 자동 보정해서 추출하세요.
+
             약품명이 불명확하거나 일부만 보이는 경우, 다음 정보를 종합하여 정확한 약품명을 추론하세요:
 
             1. **효능/효과 정보 활용**: 처방전에 적힌 효능, 적응증, 질병명을 참고
@@ -171,6 +184,21 @@ public class ScanServiceImpl implements ScanService {
         // 디버깅용 이미지 저장
         saveDebugImage(image);
 
+        // Vision 프로바이더 선택
+        boolean useGemini = "gemini".equalsIgnoreCase(visionProvider);
+        log.info("Vision 프로바이더: {}", useGemini ? "Gemini" : "OpenAI");
+
+        if (useGemini) {
+            return processWithGemini(image, contentType, useEmbedding);
+        } else {
+            return processWithOpenAI(image, contentType, useEmbedding);
+        }
+    }
+
+    /**
+     * OpenAI Vision API로 처리
+     */
+    private ScanResponseDTO.ScanResult processWithOpenAI(MultipartFile image, String contentType, boolean useEmbedding) {
         if (openaiApiKey == null || openaiApiKey.isEmpty()) {
             log.warn("OpenAI API key is not configured. Returning mock data.");
             return createMockResponse(useEmbedding);
@@ -195,7 +223,46 @@ public class ScanServiceImpl implements ScanService {
         } catch (GeneralException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Vision API error: ", e);
+            log.error("OpenAI Vision API error: ", e);
+            throw new GeneralException(ErrorStatus.VISION_API_ERROR);
+        }
+    }
+
+    /**
+     * Gemini Vision API로 처리
+     */
+    private ScanResponseDTO.ScanResult processWithGemini(MultipartFile image, String contentType, boolean useEmbedding) {
+        if (geminiApiKey == null || geminiApiKey.isEmpty()) {
+            log.warn("Gemini API key is not configured. Returning mock data.");
+            return createMockResponse(useEmbedding);
+        }
+
+        try {
+            byte[] imageBytes = image.getBytes();
+            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+
+            Map<String, Object> requestBody = buildGeminiRequest(base64Image, contentType);
+
+            String geminiUrl = GEMINI_API_URL + geminiModel + ":generateContent?key=" + geminiApiKey;
+
+            long startTime = System.currentTimeMillis();
+
+            String response = webClient.post()
+                    .uri(geminiUrl)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+
+            long elapsed = System.currentTimeMillis() - startTime;
+            log.info("Gemini API 응답 시간: {}ms ({}초)", elapsed, elapsed / 1000.0);
+
+            return parseGeminiResponse(response, useEmbedding);
+        } catch (GeneralException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Gemini Vision API error: ", e);
             throw new GeneralException(ErrorStatus.VISION_API_ERROR);
         }
     }
@@ -231,6 +298,105 @@ public class ScanServiceImpl implements ScanService {
         return request;
     }
 
+    /**
+     * Gemini API 요청 빌드
+     */
+    private Map<String, Object> buildGeminiRequest(String base64Image, String mimeType) {
+        // inline_data part (이미지)
+        Map<String, Object> inlineData = new HashMap<>();
+        inlineData.put("mime_type", mimeType);
+        inlineData.put("data", base64Image);
+
+        Map<String, Object> imagePart = new HashMap<>();
+        imagePart.put("inline_data", inlineData);
+
+        // text part (프롬프트)
+        Map<String, Object> textPart = new HashMap<>();
+        textPart.put("text", VISION_PROMPT);
+
+        // contents
+        Map<String, Object> content = new HashMap<>();
+        content.put("parts", List.of(textPart, imagePart));
+
+        // 요청 본문
+        Map<String, Object> request = new HashMap<>();
+        request.put("contents", List.of(content));
+
+        // generationConfig
+        Map<String, Object> generationConfig = new HashMap<>();
+        generationConfig.put("maxOutputTokens", 8192);
+        generationConfig.put("temperature", 0.4);  // 낮은 temperature로 일관된 응답
+        request.put("generationConfig", generationConfig);
+
+        return request;
+    }
+
+    /**
+     * Gemini API 응답 파싱
+     */
+    private ScanResponseDTO.ScanResult parseGeminiResponse(String response, boolean useEmbedding) {
+        try {
+            // 원본 응답은 너무 길 수 있으므로 앞부분만 로깅 (thoughtSignature 등 제외)
+            log.debug("Gemini 원본 응답 (앞 500자): {}", response != null && response.length() > 500 ? response.substring(0, 500) + "..." : response);
+
+            JsonNode root = objectMapper.readTree(response);
+
+            // 에러 응답 체크
+            JsonNode error = root.path("error");
+            if (!error.isMissingNode()) {
+                String errorMessage = error.path("message").asText("알 수 없는 오류");
+                log.error("Gemini API 에러: {}", errorMessage);
+                return createLowConfidenceResponse("AI API 오류: " + errorMessage);
+            }
+
+            JsonNode candidates = root.path("candidates");
+
+            if (candidates.isEmpty() || !candidates.isArray() || candidates.size() == 0) {
+                log.error("Gemini 응답에 candidates가 없음: {}", response);
+                return createLowConfidenceResponse("AI 응답을 받지 못했습니다.");
+            }
+
+            // candidates[0].content.parts[0].text - 안전하게 접근
+            JsonNode firstCandidate = candidates.get(0);
+            if (firstCandidate == null) {
+                log.error("Gemini candidates[0]이 null: {}", response);
+                return createLowConfidenceResponse("AI 응답 형식 오류");
+            }
+
+            JsonNode content = firstCandidate.path("content");
+            if (content.isMissingNode()) {
+                log.error("Gemini content가 없음: {}", response);
+                return createLowConfidenceResponse("AI 응답 형식 오류");
+            }
+
+            JsonNode parts = content.path("parts");
+            if (parts.isMissingNode() || !parts.isArray() || parts.size() == 0) {
+                log.error("Gemini parts가 없거나 비어있음: {}", response);
+                return createLowConfidenceResponse("AI 응답 형식 오류");
+            }
+
+            JsonNode firstPart = parts.get(0);
+            if (firstPart == null) {
+                log.error("Gemini parts[0]이 null: {}", response);
+                return createLowConfidenceResponse("AI 응답 형식 오류");
+            }
+
+            String text = firstPart.path("text").asText();
+            if (text == null || text.isEmpty()) {
+                log.error("Gemini text가 비어있음: {}", response);
+                return createLowConfidenceResponse("AI 응답이 비어있습니다.");
+            }
+
+            log.info("Gemini Vision 응답: {}", text);
+
+            // 공통 응답 파싱 로직 사용
+            return parseVisionResponse(text, useEmbedding);
+        } catch (Exception e) {
+            log.error("Failed to parse Gemini response: ", e);
+            return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
+        }
+    }
+
     private ScanResponseDTO.ScanResult parseOpenAIResponse(String response, boolean useEmbedding) {
         try {
             JsonNode root = objectMapper.readTree(response);
@@ -247,6 +413,21 @@ public class ScanServiceImpl implements ScanService {
 
             log.info("OpenAI Vision 응답: {}", text);
 
+            // 공통 응답 파싱 로직 사용
+            return parseVisionResponse(text, useEmbedding);
+        } catch (Exception e) {
+            log.error("Failed to parse OpenAI response: ", e);
+            return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
+        }
+    }
+
+    /**
+     * Vision API 공통 응답 파싱
+     * @param text AI가 반환한 JSON 텍스트
+     * @param useEmbedding 임베딩 기반 유사 약물 검색 사용 여부
+     */
+    private ScanResponseDTO.ScanResult parseVisionResponse(String text, boolean useEmbedding) {
+        try {
             String jsonText = extractJsonFromText(text);
             JsonNode resultJson = objectMapper.readTree(jsonText);
 
@@ -323,7 +504,7 @@ public class ScanServiceImpl implements ScanService {
                     .build();
 
         } catch (Exception e) {
-            log.error("Failed to parse OpenAI response: ", e);
+            log.error("Failed to parse Vision response: ", e);
             return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
         }
     }
