@@ -18,6 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -38,6 +44,7 @@ public class ScanServiceImpl implements ScanService {
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final double SIMILAR_DRUG_MIN_SIMILARITY = 0.5;
+    private static final String DEBUG_IMAGE_DIR = "C:\\tmp\\scan_debug";
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
@@ -58,7 +65,7 @@ public class ScanServiceImpl implements ScanService {
               "confidence": "high",
               "medications": [
                 {
-                  "name": "약품명 전체 (용량 포함)",
+                  "name": "메드론정",
                   "dosage": 1,
                   "frequency": 2,
                   "timings": ["AFTER_BREAKFAST", "AFTER_DINNER"],
@@ -70,12 +77,19 @@ public class ScanServiceImpl implements ScanService {
             }
 
             ## 필드 설명:
-            - name: 약품명과 용량 (예: "아스피린프로텍트100mg")
+            - name: 순수 약품명만 (예: "메드론정", "아스피린정", "타이레놀정")
             - dosage: 1회 복용량 (알 개수, 기본값 1)
             - frequency: 하루 복용 횟수 (기본값 1)
             - timings: 복용 시간대 배열
             - durationDays: 총 복용 일수 (기본값 7)
             - totalCount: 총 약 개수 (dosage × frequency × durationDays)
+
+            ## 약품명(name) 작성 규칙 (매우 중요):
+            - 순수 약품명만 추출하세요
+            - 제외할 것: 성분명, 보관방법, 부가설명, 괄호 안 내용
+            - 좋은 예: "메드론정", "에이스타정", "아스피린프로텍트정100mg"
+            - 나쁜 예: "메드론정 (안전보관)", "에이스타정(위험보관)", "메드론정(메틸프레드니솔론)"
+            - 용량(mg, ml 등)은 약품명에 붙어있으면 포함 가능
 
             ## timings 값 (복용 시간대):
             - BEFORE_BREAKFAST: 아침 식전
@@ -123,6 +137,9 @@ public class ScanServiceImpl implements ScanService {
         if (contentType == null || !contentType.startsWith("image/")) {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);
         }
+
+        // 디버깅용 이미지 저장
+        saveDebugImage(image);
 
         if (openaiApiKey == null || openaiApiKey.isEmpty()) {
             log.warn("OpenAI API key is not configured. Returning mock data.");
@@ -237,20 +254,25 @@ public class ScanServiceImpl implements ScanService {
                                     .durationDays(medNode.path("durationDays").asInt(7))
                                     .totalCount(medNode.path("totalCount").asInt(7));
 
-                    // DrugInfo가 매칭되면 추가 정보 설정
+                    // DrugInfo가 매칭되면 추가 정보 설정 + 매칭된 약물명으로 name 업데이트
                     if (matchedDrug != null) {
-                        builder.drugItemSeq(matchedDrug.getItemSeq())
+                        builder.name(extractPureDrugName(matchedDrug.getItemName()))  // 괄호 제거한 약물명
+                               .drugItemSeq(matchedDrug.getItemSeq())
+                               .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))  // 괄호 안 한글 우선
                                .efficacy(matchedDrug.getEfficacy())
                                .imageUrl(matchedDrug.getImageUrl())
                                .entpName(matchedDrug.getEntpName())
                                .matchedByEmbedding(false);
+                        log.info("약물 '{}' → DB 매칭: '{}'", name, matchedDrug.getItemName());
                     }
 
                     // 임베딩 모드 + DB 매칭 실패 시 → 가장 유사한 약물 1개를 메인 결과로 설정
                     if (useEmbedding && matchedDrug == null && name != null && !name.isBlank()) {
                         DrugInfo similarDrug = findMostSimilarDrug(name);
                         if (similarDrug != null) {
-                            builder.drugItemSeq(similarDrug.getItemSeq())
+                            builder.name(extractPureDrugName(similarDrug.getItemName()))  // 괄호 제거한 약물명
+                                   .drugItemSeq(similarDrug.getItemSeq())
+                                   .ingredient(resolveIngredient(similarDrug.getItemName(), similarDrug.getIngredientName()))  // 괄호 안 한글 우선
                                    .efficacy(similarDrug.getEfficacy())
                                    .imageUrl(similarDrug.getImageUrl())
                                    .entpName(similarDrug.getEntpName())
@@ -348,6 +370,49 @@ public class ScanServiceImpl implements ScanService {
         return text;
     }
 
+    /**
+     * 약물명에서 괄호 안 성분명 제거
+     * 예: "메드론정(메틸프레드니솔론)" → "메드론정"
+     * 예: "아스피린프로텍트정100mg(아세틸살리실산)" → "아스피린프로텍트정100mg"
+     */
+    private String extractPureDrugName(String itemName) {
+        if (itemName == null || itemName.isBlank()) {
+            return itemName;
+        }
+        // 괄호와 그 안의 내용 제거
+        return itemName.replaceAll("\\([^)]*\\)", "").trim();
+    }
+
+    /**
+     * 약물명에서 괄호 안 한글 성분명 추출
+     * 예: "메드론정(메틸프레드니솔론)" → "메틸프레드니솔론"
+     * 예: "아스피린프로텍트정100mg(아세틸살리실산)" → "아세틸살리실산"
+     * 괄호가 없으면 null 반환
+     */
+    private String extractIngredientFromParentheses(String itemName) {
+        if (itemName == null || itemName.isBlank()) {
+            return null;
+        }
+        // 괄호 안의 내용 추출
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\(([^)]+)\\)");
+        java.util.regex.Matcher matcher = pattern.matcher(itemName);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return null;
+    }
+
+    /**
+     * 성분명 결정: 괄호 안 한글 성분명 우선, 없으면 ingredientName 사용
+     */
+    private String resolveIngredient(String itemName, String ingredientName) {
+        String fromParentheses = extractIngredientFromParentheses(itemName);
+        if (fromParentheses != null && !fromParentheses.isBlank()) {
+            return fromParentheses;
+        }
+        return ingredientName;
+    }
+
     private ScanResponseDTO.ScanResult createLowConfidenceResponse(String notes) {
         return ScanResponseDTO.ScanResult.builder()
                 .success(false)
@@ -355,6 +420,38 @@ public class ScanServiceImpl implements ScanService {
                 .medications(List.of())
                 .notes(notes)
                 .build();
+    }
+
+    /**
+     * 디버깅용 이미지 저장
+     * @param image 업로드된 이미지
+     */
+    private void saveDebugImage(MultipartFile image) {
+        try {
+            // 디렉토리 생성
+            Path debugDir = Paths.get(DEBUG_IMAGE_DIR);
+            if (!Files.exists(debugDir)) {
+                Files.createDirectories(debugDir);
+            }
+
+            // 파일명 생성: scan_yyyyMMdd_HHmmss_SSS.확장자
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"));
+            String originalFilename = image.getOriginalFilename();
+            String extension = "png"; // 기본값
+            if (originalFilename != null && originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1);
+            }
+            String filename = String.format("scan_%s.%s", timestamp, extension);
+
+            // 파일 저장
+            Path filePath = debugDir.resolve(filename);
+            Files.write(filePath, image.getBytes());
+
+            log.info("[DEBUG] 스캔 이미지 저장: {} ({}x? bytes: {})",
+                    filePath.toAbsolutePath(), image.getContentType(), image.getSize());
+        } catch (IOException e) {
+            log.warn("[DEBUG] 이미지 저장 실패: {}", e.getMessage());
+        }
     }
 
     private ScanResponseDTO.ScanResult createMockResponse(boolean useEmbedding) {

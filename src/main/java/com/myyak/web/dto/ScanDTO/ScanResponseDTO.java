@@ -15,7 +15,7 @@ public class ScanResponseDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ScannedMedication {
-        private String name;             // 처방전에서 추출한 약 이름 (OCR 결과)
+        private String name;             // 약품명 (괄호 안 성분명 제외)
         private String drugItemSeq;      // 매칭된 DrugInfo의 itemSeq (없으면 null)
         private Integer dosage;
         private Integer frequency;
@@ -24,6 +24,7 @@ public class ScanResponseDTO {
         private Integer totalCount;
 
         // DrugInfo에서 가져온 정보 (매칭된 경우)
+        private String ingredient;       // 주성분명 (예: 메틸프레드니솔론)
         private String efficacy;         // 효능/효과
         private String imageUrl;         // 약 이미지
         private String entpName;         // 제약회사
