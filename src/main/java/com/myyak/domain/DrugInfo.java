@@ -30,7 +30,7 @@ public class DrugInfo extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String ingredientKr;  // 한글 성분명 (파싱: "메틸프레드니솔론")
-
+1
     @Column(columnDefinition = "TEXT")
     private String entpName;  // 업체명 (제약회사)
 

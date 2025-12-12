@@ -53,6 +53,7 @@ public class MedicationConverter {
         DrugInfo drugInfo = medication.getDrugInfo();
         String imageUrl = drugInfo != null ? drugInfo.getImageUrl() : null;
         String displayName = drugInfo != null ? drugInfo.getDisplayName() : null;
+        String ingredientKr = drugInfo != null ? drugInfo.getIngredientKr() : null;
 
         List<MedicationTiming> timings = reminders.stream()
                 .map(Reminder::getTiming)
@@ -72,6 +73,7 @@ public class MedicationConverter {
                 .id(medication.getId())
                 .drugName(medication.getDrugName())
                 .displayName(displayName)
+                .ingredientKr(ingredientKr)
                 .imageUrl(imageUrl)
                 .dosage(parseDosage(medication.getDosage()))
                 .frequency(medication.getFrequency())

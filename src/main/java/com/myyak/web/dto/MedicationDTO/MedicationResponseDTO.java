@@ -37,6 +37,7 @@ public class MedicationResponseDTO {
         private Long id;
         private String drugName;         // 약 이름
         private String displayName;      // 표시용 약물명 (한글 이름만)
+        private String ingredientKr;     // 한글 성분명
         private String imageUrl;         // 약 이미지 (DrugInfo에서)
         private Integer dosage;
         private Integer frequency;
