@@ -93,12 +93,25 @@ public class IntakeConverter {
                         // 해당 날짜 + 해당 시간대(timing)에 복용 기록 찾기
                         Intake todayIntake = findIntakeForDateAndTiming(medicationIntakes, date, timing);
 
+                        // DrugInfo에서 displayName, ingredientKr, imageUrl 가져오기
+                        String displayName = null;
+                        String ingredientKr = null;
+                        String imageUrl = null;
+                        if (um.getDrugInfo() != null) {
+                            displayName = um.getDrugInfo().getDisplayName();
+                            ingredientKr = um.getDrugInfo().getIngredientKr();
+                            imageUrl = um.getDrugInfo().getImageUrl();
+                        }
+
                         return IntakeResponseDTO.ScheduleMedication.builder()
                                 .id(um.getId())
                                 .name(um.getDrugName())
+                                .displayName(displayName)
+                                .ingredientKr(ingredientKr)
                                 .dosage(parseDosage(um.getDosage()))
                                 .taken(todayIntake != null)
                                 .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
+                                .imageUrl(imageUrl)
                                 .build();
                     })
                     .collect(Collectors.toList());
