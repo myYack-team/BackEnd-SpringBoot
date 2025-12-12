@@ -57,6 +57,9 @@ dependencies {
 	// Firebase Admin SDK (FCM Push 알림)
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
 
+	// Jsoup (HTML 파싱 - 크롤링용)
+	implementation 'org.jsoup:jsoup:1.17.2'
+
 	// DevTools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 

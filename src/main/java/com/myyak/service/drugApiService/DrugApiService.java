@@ -54,4 +54,14 @@ public interface DrugApiService {
      * 허가정보 API 특정 페이지 범위 수집
      */
     int fetchFromPermitApiByPageRange(int startPage, int endPage, int numOfRows);
+
+    // === 통합 배치 API ===
+
+    /**
+     * 모든 데이터 소스에서 순차적으로 데이터 수집
+     * 1. e약은요 API
+     * 2. 허가정보 API
+     * 3. 의약품안전나라 크롤링 (효능 보완)
+     */
+    void fetchFromAllSources();
 }

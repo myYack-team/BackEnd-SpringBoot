@@ -3,6 +3,7 @@ package com.myyak.service.drugApiService;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.DrugType;
 import com.myyak.repository.DrugInfoRepository;
+import com.myyak.service.drugCrawlerService.DrugCrawlerService;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class DrugApiServiceImpl implements DrugApiService {
 
     private final WebClient webClient;
     private final DrugInfoRepository drugInfoRepository;
+    private final DrugCrawlerService drugCrawlerService;
 
     @Value("${api.data.go.kr.key}")
     private String apiKey;
@@ -429,5 +431,35 @@ public class DrugApiServiceImpl implements DrugApiService {
             log.warn("허가일자 파싱 실패: {}", dateStr);
             return null;
         }
+    }
+
+    // === 통합 배치 메서드 ===
+
+    @Override
+    public void fetchFromAllSources() {
+        log.info("========== 통합 배치 시작 ==========");
+        long startTime = System.currentTimeMillis();
+
+        // 1. e약은요 API 수집
+        log.info("[1/3] e약은요 API 수집 시작");
+        int easyDrugCount = fetchAllDrugs();
+        log.info("[1/3] e약은요 API 수집 완료: {}건", easyDrugCount);
+
+        // 2. 허가정보 API 수집
+        log.info("[2/3] 허가정보 API 수집 시작");
+        int permitCount = fetchAllFromPermitApi();
+        log.info("[2/3] 허가정보 API 수집 완료: {}건", permitCount);
+
+        // 3. 크롤링으로 효능 보완
+        log.info("[3/3] 의약품안전나라 크롤링 시작 (효능 보완)");
+        int crawlCount = drugCrawlerService.crawlEfficacyForMissingDrugs();
+        log.info("[3/3] 크롤링 완료: {}건 업데이트", crawlCount);
+
+        long endTime = System.currentTimeMillis();
+        long duration = (endTime - startTime) / 1000;
+
+        log.info("========== 통합 배치 완료 ==========");
+        log.info("총 소요시간: {}초", duration);
+        log.info("e약은요: {}건, 허가정보: {}건, 크롤링: {}건", easyDrugCount, permitCount, crawlCount);
     }
 }

@@ -32,4 +32,12 @@ public interface DrugInfoRepository extends JpaRepository<DrugInfo, String> {
     // 약 이름으로 검색 (대소문자 무시)
     @Query("SELECT d FROM DrugInfo d WHERE LOWER(d.itemName) LIKE LOWER(CONCAT('%', :name, '%'))")
     List<DrugInfo> findByItemNameIgnoreCase(@Param("name") String name);
+
+    // 효능 정보가 없는 약물 조회
+    @Query("SELECT d FROM DrugInfo d WHERE d.efficacy IS NULL OR d.efficacy = ''")
+    List<DrugInfo> findByEfficacyIsNullOrEmpty();
+
+    // 효능 정보가 없는 약물 수 조회
+    @Query("SELECT COUNT(d) FROM DrugInfo d WHERE d.efficacy IS NULL OR d.efficacy = ''")
+    long countByEfficacyIsNullOrEmpty();
 }

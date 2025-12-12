@@ -121,4 +121,13 @@ public class DrugInfo extends BaseEntity {
         }
         this.permitDate = permitDate;
     }
+
+    /**
+     * 크롤링으로 효능 정보만 업데이트
+     */
+    public void updateEfficacy(String efficacy) {
+        if (efficacy != null && !efficacy.isBlank()) {
+            this.efficacy = efficacy;
+        }
+    }
 }

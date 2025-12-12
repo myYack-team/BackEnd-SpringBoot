@@ -5,6 +5,7 @@ import com.myyak.converter.DrugInfoConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
+import com.myyak.service.drugCrawlerService.DrugCrawlerService;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
@@ -28,6 +29,7 @@ public class DrugApiController {
 
     private final DrugApiService drugApiService;
     private final DrugInfoRepository drugInfoRepository;
+    private final DrugCrawlerService drugCrawlerService;
 
     @Operation(summary = "약 검색 (DB)", description = "DB에서 약 이름으로 검색")
     @GetMapping("/search")
@@ -143,6 +145,31 @@ public class DrugApiController {
 
         int count = drugApiService.fetchFromPermitApiByPageRange(startPage, endPage, numOfRows);
         return ApiResponse.onSuccess(new BatchResult(count, "허가정보 페이지 범위 수집 완료"));
+    }
+
+    // === 크롤링 API ===
+
+    @Operation(summary = "효능 크롤링", description = "효능 정보가 없는 약물에 대해 의약품안전나라에서 크롤링 (주의: 시간이 오래 걸림)")
+    @PostMapping("/batch/crawl/efficacy")
+    public ApiResponse<BatchResult> crawlEfficacy() {
+        int count = drugCrawlerService.crawlEfficacyForMissingDrugs();
+        return ApiResponse.onSuccess(new BatchResult(count, "크롤링 완료"));
+    }
+
+    @Operation(summary = "크롤링 대상 수 조회", description = "효능 정보가 없는 약물 수 조회")
+    @GetMapping("/stats/without-efficacy")
+    public ApiResponse<StatsResult> getCountWithoutEfficacy() {
+        long count = drugCrawlerService.countDrugsWithoutEfficacy();
+        return ApiResponse.onSuccess(new StatsResult(count));
+    }
+
+    // === 통합 배치 API ===
+
+    @Operation(summary = "통합 배치 수집", description = "모든 데이터 소스에서 순차적으로 수집 (e약은요 → 허가정보 → 크롤링). 매우 오래 걸림!")
+    @PostMapping("/batch/all-sources")
+    public ApiResponse<String> fetchFromAllSources() {
+        drugApiService.fetchFromAllSources();
+        return ApiResponse.onSuccess("통합 배치 완료");
     }
 
     public record BatchResult(int savedCount, String message) {}
