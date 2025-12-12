@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class ReminderResponseDTO {
@@ -17,10 +18,12 @@ public class ReminderResponseDTO {
     public static class ReminderItem {
         private Long id;
         private Long medicationId;
+        private Long supplementId;  // 영양제인 경우
         private String medicationName;
         private String time;
         private MedicationTiming timing;
         private Boolean enabled;
+        private LocalDateTime snoozeUntil;  // 스누즈 시간
     }
 
     @Getter
@@ -49,5 +52,15 @@ public class ReminderResponseDTO {
     public static class ToggleResult {
         private Long id;
         private Boolean enabled;
+    }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SnoozeResult {
+        private Long id;
+        private LocalDateTime snoozeUntil;
+        private Integer snoozeMinutes;
     }
 }
