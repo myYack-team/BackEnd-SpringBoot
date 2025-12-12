@@ -23,7 +23,13 @@ public class DrugInfo extends BaseEntity {
     private String itemSeq;  // 품목기준코드 (API PK)
 
     @Column(nullable = false, columnDefinition = "TEXT")
-    private String itemName;  // 제품명
+    private String itemName;  // 제품명 (원본: "메드론정4밀리그람(메틸프레드니솔론)")
+
+    @Column(columnDefinition = "TEXT")
+    private String displayName;  // 표시용 약물명 (파싱: "메드론정4밀리그람")
+
+    @Column(columnDefinition = "TEXT")
+    private String ingredientKr;  // 한글 성분명 (파싱: "메틸프레드니솔론")
 
     @Column(columnDefinition = "TEXT")
     private String entpName;  // 업체명 (제약회사)
@@ -66,11 +72,14 @@ public class DrugInfo extends BaseEntity {
 
     private LocalDate permitDate;  // 허가일자
 
-    public void updateFromApi(String itemName, String entpName, String efficacy,
+    public void updateFromApi(String itemName, String displayName, String ingredientKr,
+                               String entpName, String efficacy,
                                String useMethod, String warning, String caution,
                                String interaction, String sideEffect, String storageMethod,
                                String imageUrl, LocalDate openDate, LocalDate apiUpdateDate) {
         this.itemName = itemName;
+        this.displayName = displayName;
+        this.ingredientKr = ingredientKr;
         this.entpName = entpName;
         this.efficacy = efficacy;
         this.useMethod = useMethod;
@@ -84,12 +93,29 @@ public class DrugInfo extends BaseEntity {
         this.apiUpdateDate = apiUpdateDate;
     }
 
-    public void updateFromPermitApi(String itemName, String entpName, DrugType drugType,
-                                      String ingredientName, String imageUrl, LocalDate permitDate) {
+    public void updateFromPermitApi(String itemName, String displayName, String ingredientKr,
+                                      String entpName, DrugType drugType,
+                                      String ingredientName, String efficacy, String useMethod,
+                                      String caution, String storageMethod, String imageUrl, LocalDate permitDate) {
         this.itemName = itemName;
+        this.displayName = displayName;
+        this.ingredientKr = ingredientKr;
         this.entpName = entpName;
         this.drugType = drugType;
         this.ingredientName = ingredientName;
+        // efficacy 등은 기존 값이 없을 때만 업데이트 (e약은요 API 데이터 우선)
+        if ((this.efficacy == null || this.efficacy.isBlank()) && efficacy != null) {
+            this.efficacy = efficacy;
+        }
+        if ((this.useMethod == null || this.useMethod.isBlank()) && useMethod != null) {
+            this.useMethod = useMethod;
+        }
+        if ((this.caution == null || this.caution.isBlank()) && caution != null) {
+            this.caution = caution;
+        }
+        if ((this.storageMethod == null || this.storageMethod.isBlank()) && storageMethod != null) {
+            this.storageMethod = storageMethod;
+        }
         if (imageUrl != null && !imageUrl.isBlank()) {
             this.imageUrl = imageUrl;
         }
