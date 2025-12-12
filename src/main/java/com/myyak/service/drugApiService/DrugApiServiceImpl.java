@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import com.myyak.util.DrugNameParser;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -122,6 +124,8 @@ public class DrugApiServiceImpl implements DrugApiService {
                     .ifPresentOrElse(
                             existing -> existing.updateFromApi(
                                     drugInfo.getItemName(),
+                                    drugInfo.getDisplayName(),
+                                    drugInfo.getIngredientKr(),
                                     drugInfo.getEntpName(),
                                     drugInfo.getEfficacy(),
                                     drugInfo.getUseMethod(),
@@ -220,9 +224,13 @@ public class DrugApiServiceImpl implements DrugApiService {
     }
 
     private DrugInfo convertToDrugInfo(EasyDrugApiResponse.EasyDrugItem item) {
+        DrugNameParser.ParsedDrugName parsed = DrugNameParser.parse(item.getItemName());
+
         return DrugInfo.builder()
                 .itemSeq(item.getItemSeq())
                 .itemName(item.getItemName())
+                .displayName(parsed.displayName())
+                .ingredientKr(parsed.ingredientKr())
                 .entpName(item.getEntpName())
                 .efficacy(item.getEfcyQesitm())
                 .useMethod(item.getUseMethodQesitm())
@@ -329,9 +337,15 @@ public class DrugApiServiceImpl implements DrugApiService {
                             .ifPresentOrElse(
                                     existing -> existing.updateFromPermitApi(
                                             drugInfo.getItemName(),
+                                            drugInfo.getDisplayName(),
+                                            drugInfo.getIngredientKr(),
                                             drugInfo.getEntpName(),
                                             drugInfo.getDrugType(),
                                             drugInfo.getIngredientName(),
+                                            drugInfo.getEfficacy(),
+                                            drugInfo.getUseMethod(),
+                                            drugInfo.getCaution(),
+                                            drugInfo.getStorageMethod(),
                                             drugInfo.getImageUrl(),
                                             drugInfo.getPermitDate()
                                     ),
@@ -363,15 +377,46 @@ public class DrugApiServiceImpl implements DrugApiService {
     }
 
     private DrugInfo convertFromPermitApi(DrugPermitApiResponse.DrugPermitItem item) {
+        DrugNameParser.ParsedDrugName parsed = DrugNameParser.parse(item.getItemName());
+
         return DrugInfo.builder()
                 .itemSeq(item.getItemSeq())
                 .itemName(item.getItemName())
+                .displayName(parsed.displayName())
+                .ingredientKr(parsed.ingredientKr())
                 .entpName(item.getEntpName())
                 .drugType(DrugType.fromApiValue(item.getSpcltyPblc()))
                 .ingredientName(item.getItemIngrName())
+                .efficacy(parseDocData(item.getEeDocData()))
+                .useMethod(parseDocData(item.getUdDocData()))
+                .caution(parseDocData(item.getNbDocData()))
+                .storageMethod(item.getStorageMethod())
                 .imageUrl(item.getBigPrdtImgUrl())
                 .permitDate(parsePermitDate(item.getItemPermitDate()))
                 .build();
+    }
+
+    /**
+     * API에서 받은 DOC_DATA를 파싱하여 텍스트 추출
+     * XML 태그가 포함된 경우 태그를 제거하고 내용만 추출
+     */
+    private String parseDocData(String docData) {
+        if (docData == null || docData.isBlank()) {
+            return null;
+        }
+
+        // XML 태그 제거 (간단한 정규식 사용)
+        // <![CDATA[...]]> 처리
+        String result = docData.replaceAll("<!\\[CDATA\\[", "")
+                               .replaceAll("\\]\\]>", "");
+
+        // XML 태그 제거
+        result = result.replaceAll("<[^>]+>", " ");
+
+        // 연속된 공백 정리 및 trim
+        result = result.replaceAll("\\s+", " ").trim();
+
+        return result.isEmpty() ? null : result;
     }
 
     private LocalDate parsePermitDate(String dateStr) {

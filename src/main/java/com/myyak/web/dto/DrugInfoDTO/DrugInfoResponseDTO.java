@@ -16,7 +16,9 @@ public class DrugInfoResponseDTO {
     @AllArgsConstructor
     public static class DrugInfoDetail {
         private String itemSeq;      // 품목기준코드
-        private String itemName;     // 제품명
+        private String itemName;     // 제품명 (원본)
+        private String displayName;  // 표시용 약물명 ("메드론정4밀리그람")
+        private String ingredientKr; // 한글 성분명 ("메틸프레드니솔론")
         private String entpName;     // 업체명
         private DrugType drugType;   // 전문/일반/영양제 구분
         private String efficacy;     // 효능/효과
@@ -35,7 +37,9 @@ public class DrugInfoResponseDTO {
     @AllArgsConstructor
     public static class DrugInfoSummary {
         private String itemSeq;      // 품목기준코드
-        private String itemName;     // 제품명
+        private String itemName;     // 제품명 (원본)
+        private String displayName;  // 표시용 약물명
+        private String ingredientKr; // 한글 성분명
         private String entpName;     // 업체명
         private DrugType drugType;   // 전문/일반/영양제 구분
         private String efficacy;     // 효능 (요약)
