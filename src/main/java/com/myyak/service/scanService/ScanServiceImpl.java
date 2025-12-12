@@ -7,8 +7,7 @@ import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.repository.DrugInfoRepository;
-import com.myyak.service.embeddingService.EmbeddingService;
-import com.myyak.web.dto.EmbeddingDTO.EmbeddingResponseDTO;
+import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.web.dto.ScanDTO.ScanResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +33,7 @@ public class ScanServiceImpl implements ScanService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
     private final DrugInfoRepository drugInfoRepository;
-    private final EmbeddingService embeddingService;
+    private final DrugSearchService drugSearchService;
 
     @Value("${ai.vision-provider:openai}")
     private String visionProvider;
@@ -53,7 +52,6 @@ public class ScanServiceImpl implements ScanService {
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final double SIMILAR_DRUG_MIN_SIMILARITY = 0.5;
     private static final String DEBUG_IMAGE_DIR = "C:\\tmp\\scan_debug";
 
     private static final String VISION_PROMPT = """
@@ -158,20 +156,6 @@ public class ScanServiceImpl implements ScanService {
 
     @Override
     public ScanResponseDTO.ScanResult scanPrescription(MultipartFile image) {
-        return processScan(image, false);
-    }
-
-    @Override
-    public ScanResponseDTO.ScanResult scanPrescriptionWithEmbedding(MultipartFile image) {
-        return processScan(image, true);
-    }
-
-    /**
-     * 공통 스캔 처리 메서드
-     * @param image 처방전 이미지
-     * @param useEmbedding 임베딩 기반 유사 약물 검색 사용 여부
-     */
-    private ScanResponseDTO.ScanResult processScan(MultipartFile image, boolean useEmbedding) {
         if (image == null || image.isEmpty()) {
             throw new GeneralException(ErrorStatus.SCAN_IMAGE_REQUIRED);
         }
@@ -189,19 +173,19 @@ public class ScanServiceImpl implements ScanService {
         log.info("Vision 프로바이더: {}", useGemini ? "Gemini" : "OpenAI");
 
         if (useGemini) {
-            return processWithGemini(image, contentType, useEmbedding);
+            return processWithGemini(image, contentType);
         } else {
-            return processWithOpenAI(image, contentType, useEmbedding);
+            return processWithOpenAI(image, contentType);
         }
     }
 
     /**
      * OpenAI Vision API로 처리
      */
-    private ScanResponseDTO.ScanResult processWithOpenAI(MultipartFile image, String contentType, boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult processWithOpenAI(MultipartFile image, String contentType) {
         if (openaiApiKey == null || openaiApiKey.isEmpty()) {
             log.warn("OpenAI API key is not configured. Returning mock data.");
-            return createMockResponse(useEmbedding);
+            return createMockResponse();
         }
 
         try {
@@ -219,7 +203,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyToMono(String.class)
                     .block();
 
-            return parseOpenAIResponse(response, useEmbedding);
+            return parseOpenAIResponse(response);
         } catch (GeneralException e) {
             throw e;
         } catch (Exception e) {
@@ -231,10 +215,10 @@ public class ScanServiceImpl implements ScanService {
     /**
      * Gemini Vision API로 처리
      */
-    private ScanResponseDTO.ScanResult processWithGemini(MultipartFile image, String contentType, boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult processWithGemini(MultipartFile image, String contentType) {
         if (geminiApiKey == null || geminiApiKey.isEmpty()) {
             log.warn("Gemini API key is not configured. Returning mock data.");
-            return createMockResponse(useEmbedding);
+            return createMockResponse();
         }
 
         try {
@@ -258,7 +242,7 @@ public class ScanServiceImpl implements ScanService {
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("Gemini API 응답 시간: {}ms ({}초)", elapsed, elapsed / 1000.0);
 
-            return parseGeminiResponse(response, useEmbedding);
+            return parseGeminiResponse(response);
         } catch (GeneralException e) {
             throw e;
         } catch (Exception e) {
@@ -268,10 +252,8 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private Map<String, Object> buildOpenAIRequest(String base64Image, String mimeType) {
-        // 이미지 URL (base64 data URL)
         String imageUrl = "data:" + mimeType + ";base64," + base64Image;
 
-        // 이미지 content
         Map<String, Object> imageUrlObj = new HashMap<>();
         imageUrlObj.put("url", imageUrl);
 
@@ -279,17 +261,14 @@ public class ScanServiceImpl implements ScanService {
         imageContent.put("type", "image_url");
         imageContent.put("image_url", imageUrlObj);
 
-        // 텍스트 content
         Map<String, Object> textContent = new HashMap<>();
         textContent.put("type", "text");
         textContent.put("text", VISION_PROMPT);
 
-        // 메시지
         Map<String, Object> userMessage = new HashMap<>();
         userMessage.put("role", "user");
         userMessage.put("content", List.of(textContent, imageContent));
 
-        // 요청 본문
         Map<String, Object> request = new HashMap<>();
         request.put("model", openaiModel);
         request.put("messages", List.of(userMessage));
@@ -298,11 +277,7 @@ public class ScanServiceImpl implements ScanService {
         return request;
     }
 
-    /**
-     * Gemini API 요청 빌드
-     */
     private Map<String, Object> buildGeminiRequest(String base64Image, String mimeType) {
-        // inline_data part (이미지)
         Map<String, Object> inlineData = new HashMap<>();
         inlineData.put("mime_type", mimeType);
         inlineData.put("data", base64Image);
@@ -310,38 +285,29 @@ public class ScanServiceImpl implements ScanService {
         Map<String, Object> imagePart = new HashMap<>();
         imagePart.put("inline_data", inlineData);
 
-        // text part (프롬프트)
         Map<String, Object> textPart = new HashMap<>();
         textPart.put("text", VISION_PROMPT);
 
-        // contents
         Map<String, Object> content = new HashMap<>();
         content.put("parts", List.of(textPart, imagePart));
 
-        // 요청 본문
         Map<String, Object> request = new HashMap<>();
         request.put("contents", List.of(content));
 
-        // generationConfig
         Map<String, Object> generationConfig = new HashMap<>();
         generationConfig.put("maxOutputTokens", 8192);
-        generationConfig.put("temperature", 0.4);  // 낮은 temperature로 일관된 응답
+        generationConfig.put("temperature", 0.4);
         request.put("generationConfig", generationConfig);
 
         return request;
     }
 
-    /**
-     * Gemini API 응답 파싱
-     */
-    private ScanResponseDTO.ScanResult parseGeminiResponse(String response, boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult parseGeminiResponse(String response) {
         try {
-            // 원본 응답은 너무 길 수 있으므로 앞부분만 로깅 (thoughtSignature 등 제외)
             log.debug("Gemini 원본 응답 (앞 500자): {}", response != null && response.length() > 500 ? response.substring(0, 500) + "..." : response);
 
             JsonNode root = objectMapper.readTree(response);
 
-            // 에러 응답 체크
             JsonNode error = root.path("error");
             if (!error.isMissingNode()) {
                 String errorMessage = error.path("message").asText("알 수 없는 오류");
@@ -356,7 +322,6 @@ public class ScanServiceImpl implements ScanService {
                 return createLowConfidenceResponse("AI 응답을 받지 못했습니다.");
             }
 
-            // candidates[0].content.parts[0].text - 안전하게 접근
             JsonNode firstCandidate = candidates.get(0);
             if (firstCandidate == null) {
                 log.error("Gemini candidates[0]이 null: {}", response);
@@ -389,15 +354,14 @@ public class ScanServiceImpl implements ScanService {
 
             log.info("Gemini Vision 응답: {}", text);
 
-            // 공통 응답 파싱 로직 사용
-            return parseVisionResponse(text, useEmbedding);
+            return parseVisionResponse(text);
         } catch (Exception e) {
             log.error("Failed to parse Gemini response: ", e);
             return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
         }
     }
 
-    private ScanResponseDTO.ScanResult parseOpenAIResponse(String response, boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult parseOpenAIResponse(String response) {
         try {
             JsonNode root = objectMapper.readTree(response);
             JsonNode choices = root.path("choices");
@@ -413,8 +377,7 @@ public class ScanServiceImpl implements ScanService {
 
             log.info("OpenAI Vision 응답: {}", text);
 
-            // 공통 응답 파싱 로직 사용
-            return parseVisionResponse(text, useEmbedding);
+            return parseVisionResponse(text);
         } catch (Exception e) {
             log.error("Failed to parse OpenAI response: ", e);
             return createLowConfidenceResponse("응답 파싱에 실패했습니다.");
@@ -423,10 +386,8 @@ public class ScanServiceImpl implements ScanService {
 
     /**
      * Vision API 공통 응답 파싱
-     * @param text AI가 반환한 JSON 텍스트
-     * @param useEmbedding 임베딩 기반 유사 약물 검색 사용 여부
      */
-    private ScanResponseDTO.ScanResult parseVisionResponse(String text, boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult parseVisionResponse(String text) {
         try {
             String jsonText = extractJsonFromText(text);
             JsonNode resultJson = objectMapper.readTree(jsonText);
@@ -465,30 +426,30 @@ public class ScanServiceImpl implements ScanService {
                                     .durationDays(medNode.path("durationDays").asInt(7))
                                     .totalCount(medNode.path("totalCount").asInt(7));
 
-                    // DrugInfo가 매칭되면 추가 정보 설정 + 매칭된 약물명으로 name 업데이트
+                    // DrugInfo가 매칭되면 추가 정보 설정
                     if (matchedDrug != null) {
-                        builder.name(extractPureDrugName(matchedDrug.getItemName()))  // 괄호 제거한 약물명
+                        builder.name(extractPureDrugName(matchedDrug.getItemName()))
                                .drugItemSeq(matchedDrug.getItemSeq())
-                               .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))  // 괄호 안 한글 우선
+                               .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))
                                .efficacy(matchedDrug.getEfficacy())
                                .imageUrl(matchedDrug.getImageUrl())
-                               .entpName(matchedDrug.getEntpName())
-                               .matchedByEmbedding(false);
+                               .entpName(matchedDrug.getEntpName());
                         log.info("약물 '{}' → DB 매칭: '{}'", name, matchedDrug.getItemName());
                     }
 
-                    // 임베딩 모드 + DB 매칭 실패 시 → 가장 유사한 약물 1개를 메인 결과로 설정
-                    if (useEmbedding && matchedDrug == null && name != null && !name.isBlank()) {
-                        DrugInfo similarDrug = findMostSimilarDrug(name);
-                        if (similarDrug != null) {
-                            builder.name(extractPureDrugName(similarDrug.getItemName()))  // 괄호 제거한 약물명
-                                   .drugItemSeq(similarDrug.getItemSeq())
-                                   .ingredient(resolveIngredient(similarDrug.getItemName(), similarDrug.getIngredientName()))  // 괄호 안 한글 우선
-                                   .efficacy(similarDrug.getEfficacy())
-                                   .imageUrl(similarDrug.getImageUrl())
-                                   .entpName(similarDrug.getEntpName())
-                                   .matchedByEmbedding(true);
-                            log.info("약물 '{}' → 임베딩 매칭: '{}'", name, similarDrug.getItemName());
+                    // DB 매칭 실패 시 → 편집거리 검색으로 OCR 오타 보정
+                    if (matchedDrug == null && name != null && !name.isBlank()) {
+                        Optional<DrugInfo> editDistanceMatch = drugSearchService.findByEditDistance(name);
+                        if (editDistanceMatch.isPresent()) {
+                            DrugInfo foundDrug = editDistanceMatch.get();
+                            builder.name(extractPureDrugName(foundDrug.getItemName()))
+                                   .drugItemSeq(foundDrug.getItemSeq())
+                                   .ingredient(resolveIngredient(foundDrug.getItemName(), foundDrug.getIngredientName()))
+                                   .efficacy(foundDrug.getEfficacy())
+                                   .imageUrl(foundDrug.getImageUrl())
+                                   .entpName(foundDrug.getEntpName())
+                                   .matchedByEditDistance(true);
+                            log.info("약물 '{}' → 편집거리 매칭: '{}'", name, foundDrug.getItemName());
                         }
                     }
 
@@ -509,58 +470,21 @@ public class ScanServiceImpl implements ScanService {
         }
     }
 
-    /**
-     * 임베딩 기반으로 가장 유사한 약물 1개 찾기
-     * @param drugName OCR로 인식된 약물명
-     * @return 가장 유사한 DrugInfo (없으면 null)
-     */
-    private DrugInfo findMostSimilarDrug(String drugName) {
-        try {
-            EmbeddingResponseDTO.SimilarDrugSearchResult searchResult =
-                    embeddingService.searchSimilarDrugs(drugName, 1);
-
-            if (searchResult.getResults().isEmpty()) {
-                return null;
-            }
-
-            EmbeddingResponseDTO.SimilarDrug topMatch = searchResult.getResults().get(0);
-
-            // 유사도가 최소 기준 이상인 경우에만 반환
-            if (topMatch.getSimilarity() < SIMILAR_DRUG_MIN_SIMILARITY) {
-                log.info("약물 '{}' 유사도 {}로 기준 미달", drugName, topMatch.getSimilarity());
-                return null;
-            }
-
-            // DrugInfo 조회
-            return drugInfoRepository.findById(topMatch.getItemSeq()).orElse(null);
-
-        } catch (Exception e) {
-            log.warn("임베딩 기반 약물 검색 실패: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * 약 이름으로 DrugInfo 조회
-     */
     private DrugInfo findDrugInfo(String name) {
         if (name == null || name.isEmpty()) {
             return null;
         }
 
-        // 정확한 이름으로 먼저 검색
         Optional<DrugInfo> exact = drugInfoRepository.findByItemName(name);
         if (exact.isPresent()) {
             return exact.get();
         }
 
-        // 부분 일치로 검색
         List<DrugInfo> matches = drugInfoRepository.findByItemNameContaining(name);
         if (!matches.isEmpty()) {
             return matches.get(0);
         }
 
-        // 약 이름에서 숫자/용량 제거 후 재검색
         String simpleName = name.replaceAll("[0-9]+mg|[0-9]+ml|정|캡슐|필름코팅정|서방정", "").trim();
         if (!simpleName.equals(name)) {
             matches = drugInfoRepository.findByItemNameContaining(simpleName);
@@ -581,30 +505,17 @@ public class ScanServiceImpl implements ScanService {
         return text;
     }
 
-    /**
-     * 약물명에서 괄호 안 성분명 제거
-     * 예: "메드론정(메틸프레드니솔론)" → "메드론정"
-     * 예: "아스피린프로텍트정100mg(아세틸살리실산)" → "아스피린프로텍트정100mg"
-     */
     private String extractPureDrugName(String itemName) {
         if (itemName == null || itemName.isBlank()) {
             return itemName;
         }
-        // 괄호와 그 안의 내용 제거
         return itemName.replaceAll("\\([^)]*\\)", "").trim();
     }
 
-    /**
-     * 약물명에서 괄호 안 한글 성분명 추출
-     * 예: "메드론정(메틸프레드니솔론)" → "메틸프레드니솔론"
-     * 예: "아스피린프로텍트정100mg(아세틸살리실산)" → "아세틸살리실산"
-     * 괄호가 없으면 null 반환
-     */
     private String extractIngredientFromParentheses(String itemName) {
         if (itemName == null || itemName.isBlank()) {
             return null;
         }
-        // 괄호 안의 내용 추출
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\(([^)]+)\\)");
         java.util.regex.Matcher matcher = pattern.matcher(itemName);
         if (matcher.find()) {
@@ -613,9 +524,6 @@ public class ScanServiceImpl implements ScanService {
         return null;
     }
 
-    /**
-     * 성분명 결정: 괄호 안 한글 성분명 우선, 없으면 ingredientName 사용
-     */
     private String resolveIngredient(String itemName, String ingredientName) {
         String fromParentheses = extractIngredientFromParentheses(itemName);
         if (fromParentheses != null && !fromParentheses.isBlank()) {
@@ -633,28 +541,21 @@ public class ScanServiceImpl implements ScanService {
                 .build();
     }
 
-    /**
-     * 디버깅용 이미지 저장
-     * @param image 업로드된 이미지
-     */
     private void saveDebugImage(MultipartFile image) {
         try {
-            // 디렉토리 생성
             Path debugDir = Paths.get(DEBUG_IMAGE_DIR);
             if (!Files.exists(debugDir)) {
                 Files.createDirectories(debugDir);
             }
 
-            // 파일명 생성: scan_yyyyMMdd_HHmmss_SSS.확장자
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS"));
             String originalFilename = image.getOriginalFilename();
-            String extension = "png"; // 기본값
+            String extension = "png";
             if (originalFilename != null && originalFilename.contains(".")) {
                 extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1);
             }
             String filename = String.format("scan_%s.%s", timestamp, extension);
 
-            // 파일 저장
             Path filePath = debugDir.resolve(filename);
             Files.write(filePath, image.getBytes());
 
@@ -665,12 +566,11 @@ public class ScanServiceImpl implements ScanService {
         }
     }
 
-    private ScanResponseDTO.ScanResult createMockResponse(boolean useEmbedding) {
+    private ScanResponseDTO.ScanResult createMockResponse() {
         return ScanResponseDTO.ScanResult.builder()
                 .success(true)
                 .confidence("high")
                 .medications(List.of(
-                        // DB 매칭 성공 예시
                         ScanResponseDTO.ScannedMedication.builder()
                                 .name("아스피린프로텍트100mg")
                                 .drugItemSeq("200003933")
@@ -680,22 +580,17 @@ public class ScanServiceImpl implements ScanService {
                                 .durationDays(30)
                                 .totalCount(60)
                                 .entpName("바이엘코리아(주)")
-                                .matchedByEmbedding(false)
                                 .build(),
-                        // 임베딩 매칭 예시 (useEmbedding=true일 때)
                         ScanResponseDTO.ScannedMedication.builder()
-                                .name("메트포민500mg")  // OCR에서 오인식된 이름
-                                .drugItemSeq(useEmbedding ? "200808001" : null)
+                                .name("메트포민500mg")
                                 .dosage(1)
                                 .frequency(2)
                                 .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
                                 .durationDays(30)
                                 .totalCount(60)
-                                .entpName(useEmbedding ? "대웅제약(주)" : null)
-                                .matchedByEmbedding(useEmbedding ? true : null)
                                 .build()
                 ))
-                .notes(useEmbedding ? "임베딩 모드: OCR 오인식 시 유사 약물로 자동 매칭 (Mock)" : null)
+                .notes(null)
                 .build();
     }
 }

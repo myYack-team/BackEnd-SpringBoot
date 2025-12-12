@@ -20,29 +20,16 @@ public class ScanController {
 
     private final ScanService scanService;
 
-    @Operation(summary = "처방전 스캔 (LLM 전용)", description = "처방전/약봉투 이미지를 분석하여 약 정보를 추출합니다. DB 키워드 검색으로 약물을 매칭합니다.")
+    @Operation(
+            summary = "처방전 스캔",
+            description = "처방전/약봉투 이미지를 분석하여 약 정보를 추출합니다. " +
+                    "DB 키워드 검색으로 약물을 매칭하고, 매칭 실패 시 자모 기반 편집거리 검색으로 OCR 오타를 보정합니다."
+    )
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<ScanResponseDTO.ScanResult> scanPrescription(
             @Parameter(description = "처방전/약봉투 이미지")
             @RequestPart("image") MultipartFile image) {
         ScanResponseDTO.ScanResult result = scanService.scanPrescription(image);
-
-        if ("low".equals(result.getConfidence())) {
-            return ApiResponse.of(SuccessStatus.SCAN_RETRY_RECOMMENDED, result);
-        }
-        return ApiResponse.of(SuccessStatus.SCAN_SUCCESS, result);
-    }
-
-    @Operation(
-            summary = "처방전 스캔 (LLM + Embedding)",
-            description = "처방전/약봉투 이미지를 분석하여 약 정보를 추출합니다. " +
-                    "DB 키워드 검색으로 약물을 매칭하고, 매칭 실패 시 Embedding 기반 유사 약물을 추천합니다."
-    )
-    @PostMapping(value = "/with-embedding", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<ScanResponseDTO.ScanResult> scanPrescriptionWithEmbedding(
-            @Parameter(description = "처방전/약봉투 이미지")
-            @RequestPart("image") MultipartFile image) {
-        ScanResponseDTO.ScanResult result = scanService.scanPrescriptionWithEmbedding(image);
 
         if ("low".equals(result.getConfidence())) {
             return ApiResponse.of(SuccessStatus.SCAN_RETRY_RECOMMENDED, result);

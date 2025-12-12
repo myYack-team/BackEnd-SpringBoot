@@ -29,8 +29,8 @@ public class ScanResponseDTO {
         private String imageUrl;         // 약 이미지
         private String entpName;         // 제약회사
 
-        // 매칭 방식 표시 (true: 임베딩 유사도 기반, false: DB 키워드 검색)
-        private Boolean matchedByEmbedding;
+        // 매칭 방식 표시 (true: 편집거리 기반 매칭, false: DB 키워드 검색)
+        private Boolean matchedByEditDistance;
     }
 
     @Getter
