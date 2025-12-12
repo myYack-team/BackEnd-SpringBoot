@@ -6,6 +6,7 @@ import com.myyak.converter.IntakeConverter;
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.repository.IntakeRepository;
 import com.myyak.repository.ReminderRepository;
@@ -54,13 +55,17 @@ public class IntakeServiceImpl implements IntakeService {
                 throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
             }
 
-            Intake intake = IntakeConverter.toEntity(medication, timing, request.getTakenAt());
+            IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
+            Intake intake = IntakeConverter.toEntity(medication, timing, request.getTakenAt(), status);
             intakeRepository.save(intake);
             intakes.add(intake);
 
-            String dosageStr = medication.getDosage().replaceAll("[^0-9]", "");
-            int dosage = dosageStr.isEmpty() ? 1 : Integer.parseInt(dosageStr);
-            medication.decreaseRemainingCount(dosage);
+            // TAKEN 상태일 때만 남은 개수 차감
+            if (status == IntakeStatus.TAKEN) {
+                String dosageStr = medication.getDosage().replaceAll("[^0-9]", "");
+                int dosage = dosageStr.isEmpty() ? 1 : Integer.parseInt(dosageStr);
+                medication.decreaseRemainingCount(dosage);
+            }
             medications.add(medication);
         }
 

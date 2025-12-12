@@ -21,11 +21,15 @@ public class IntakeConverter {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static Intake toEntity(UserMedication userMedication, MedicationTiming timing, LocalDateTime takenAt) {
+        return toEntity(userMedication, timing, takenAt, IntakeStatus.TAKEN);
+    }
+
+    public static Intake toEntity(UserMedication userMedication, MedicationTiming timing, LocalDateTime takenAt, IntakeStatus status) {
         return Intake.builder()
                 .userMedication(userMedication)
                 .timing(timing)
                 .takenAt(takenAt)
-                .status(IntakeStatus.TAKEN)
+                .status(status)
                 .build();
     }
 
@@ -86,7 +90,8 @@ public class IntakeConverter {
                     .map(r -> {
                         UserMedication um = r.getUserMedication();
                         List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
-                        Intake todayIntake = findIntakeForDate(medicationIntakes, date);
+                        // 해당 날짜 + 해당 시간대(timing)에 복용 기록 찾기
+                        Intake todayIntake = findIntakeForDateAndTiming(medicationIntakes, date, timing);
 
                         return IntakeResponseDTO.ScheduleMedication.builder()
                                 .id(um.getId())
@@ -130,9 +135,9 @@ public class IntakeConverter {
                 .build();
     }
 
-    private static Intake findIntakeForDate(List<Intake> intakes, LocalDate date) {
+    private static Intake findIntakeForDateAndTiming(List<Intake> intakes, LocalDate date, MedicationTiming timing) {
         return intakes.stream()
-                .filter(i -> i.getTakenAt().toLocalDate().equals(date))
+                .filter(i -> i.getTakenAt().toLocalDate().equals(date) && i.getTiming() == timing)
                 .findFirst()
                 .orElse(null);
     }
