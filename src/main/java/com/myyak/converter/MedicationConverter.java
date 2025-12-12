@@ -48,26 +48,44 @@ public class MedicationConverter {
                 .build();
     }
 
-    public static MedicationResponseDTO.MedicationListItem toListItem(UserMedication medication, List<MedicationTiming> timings) {
+    public static MedicationResponseDTO.MedicationListItem toListItem(UserMedication medication, List<Reminder> reminders) {
         int daysLeft = calculateDaysLeft(medication);
-        String imageUrl = medication.getDrugInfo() != null ? medication.getDrugInfo().getImageUrl() : null;
+        DrugInfo drugInfo = medication.getDrugInfo();
+        String imageUrl = drugInfo != null ? drugInfo.getImageUrl() : null;
+        String displayName = drugInfo != null ? drugInfo.getDisplayName() : null;
+
+        List<MedicationTiming> timings = reminders.stream()
+                .map(Reminder::getTiming)
+                .collect(Collectors.toList());
+
+        List<MedicationResponseDTO.ReminderInfo> reminderInfos = reminders.stream()
+                .map(r -> MedicationResponseDTO.ReminderInfo.builder()
+                        .id(r.getId())
+                        .time(r.getTime().format(DateTimeFormatter.ofPattern("HH:mm")))
+                        .timing(r.getTiming())
+                        .timingLabel(r.getTiming().getDescription())
+                        .enabled(r.getEnabled())
+                        .build())
+                .collect(Collectors.toList());
 
         return MedicationResponseDTO.MedicationListItem.builder()
                 .id(medication.getId())
                 .drugName(medication.getDrugName())
+                .displayName(displayName)
                 .imageUrl(imageUrl)
                 .dosage(parseDosage(medication.getDosage()))
                 .frequency(medication.getFrequency())
                 .timings(timings)
                 .remainingCount(medication.getRemainingCount())
                 .daysLeft(daysLeft)
+                .reminders(reminderInfos)
                 .build();
     }
 
     public static MedicationResponseDTO.MedicationList toList(List<UserMedication> medications,
-                                                               java.util.Map<Long, List<MedicationTiming>> timingsMap) {
+                                                               java.util.Map<Long, List<Reminder>> remindersMap) {
         List<MedicationResponseDTO.MedicationListItem> items = medications.stream()
-                .map(m -> toListItem(m, timingsMap.getOrDefault(m.getId(), List.of())))
+                .map(m -> toListItem(m, remindersMap.getOrDefault(m.getId(), List.of())))
                 .collect(Collectors.toList());
 
         return MedicationResponseDTO.MedicationList.builder()
@@ -98,6 +116,8 @@ public class MedicationConverter {
             drugInfoData = MedicationResponseDTO.DrugInfoData.builder()
                     .itemSeq(di.getItemSeq())
                     .itemName(di.getItemName())
+                    .displayName(di.getDisplayName())
+                    .ingredientKr(di.getIngredientKr())
                     .entpName(di.getEntpName())
                     .efficacy(di.getEfficacy())
                     .useMethod(di.getUseMethod())

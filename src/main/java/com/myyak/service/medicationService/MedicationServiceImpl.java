@@ -71,16 +71,13 @@ public class MedicationServiceImpl implements MedicationService {
         User user = userService.findById(userId);
         List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
 
-        Map<Long, List<MedicationTiming>> timingsMap = new HashMap<>();
+        Map<Long, List<Reminder>> remindersMap = new HashMap<>();
         for (UserMedication medication : medications) {
             List<Reminder> reminders = reminderRepository.findByUserMedication(medication);
-            List<MedicationTiming> timings = reminders.stream()
-                    .map(Reminder::getTiming)
-                    .collect(Collectors.toList());
-            timingsMap.put(medication.getId(), timings);
+            remindersMap.put(medication.getId(), reminders);
         }
 
-        return MedicationConverter.toList(medications, timingsMap);
+        return MedicationConverter.toList(medications, remindersMap);
     }
 
     @Override
