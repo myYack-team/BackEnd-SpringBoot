@@ -31,6 +31,12 @@ public enum ErrorStatus implements BaseErrorCode {
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "MED404", "약을 찾을 수 없습니다."),
     MEDICATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "MED403", "해당 약에 대한 접근 권한이 없습니다."),
 
+    // 영양제 관련 에러
+    SUPPLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "SUPP404", "영양제를 찾을 수 없습니다."),
+    SUPPLEMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "SUPP403", "해당 영양제에 대한 접근 권한이 없습니다."),
+    USER_SUPPLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "USUPP404", "사용자 영양제를 찾을 수 없습니다."),
+    USER_SUPPLEMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "USUPP409", "이미 등록된 영양제입니다."),
+
     // 스캔 관련 에러
     SCAN_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "SCAN400", "이미지가 필요합니다."),
     SCAN_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "SCAN500", "처방전 인식에 실패했습니다."),
