@@ -9,6 +9,7 @@ public enum DrugType {
 
     PROFESSIONAL("전문의약품"),
     GENERAL("일반의약품"),
+    SUPPLEMENT("영양제"),
     UNKNOWN("미분류");
 
     private final String description;
