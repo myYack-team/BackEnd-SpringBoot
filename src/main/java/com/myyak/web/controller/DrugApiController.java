@@ -172,6 +172,22 @@ public class DrugApiController {
         return ApiResponse.onSuccess("통합 배치 완료");
     }
 
+    // === 배치 파싱 API ===
+
+    @Operation(summary = "성분명 재파싱", description = "ingredientKr이 NULL인 약물의 itemName을 새로운 파싱 로직으로 다시 파싱")
+    @PostMapping("/batch/reparse/ingredient")
+    public ApiResponse<BatchResult> reparseIngredientKr() {
+        int count = drugApiService.reparseIngredientKr();
+        return ApiResponse.onSuccess(new BatchResult(count, "성분명 재파싱 완료"));
+    }
+
+    @Operation(summary = "성분명 미파싱 약물 수 조회", description = "ingredientKr이 NULL인 약물 수 조회")
+    @GetMapping("/stats/without-ingredient")
+    public ApiResponse<StatsResult> getCountWithoutIngredient() {
+        long count = drugApiService.countWithoutIngredientKr();
+        return ApiResponse.onSuccess(new StatsResult(count));
+    }
+
     public record BatchResult(int savedCount, String message) {}
     public record StatsResult(long totalCount) {}
 }

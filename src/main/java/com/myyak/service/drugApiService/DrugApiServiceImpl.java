@@ -462,4 +462,32 @@ public class DrugApiServiceImpl implements DrugApiService {
         log.info("총 소요시간: {}초", duration);
         log.info("e약은요: {}건, 허가정보: {}건, 크롤링: {}건", easyDrugCount, permitCount, crawlCount);
     }
+
+    // === 배치 파싱 메서드 ===
+
+    @Override
+    public int reparseIngredientKr() {
+        List<DrugInfo> drugsWithoutIngredient = drugInfoRepository.findByIngredientKrIsNull();
+        log.info("ingredientKr이 NULL인 약물 수: {}건", drugsWithoutIngredient.size());
+
+        int updatedCount = 0;
+
+        for (DrugInfo drug : drugsWithoutIngredient) {
+            DrugNameParser.ParsedDrugName parsed = DrugNameParser.parse(drug.getItemName());
+
+            if (parsed.ingredientKr() != null) {
+                drug.updateParsedNames(parsed.displayName(), parsed.ingredientKr());
+                updatedCount++;
+            }
+        }
+
+        log.info("ingredientKr 파싱 완료: {}건 업데이트", updatedCount);
+        return updatedCount;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countWithoutIngredientKr() {
+        return drugInfoRepository.countByIngredientKrIsNull();
+    }
 }

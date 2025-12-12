@@ -64,4 +64,17 @@ public interface DrugApiService {
      * 3. 의약품안전나라 크롤링 (효능 보완)
      */
     void fetchFromAllSources();
+
+    // === 배치 파싱 API ===
+
+    /**
+     * ingredientKr이 NULL인 약물의 itemName을 다시 파싱하여 업데이트
+     * @return 업데이트된 약물 수
+     */
+    int reparseIngredientKr();
+
+    /**
+     * ingredientKr이 NULL인 약물 수 조회
+     */
+    long countWithoutIngredientKr();
 }

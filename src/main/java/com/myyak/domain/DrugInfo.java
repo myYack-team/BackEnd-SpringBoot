@@ -130,4 +130,16 @@ public class DrugInfo extends BaseEntity {
             this.efficacy = efficacy;
         }
     }
+
+    /**
+     * 파싱된 displayName, ingredientKr 업데이트
+     */
+    public void updateParsedNames(String displayName, String ingredientKr) {
+        if (displayName != null && !displayName.isBlank()) {
+            this.displayName = displayName;
+        }
+        if (ingredientKr != null && !ingredientKr.isBlank()) {
+            this.ingredientKr = ingredientKr;
+        }
+    }
 }
