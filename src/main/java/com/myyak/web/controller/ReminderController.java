@@ -48,4 +48,25 @@ public class ReminderController {
             @PathVariable Long reminderId) {
         return ApiResponse.of(SuccessStatus.REMINDER_UPDATED, reminderService.toggleReminder(userId, reminderId));
     }
+
+    @Operation(summary = "다시 알림 설정", description = "알림을 나중에 다시 받도록 설정합니다. (10분, 30분, 1시간)")
+    @PostMapping("/{reminderId}/snooze")
+    public ApiResponse<ReminderResponseDTO.SnoozeResult> snoozeReminder(
+            @Parameter(description = "사용자 ID (임시)")
+            @RequestParam Long userId,
+            @Parameter(description = "알림 ID")
+            @PathVariable Long reminderId,
+            @Valid @RequestBody ReminderRequestDTO.SnoozeRequest request) {
+        return ApiResponse.of(SuccessStatus.REMINDER_SNOOZED, reminderService.snoozeReminder(userId, reminderId, request));
+    }
+
+    @Operation(summary = "다시 알림 해제", description = "설정된 다시 알림을 해제합니다.")
+    @DeleteMapping("/{reminderId}/snooze")
+    public ApiResponse<ReminderResponseDTO.SnoozeResult> clearSnooze(
+            @Parameter(description = "사용자 ID (임시)")
+            @RequestParam Long userId,
+            @Parameter(description = "알림 ID")
+            @PathVariable Long reminderId) {
+        return ApiResponse.of(SuccessStatus.REMINDER_SNOOZE_CLEARED, reminderService.clearSnooze(userId, reminderId));
+    }
 }

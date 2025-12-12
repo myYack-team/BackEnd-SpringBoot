@@ -1,7 +1,9 @@
 package com.myyak.converter;
 
 import com.myyak.domain.DrugInfo;
+import com.myyak.domain.enums.DrugType;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -21,6 +23,7 @@ public class DrugInfoConverter {
                 .sideEffect(drugInfo.getSideEffect())
                 .storageMethod(drugInfo.getStorageMethod())
                 .imageUrl(drugInfo.getImageUrl())
+                .drugType(drugInfo.getDrugType() != null ? drugInfo.getDrugType() : DrugType.UNKNOWN)
                 .build();
     }
 
@@ -37,6 +40,7 @@ public class DrugInfoConverter {
                 .entpName(drugInfo.getEntpName())
                 .efficacy(efficacySummary)
                 .imageUrl(drugInfo.getImageUrl())
+                .drugType(drugInfo.getDrugType() != null ? drugInfo.getDrugType() : DrugType.UNKNOWN)
                 .build();
     }
 
@@ -48,6 +52,21 @@ public class DrugInfoConverter {
         return DrugInfoResponseDTO.DrugSearchResult.builder()
                 .drugs(summaries)
                 .totalCount(summaries.size())
+                .build();
+    }
+
+    public static DrugInfoResponseDTO.DrugSearchPageResult toSearchPageResult(Page<DrugInfo> drugPage) {
+        List<DrugInfoResponseDTO.DrugInfoSummary> summaries = drugPage.getContent().stream()
+                .map(DrugInfoConverter::toSummary)
+                .collect(Collectors.toList());
+
+        return DrugInfoResponseDTO.DrugSearchPageResult.builder()
+                .drugs(summaries)
+                .totalCount((int) drugPage.getTotalElements())
+                .page(drugPage.getNumber())
+                .size(drugPage.getSize())
+                .totalPages(drugPage.getTotalPages())
+                .hasNext(drugPage.hasNext())
                 .build();
     }
 }

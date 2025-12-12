@@ -1,5 +1,6 @@
 package com.myyak.web.dto.DrugInfoDTO;
 
+import com.myyak.domain.enums.DrugType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,6 +18,7 @@ public class DrugInfoResponseDTO {
         private String itemSeq;      // 품목기준코드
         private String itemName;     // 제품명
         private String entpName;     // 업체명
+        private DrugType drugType;   // 전문/일반/영양제 구분
         private String efficacy;     // 효능/효과
         private String useMethod;    // 용법/용량
         private String warning;      // 주의사항 경고
@@ -35,6 +37,7 @@ public class DrugInfoResponseDTO {
         private String itemSeq;      // 품목기준코드
         private String itemName;     // 제품명
         private String entpName;     // 업체명
+        private DrugType drugType;   // 전문/일반/영양제 구분
         private String efficacy;     // 효능 (요약)
         private String imageUrl;     // 약 이미지
     }
@@ -46,5 +49,18 @@ public class DrugInfoResponseDTO {
     public static class DrugSearchResult {
         private List<DrugInfoSummary> drugs;
         private Integer totalCount;
+    }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DrugSearchPageResult {
+        private List<DrugInfoSummary> drugs;
+        private Integer totalCount;
+        private Integer page;
+        private Integer size;
+        private Integer totalPages;
+        private Boolean hasNext;
     }
 }

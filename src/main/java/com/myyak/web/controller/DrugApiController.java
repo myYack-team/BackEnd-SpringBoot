@@ -12,6 +12,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -35,6 +38,20 @@ public class DrugApiController {
         List<DrugInfoResponseDTO.DrugInfoSummary> result = drugInfos.stream()
                 .map(DrugInfoConverter::toSummary)
                 .collect(Collectors.toList());
+
+        return ApiResponse.onSuccess(result);
+    }
+
+    @Operation(summary = "약 검색 (DB, 페이징)", description = "DB에서 약 이름으로 검색 (페이징 지원)")
+    @GetMapping("/search/page")
+    public ApiResponse<DrugInfoResponseDTO.DrugSearchPageResult> searchDrugsWithPaging(
+            @Parameter(description = "약 이름") @RequestParam String name,
+            @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<DrugInfo> drugPage = drugInfoRepository.searchByKeyword(name, pageable);
+        DrugInfoResponseDTO.DrugSearchPageResult result = DrugInfoConverter.toSearchPageResult(drugPage);
 
         return ApiResponse.onSuccess(result);
     }

@@ -1,6 +1,7 @@
 package com.myyak.web.dto.ReminderDTO;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,5 +14,12 @@ public class ReminderRequestDTO {
         @NotBlank(message = "시간은 필수입니다")
         @Pattern(regexp = "^([01]?[0-9]|2[0-3]):[0-5][0-9]$", message = "시간 형식은 HH:mm이어야 합니다")
         private String time;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    public static class SnoozeRequest {
+        @NotNull(message = "스누즈 시간(분)은 필수입니다")
+        private Integer minutes;  // 10, 30, 60
     }
 }

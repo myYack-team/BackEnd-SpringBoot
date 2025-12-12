@@ -23,13 +23,27 @@ public class ReminderConverter {
     }
 
     public static ReminderResponseDTO.ReminderItem toItem(Reminder reminder) {
+        Long medicationId = null;
+        Long supplementId = null;
+        String name = null;
+
+        if (reminder.getUserMedication() != null) {
+            medicationId = reminder.getUserMedication().getId();
+            name = reminder.getUserMedication().getDrugName();
+        } else if (reminder.getUserSupplement() != null) {
+            supplementId = reminder.getUserSupplement().getId();
+            name = reminder.getUserSupplement().getSupplementName();
+        }
+
         return ReminderResponseDTO.ReminderItem.builder()
                 .id(reminder.getId())
-                .medicationId(reminder.getUserMedication().getId())
-                .medicationName(reminder.getUserMedication().getDrugName())
+                .medicationId(medicationId)
+                .supplementId(supplementId)
+                .medicationName(name)
                 .time(reminder.getTime().format(TIME_FORMATTER))
                 .timing(reminder.getTiming())
                 .enabled(reminder.getEnabled())
+                .snoozeUntil(reminder.getSnoozeUntil())
                 .build();
     }
 
@@ -56,6 +70,22 @@ public class ReminderConverter {
         return ReminderResponseDTO.ToggleResult.builder()
                 .id(reminder.getId())
                 .enabled(reminder.getEnabled())
+                .build();
+    }
+
+    public static ReminderResponseDTO.SnoozeResult toSnoozeResult(Reminder reminder, int minutes) {
+        return ReminderResponseDTO.SnoozeResult.builder()
+                .id(reminder.getId())
+                .snoozeUntil(reminder.getSnoozeUntil())
+                .snoozeMinutes(minutes)
+                .build();
+    }
+
+    public static ReminderResponseDTO.SnoozeResult toClearSnoozeResult(Reminder reminder) {
+        return ReminderResponseDTO.SnoozeResult.builder()
+                .id(reminder.getId())
+                .snoozeUntil(null)
+                .snoozeMinutes(0)
                 .build();
     }
 }

@@ -3,6 +3,7 @@ package com.myyak.converter;
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.enums.DrugType;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.web.dto.TodayDTO.TodayResponseDTO;
 
@@ -51,14 +52,29 @@ public class TodayConverter {
                     .map(r -> {
                         UserMedication um = r.getUserMedication();
                         List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
+                        // 해당 날짜 + 해당 시간대(timing)에 복용 기록이 있는지 확인
                         boolean taken = medicationIntakes.stream()
-                                .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date));
+                                .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date)
+                                        && i.getTiming() == timing);
+
+                        // DrugInfo에서 drugType과 imageUrl 가져오기
+                        DrugType drugType = DrugType.UNKNOWN;
+                        String imageUrl = null;
+                        if (um.getDrugInfo() != null) {
+                            drugType = um.getDrugInfo().getDrugType() != null
+                                    ? um.getDrugInfo().getDrugType()
+                                    : DrugType.UNKNOWN;
+                            imageUrl = um.getDrugInfo().getImageUrl();
+                        }
 
                         return TodayResponseDTO.TodayMedication.builder()
                                 .id(um.getId())
                                 .name(um.getDrugName())
                                 .dosage(parseDosage(um.getDosage()))
                                 .taken(taken)
+                                .reminderId(r.getId())
+                                .drugType(drugType)
+                                .imageUrl(imageUrl)
                                 .build();
                     })
                     .collect(Collectors.toList());

@@ -1,5 +1,6 @@
 package com.myyak.web.dto.IntakeDTO;
 
+import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -22,5 +23,8 @@ public class IntakeRequestDTO {
 
         @NotNull(message = "복용 시점은 필수입니다")
         private MedicationTiming timing;
+
+        // 복용 상태 (기본값: TAKEN)
+        private IntakeStatus status = IntakeStatus.TAKEN;
     }
 }

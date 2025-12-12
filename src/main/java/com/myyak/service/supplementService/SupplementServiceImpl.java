@@ -1,0 +1,247 @@
+package com.myyak.service.supplementService;
+
+import com.myyak.apiPayload.code.status.ErrorStatus;
+import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.SupplementConverter;
+import com.myyak.domain.Reminder;
+import com.myyak.domain.Supplement;
+import com.myyak.domain.User;
+import com.myyak.domain.UserSupplement;
+import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.domain.enums.SupplementTag;
+import com.myyak.repository.ReminderRepository;
+import com.myyak.repository.SupplementRepository;
+import com.myyak.repository.UserSupplementRepository;
+import com.myyak.service.userService.UserService;
+import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
+import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class SupplementServiceImpl implements SupplementService {
+
+    private final SupplementRepository supplementRepository;
+    private final UserSupplementRepository userSupplementRepository;
+    private final ReminderRepository reminderRepository;
+    private final UserService userService;
+
+    // ============ Supplement (마스터) ============
+
+    @Override
+    public Supplement findById(Long supplementId) {
+        return supplementRepository.findById(supplementId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.SUPPLEMENT_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional
+    public SupplementResponseDTO.CreateSupplementResult createSupplement(Long userId, SupplementRequestDTO.CreateSupplementRequest request) {
+        User user = userService.findById(userId);
+        Supplement supplement = SupplementConverter.toEntity(request, user);
+        supplementRepository.save(supplement);
+
+        return SupplementConverter.toCreateResult(supplement);
+    }
+
+    @Override
+    public SupplementResponseDTO.SupplementList searchSupplements(String keyword, SupplementTag tag, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "selectionCount"));
+        Page<Supplement> supplementPage;
+
+        if (keyword != null && !keyword.isBlank() && tag != null) {
+            supplementPage = supplementRepository.searchByTagAndKeyword(tag, keyword, pageable);
+        } else if (keyword != null && !keyword.isBlank()) {
+            supplementPage = supplementRepository.searchByKeyword(keyword, pageable);
+        } else if (tag != null) {
+            supplementPage = supplementRepository.findByTag(tag, pageable);
+        } else {
+            supplementPage = supplementRepository.findAll(pageable);
+        }
+
+        return SupplementConverter.toList(supplementPage);
+    }
+
+    @Override
+    public SupplementResponseDTO.SupplementList getPopularSupplements(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Supplement> supplementPage = supplementRepository.findAllOrderByPopularity(pageable);
+        return SupplementConverter.toList(supplementPage);
+    }
+
+    @Override
+    public SupplementResponseDTO.SupplementDetail getSupplementDetail(Long supplementId) {
+        Supplement supplement = findById(supplementId);
+        return SupplementConverter.toDetail(supplement);
+    }
+
+    @Override
+    @Transactional
+    public SupplementResponseDTO.SupplementDetail updateSupplement(Long userId, Long supplementId, SupplementRequestDTO.UpdateSupplementRequest request) {
+        User user = userService.findById(userId);
+        Supplement supplement = findById(supplementId);
+
+        validateSupplementOwner(supplement, user);
+
+        String name = request.getName() != null ? request.getName() : supplement.getName();
+        String description = request.getDescription() != null ? request.getDescription() : supplement.getDescription();
+        SupplementTag tag = request.getTag() != null ? request.getTag() : supplement.getTag();
+        String imageUrl = request.getImageUrl() != null ? request.getImageUrl() : supplement.getImageUrl();
+
+        supplement.update(name, description, tag, imageUrl);
+
+        return SupplementConverter.toDetail(supplement);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSupplement(Long userId, Long supplementId) {
+        User user = userService.findById(userId);
+        Supplement supplement = findById(supplementId);
+
+        validateSupplementOwner(supplement, user);
+
+        supplementRepository.delete(supplement);
+    }
+
+    // ============ UserSupplement ============
+
+    @Override
+    public UserSupplement findUserSupplementById(Long userSupplementId) {
+        return userSupplementRepository.findById(userSupplementId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.USER_SUPPLEMENT_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional
+    public SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
+        User user = userService.findById(userId);
+        Supplement supplement = findById(request.getSupplementId());
+
+        // 이미 등록된 영양제인지 확인
+        userSupplementRepository.findByUserAndSupplementId(user, supplement.getId())
+                .ifPresent(us -> {
+                    throw new GeneralException(ErrorStatus.USER_SUPPLEMENT_ALREADY_EXISTS);
+                });
+
+        UserSupplement userSupplement = SupplementConverter.toUserSupplementEntity(request, user, supplement);
+        userSupplementRepository.save(userSupplement);
+
+        // 선택 횟수 증가
+        supplement.incrementSelectionCount();
+
+        // 리마인더 생성
+        List<MedicationTiming> timings = request.getTimings();
+        for (MedicationTiming timing : timings) {
+            if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
+                Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                reminderRepository.save(reminder);
+            }
+        }
+
+        return SupplementConverter.toAddResult(userSupplement, timings);
+    }
+
+    @Override
+    public SupplementResponseDTO.UserSupplementList getUserSupplements(Long userId) {
+        User user = userService.findById(userId);
+        List<UserSupplement> supplements = userSupplementRepository.findByUserWithSupplement(user);
+
+        Map<Long, List<MedicationTiming>> timingsMap = new HashMap<>();
+        for (UserSupplement supplement : supplements) {
+            List<Reminder> reminders = reminderRepository.findByUserSupplement(supplement);
+            List<MedicationTiming> timings = reminders.stream()
+                    .map(Reminder::getTiming)
+                    .collect(Collectors.toList());
+            timingsMap.put(supplement.getId(), timings);
+        }
+
+        return SupplementConverter.toUserSupplementList(supplements, timingsMap);
+    }
+
+    @Override
+    public SupplementResponseDTO.UserSupplementDetail getUserSupplementDetail(Long userId, Long userSupplementId) {
+        User user = userService.findById(userId);
+        UserSupplement userSupplement = findUserSupplementById(userSupplementId);
+
+        validateUserSupplementOwner(userSupplement, user);
+
+        List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
+        return SupplementConverter.toUserSupplementDetail(userSupplement, reminders);
+    }
+
+    @Override
+    @Transactional
+    public SupplementResponseDTO.UpdateUserSupplementResult updateUserSupplement(Long userId, Long userSupplementId, SupplementRequestDTO.UpdateUserSupplementRequest request) {
+        User user = userService.findById(userId);
+        UserSupplement userSupplement = findUserSupplementById(userSupplementId);
+
+        validateUserSupplementOwner(userSupplement, user);
+
+        String dosage = request.getDosage() != null ? request.getDosage() : userSupplement.getDosage();
+        Integer frequency = request.getFrequency() != null ? request.getFrequency() : userSupplement.getFrequency();
+
+        userSupplement.update(dosage, frequency, request.getEndDate(), request.getMemo());
+
+        List<MedicationTiming> timings;
+        if (request.getTimings() != null) {
+            // 기존 리마인더 삭제 후 새로 생성
+            reminderRepository.deleteByUserSupplement(userSupplement);
+
+            for (MedicationTiming timing : request.getTimings()) {
+                if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
+                    Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                    reminderRepository.save(reminder);
+                }
+            }
+            timings = request.getTimings();
+        } else {
+            List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
+            timings = reminders.stream()
+                    .map(Reminder::getTiming)
+                    .collect(Collectors.toList());
+        }
+
+        return SupplementConverter.toUpdateResult(userSupplement, timings);
+    }
+
+    @Override
+    @Transactional
+    public void deleteUserSupplement(Long userId, Long userSupplementId) {
+        User user = userService.findById(userId);
+        UserSupplement userSupplement = findUserSupplementById(userSupplementId);
+
+        validateUserSupplementOwner(userSupplement, user);
+
+        // 선택 횟수 감소
+        userSupplement.getSupplement().decrementSelectionCount();
+
+        userSupplement.deactivate();
+    }
+
+    // ============ Private Methods ============
+
+    private void validateSupplementOwner(Supplement supplement, User user) {
+        if (!supplement.getCreatedBy().getId().equals(user.getId())) {
+            throw new GeneralException(ErrorStatus.SUPPLEMENT_ACCESS_DENIED);
+        }
+    }
+
+    private void validateUserSupplementOwner(UserSupplement userSupplement, User user) {
+        if (!userSupplement.getUser().getId().equals(user.getId())) {
+            throw new GeneralException(ErrorStatus.SUPPLEMENT_ACCESS_DENIED);
+        }
+    }
+}

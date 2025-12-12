@@ -24,6 +24,14 @@ public enum SuccessStatus implements BaseCode {
     MEDICATION_UPDATED(HttpStatus.OK, "MED200", "약 정보가 수정되었습니다."),
     MEDICATION_DELETED(HttpStatus.OK, "MED202", "약이 삭제되었습니다."),
 
+    // 영양제 관련
+    SUPPLEMENT_CREATED(HttpStatus.CREATED, "SUPP201", "영양제가 등록되었습니다."),
+    SUPPLEMENT_UPDATED(HttpStatus.OK, "SUPP200", "영양제 정보가 수정되었습니다."),
+    SUPPLEMENT_DELETED(HttpStatus.OK, "SUPP202", "영양제가 삭제되었습니다."),
+    USER_SUPPLEMENT_CREATED(HttpStatus.CREATED, "USUPP201", "영양제가 내 목록에 추가되었습니다."),
+    USER_SUPPLEMENT_UPDATED(HttpStatus.OK, "USUPP200", "영양제 복용 정보가 수정되었습니다."),
+    USER_SUPPLEMENT_DELETED(HttpStatus.OK, "USUPP202", "영양제가 내 목록에서 삭제되었습니다."),
+
     // 스캔 관련
     SCAN_SUCCESS(HttpStatus.OK, "SCAN200", "처방전 인식에 성공했습니다."),
     SCAN_RETRY_RECOMMENDED(HttpStatus.OK, "SCAN201", "인식 정확도가 낮습니다. 재촬영을 권장합니다."),
@@ -32,7 +40,9 @@ public enum SuccessStatus implements BaseCode {
     INTAKE_RECORDED(HttpStatus.CREATED, "INTAKE201", "복약이 기록되었습니다."),
 
     // 알림 관련
-    REMINDER_UPDATED(HttpStatus.OK, "REMINDER200", "알림이 수정되었습니다.");
+    REMINDER_UPDATED(HttpStatus.OK, "REMINDER200", "알림이 수정되었습니다."),
+    REMINDER_SNOOZED(HttpStatus.OK, "REMINDER201", "다시 알림이 설정되었습니다."),
+    REMINDER_SNOOZE_CLEARED(HttpStatus.OK, "REMINDER202", "다시 알림이 해제되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
