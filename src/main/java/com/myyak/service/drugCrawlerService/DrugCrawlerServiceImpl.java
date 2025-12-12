@@ -2,12 +2,13 @@ package com.myyak.service.drugCrawlerService;
 
 import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
@@ -19,17 +20,23 @@ import java.util.List;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
-@Transactional
 public class DrugCrawlerServiceImpl implements DrugCrawlerService {
 
     private final DrugInfoRepository drugInfoRepository;
+    private final DrugCrawlerServiceImpl self; // 자기 자신 주입 (프록시 호출용)
+
+    public DrugCrawlerServiceImpl(DrugInfoRepository drugInfoRepository,
+                                   @Lazy DrugCrawlerServiceImpl self) {
+        this.drugInfoRepository = drugInfoRepository;
+        this.self = self;
+    }
 
     private static final String NEDRUG_DETAIL_URL = "https://nedrug.mfds.go.kr/pbp/CCBBB01/getItemDetail";
     private static final int REQUEST_DELAY_MS = 1000; // 1초 딜레이
     private static final int TIMEOUT_MS = 10000; // 10초 타임아웃
 
     @Override
+    @Transactional(readOnly = true)
     public int crawlEfficacyForMissingDrugs() {
         List<DrugInfo> drugsWithoutEfficacy = drugInfoRepository.findByEfficacyIsNullOrEmpty();
         log.info("효능 정보가 없는 약물 수: {}건", drugsWithoutEfficacy.size());
@@ -41,7 +48,8 @@ public class DrugCrawlerServiceImpl implements DrugCrawlerService {
             DrugInfo drug = drugsWithoutEfficacy.get(i);
 
             try {
-                boolean success = crawlEfficacyByItemSeq(drug.getItemSeq());
+                // self를 통해 호출해야 프록시가 적용되어 REQUIRES_NEW 트랜잭션이 동작
+                boolean success = self.crawlAndSaveEfficacy(drug.getItemSeq());
                 if (success) {
                     successCount++;
                     log.info("[{}/{}] 크롤링 성공: {} ({})",
@@ -75,6 +83,15 @@ public class DrugCrawlerServiceImpl implements DrugCrawlerService {
 
     @Override
     public boolean crawlEfficacyByItemSeq(String itemSeq) {
+        return self.crawlAndSaveEfficacy(itemSeq);
+    }
+
+    /**
+     * 개별 약물 효능 크롤링 및 저장 (독립 트랜잭션)
+     * REQUIRES_NEW로 각 건마다 즉시 커밋되어 중간에 중단되어도 이전 데이터는 유지됨
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean crawlAndSaveEfficacy(String itemSeq) {
         try {
             String url = NEDRUG_DETAIL_URL + "?itemSeq=" + itemSeq;
 
