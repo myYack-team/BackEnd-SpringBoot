@@ -36,12 +36,14 @@ public class MedicationResponseDTO {
     public static class MedicationListItem {
         private Long id;
         private String drugName;         // 약 이름
+        private String displayName;      // 표시용 약물명 (한글 이름만)
         private String imageUrl;         // 약 이미지 (DrugInfo에서)
         private Integer dosage;
         private Integer frequency;
         private List<MedicationTiming> timings;
         private Integer remainingCount;
         private Integer daysLeft;
+        private List<ReminderInfo> reminders;  // 알림 정보 (시간 표시용)
     }
 
     @Getter
@@ -82,6 +84,8 @@ public class MedicationResponseDTO {
     public static class DrugInfoData {
         private String itemSeq;
         private String itemName;
+        private String displayName;      // 표시용 약물명 (한글 이름만)
+        private String ingredientKr;     // 한글 성분명
         private String entpName;         // 제약회사
         private String efficacy;         // 효능/효과
         private String useMethod;        // 용법/용량
