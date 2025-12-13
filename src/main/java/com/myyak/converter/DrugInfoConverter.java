@@ -18,7 +18,7 @@ public class DrugInfoConverter {
                 .ingredientKr(drugInfo.getIngredientKr())
                 .entpName(drugInfo.getEntpName())
                 .efficacy(drugInfo.getEfficacy())
-                .useMethod(drugInfo.getUseMethod())
+                .useMethod(drugInfo.getUsage())
                 .warning(drugInfo.getWarning())
                 .caution(drugInfo.getCaution())
                 .interaction(drugInfo.getInteraction())

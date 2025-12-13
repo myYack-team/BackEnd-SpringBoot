@@ -122,7 +122,7 @@ public class MedicationConverter {
                     .ingredientKr(di.getIngredientKr())
                     .entpName(di.getEntpName())
                     .efficacy(di.getEfficacy())
-                    .useMethod(di.getUseMethod())
+                    .useMethod(di.getUsage())
                     .warning(di.getWarning())
                     .caution(di.getCaution())
                     .interaction(di.getInteraction())

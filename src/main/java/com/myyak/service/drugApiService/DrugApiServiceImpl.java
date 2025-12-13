@@ -130,7 +130,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                                     drugInfo.getIngredientKr(),
                                     drugInfo.getEntpName(),
                                     drugInfo.getEfficacy(),
-                                    drugInfo.getUseMethod(),
+                                    drugInfo.getUsage(),
                                     drugInfo.getWarning(),
                                     drugInfo.getCaution(),
                                     drugInfo.getInteraction(),
@@ -235,7 +235,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                 .ingredientKr(parsed.ingredientKr())
                 .entpName(item.getEntpName())
                 .efficacy(item.getEfcyQesitm())
-                .useMethod(item.getUseMethodQesitm())
+                .usage(item.getUseMethodQesitm())
                 .warning(item.getAtpnWarnQesitm())
                 .caution(item.getAtpnQesitm())
                 .interaction(item.getIntrcQesitm())
@@ -345,7 +345,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                                             drugInfo.getDrugType(),
                                             drugInfo.getIngredientName(),
                                             drugInfo.getEfficacy(),
-                                            drugInfo.getUseMethod(),
+                                            drugInfo.getUsage(),
                                             drugInfo.getCaution(),
                                             drugInfo.getStorageMethod(),
                                             drugInfo.getImageUrl(),
@@ -390,7 +390,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                 .drugType(DrugType.fromApiValue(item.getSpcltyPblc()))
                 .ingredientName(item.getItemIngrName())
                 .efficacy(parseDocData(item.getEeDocData()))
-                .useMethod(parseDocData(item.getUdDocData()))
+                .usage(parseDocData(item.getUdDocData()))
                 .caution(parseDocData(item.getNbDocData()))
                 .storageMethod(item.getStorageMethod())
                 .imageUrl(item.getBigPrdtImgUrl())
