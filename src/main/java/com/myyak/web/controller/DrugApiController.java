@@ -6,6 +6,7 @@ import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
 import com.myyak.service.drugCrawlerService.DrugCrawlerService;
+import com.myyak.service.drugPdfBatchService.DrugPdfBatchService;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
@@ -30,6 +31,7 @@ public class DrugApiController {
     private final DrugApiService drugApiService;
     private final DrugInfoRepository drugInfoRepository;
     private final DrugCrawlerService drugCrawlerService;
+    private final DrugPdfBatchService drugPdfBatchService;
 
     @Operation(summary = "약 검색 (DB)", description = "DB에서 약 이름으로 검색")
     @GetMapping("/search")
@@ -188,6 +190,24 @@ public class DrugApiController {
         return ApiResponse.onSuccess(new StatsResult(count));
     }
 
+    // === Excel PDF 파싱 배치 API ===
+
+    @Operation(summary = "Excel PDF 파싱 배치", description = "Excel 파일에서 PDF URL을 읽어 파싱 후 DB에 저장 (주의: 매우 오래 걸림)")
+    @PostMapping("/batch/pdf/import")
+    public ApiResponse<PdfBatchResult> importPdfFromExcel(
+            @Parameter(description = "Excel 파일 경로") @RequestParam String filePath) {
+
+        DrugPdfBatchService.BatchResult result = drugPdfBatchService.importFromExcel(filePath);
+        return ApiResponse.onSuccess(new PdfBatchResult(
+                result.totalCount(),
+                result.successCount(),
+                result.skipCount(),
+                result.failCount(),
+                result.toSummary()
+        ));
+    }
+
     public record BatchResult(int savedCount, String message) {}
     public record StatsResult(long totalCount) {}
+    public record PdfBatchResult(int totalCount, int successCount, int skipCount, int failCount, String message) {}
 }
