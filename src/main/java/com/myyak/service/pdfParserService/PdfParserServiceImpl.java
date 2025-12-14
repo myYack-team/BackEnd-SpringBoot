@@ -100,8 +100,10 @@ public class PdfParserServiceImpl implements PdfParserService {
             return null;
         }
 
-        // 연속된 공백/개행 정리
+        // NULL 문자 및 제어 문자 제거 후 연속된 공백/개행 정리
         String cleaned = text
+                .replaceAll("\\x00", "")  // NULL 문자 제거
+                .replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "")  // 제어 문자 제거
                 .replaceAll("\\r\\n", "\n")
                 .replaceAll("\\r", "\n")
                 .replaceAll("[ \\t]+", " ")

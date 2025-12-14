@@ -83,9 +83,14 @@ public class DrugPdfBatchServiceImpl implements DrugPdfBatchService {
 
         DrugInfo drugInfo = optionalDrugInfo.get();
 
-        // PDF URL이 있는 경우만 처리
-        if (!pdfData.hasAnyPdfUrl() && !pdfData.hasProductImageUrl() &&
-            (pdfData.getStorageMethod() == null || pdfData.getStorageMethod().isBlank())) {
+        // 각 필드가 비어있는지 확인
+        boolean needEfficacy = drugInfo.getEfficacy() == null || drugInfo.getEfficacy().isBlank();
+        boolean needUsage = drugInfo.getUsage() == null || drugInfo.getUsage().isBlank();
+        boolean needPrecaution = drugInfo.getPrecaution() == null || drugInfo.getPrecaution().isBlank();
+        boolean needStorageMethod = drugInfo.getStorageMethod() == null || drugInfo.getStorageMethod().isBlank();
+
+        // 모든 필드가 이미 채워져 있으면 스킵
+        if (!needEfficacy && !needUsage && !needPrecaution && !needStorageMethod) {
             return false;
         }
 
@@ -93,28 +98,31 @@ public class DrugPdfBatchServiceImpl implements DrugPdfBatchService {
         String usage = null;
         String precaution = null;
 
-        // Q컬럼: 전문의약품설명서 PDF에서 효능효과 추출
-        if (isValidUrl(pdfData.getEfficacyUrl())) {
-            efficacy = pdfParserService.extractTextFromPdfUrl(pdfData.getEfficacyUrl());
+        // 효능효과가 비어있을 때만 PDF 다운로드
+        if (needEfficacy && isValidUrl(pdfData.getEfficacyUrl())) {
+            efficacy = removeTitle(pdfParserService.extractTextFromPdfUrl(pdfData.getEfficacyUrl()), "효능효과");
         }
 
-        // R컬럼: 일반의약품설명서 PDF에서 용법용량 추출
-        if (isValidUrl(pdfData.getUsageUrl())) {
-            usage = pdfParserService.extractTextFromPdfUrl(pdfData.getUsageUrl());
+        // 용법용량이 비어있을 때만 PDF 다운로드
+        if (needUsage && isValidUrl(pdfData.getUsageUrl())) {
+            usage = removeTitle(pdfParserService.extractTextFromPdfUrl(pdfData.getUsageUrl()), "용법용량");
         }
 
-        // S컬럼: 일반의약품용법용량 PDF에서 사용상 주의사항 추출
-        if (isValidUrl(pdfData.getPrecautionUrl())) {
-            precaution = pdfParserService.extractTextFromPdfUrl(pdfData.getPrecautionUrl());
+        // 주의사항이 비어있을 때만 PDF 다운로드
+        if (needPrecaution && isValidUrl(pdfData.getPrecautionUrl())) {
+            precaution = removeTitle(pdfParserService.extractTextFromPdfUrl(pdfData.getPrecautionUrl()), "사용상의주의사항");
         }
 
-        // 업데이트 (T컬럼은 이미지 URL 그대로, U컬럼은 TEXT 그대로)
+        // storageMethod도 비어있을 때만 사용
+        String storageMethod = needStorageMethod ? pdfData.getStorageMethod() : null;
+
+        // 업데이트 (T컬럼은 이미지 URL 그대로)
         drugInfo.updateFromPdfData(
                 efficacy,
                 usage,
                 precaution,
                 pdfData.getProductImageUrl(),
-                pdfData.getStorageMethod()
+                storageMethod
         );
 
         drugInfoRepository.save(drugInfo);
@@ -125,5 +133,13 @@ public class DrugPdfBatchServiceImpl implements DrugPdfBatchService {
 
     private boolean isValidUrl(String url) {
         return url != null && !url.isBlank() && url.startsWith("http");
+    }
+
+    private String removeTitle(String text, String title) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        // 맨 앞의 제목과 뒤따르는 공백/개행 제거
+        return text.replaceFirst("^" + title + "\\s*", "").trim();
     }
 }

@@ -37,7 +37,7 @@ public class DrugInfo extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String efficacy;  // efcyQesitm - 효능/효과 (Q컬럼 PDF)
 
-    @Column(name = "use_method", columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String usage;  // useMethodQesitm - 용법/용량 (R컬럼 PDF)
 
     @Column(columnDefinition = "TEXT")
