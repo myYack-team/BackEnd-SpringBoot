@@ -19,7 +19,12 @@ public class PrescriptionResponseDTO {
         private Long id;
         private String imageUrl;
         private LocalDate prescriptionDate;
+        private String patientName;       // 환자명
         private String hospitalName;
+        private String diagnosis;         // 진단명/증상
+        private Integer durationDays;     // 복용 기간 (일)
+        private LocalDate endDate;        // 복용 종료일
+        private String status;            // 복용 상태 (UPCOMING, IN_PROGRESS, COMPLETED)
         private String notes;
         private Integer medicationCount;
         private LocalDateTime createdAt;
@@ -33,7 +38,12 @@ public class PrescriptionResponseDTO {
         private Long id;
         private String imageUrl;
         private LocalDate prescriptionDate;
+        private String patientName;       // 환자명
         private String hospitalName;
+        private String diagnosis;         // 진단명/증상
+        private Integer durationDays;     // 복용 기간 (일)
+        private LocalDate endDate;        // 복용 종료일
+        private String status;            // 복용 상태 (UPCOMING, IN_PROGRESS, COMPLETED)
         private String notes;
         private List<MedicationSummary> medications;
         private LocalDateTime createdAt;
