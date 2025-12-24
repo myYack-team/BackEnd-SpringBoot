@@ -5,10 +5,18 @@ import com.myyak.domain.DrugInfo;
 import java.util.Optional;
 
 /**
- * 자모 기반 편집거리 검색 서비스
- * OCR 오타 처리를 위한 한글 자모 분해 + Levenshtein Distance 기반 약물 검색
+ * 약물 검색 서비스
+ * - 메모리 캐시 기반 빠른 검색 (DB 쿼리 없음)
+ * - 자모 분해 + Levenshtein Distance 기반 오타 교정
  */
 public interface DrugSearchService {
+
+    /**
+     * 메모리 캐시에서 약물명 부분 일치 검색 (DB 쿼리 없음, 매우 빠름)
+     * @param keyword 검색 키워드
+     * @return 매칭된 약물 (없으면 empty)
+     */
+    Optional<DrugInfo> findByNameContaining(String keyword);
 
     /**
      * 편집거리 기반 약물 검색
