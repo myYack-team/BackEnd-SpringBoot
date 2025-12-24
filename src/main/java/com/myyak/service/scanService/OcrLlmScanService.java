@@ -560,16 +560,18 @@ public class OcrLlmScanService implements ScanService {
     }
 
     /**
-     * 검색용 약물명 추출 (용량, 단위 제거)
+     * 검색용 약물명 추출 (용량, 단위, 공백 제거)
+     * DB의 약물명은 공백 없이 저장되어 있으므로 검색 시에도 공백 제거
      */
     private String extractDrugNameForSearch(String drugName) {
+        // "디푸코연고 0.3% 10g" → "디푸코연고0.3%"
         // "메치론정 4mg" → "메치론정"
         // "셀벡스 캡슐 50mg" → "셀벡스"
         String cleaned = drugName
-                .replaceAll("\\s*\\d+(\\.\\d+)?\\s*(mg|ml|g|정|캡슐|시럽|밀리그램|그램).*", "")
-                .replaceAll("\\s*(정|캡슐|시럽|연고|크림|주사)$", "")
-                .trim();
-        return cleaned.isEmpty() ? drugName : cleaned;
+                .replaceAll("\\s+", "")  // 모든 공백 제거 (DB는 공백 없이 저장됨)
+                .replaceAll("\\d+(\\.\\d+)?(mg|ml|g|밀리그램|그램)$", "")  // 끝의 용량 제거
+                .replaceAll("\\d+g$", "");  // "10g" 같은 용량 제거
+        return cleaned.isEmpty() ? drugName.replaceAll("\\s+", "") : cleaned;
     }
 
     /**
