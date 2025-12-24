@@ -69,7 +69,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                             .id(p.getId())
                             .imageUrl(p.getImageUrl())
                             .prescriptionDate(p.getPrescriptionDate())
+                            .patientName(p.getPatientName())
                             .hospitalName(p.getHospitalName())
+                            .diagnosis(p.getDiagnosis())
+                            .durationDays(p.getDurationDays())
+                            .endDate(p.getEndDate())
+                            .status(p.getStatus())
                             .notes(p.getNotes())
                             .medicationCount(medicationCount)
                             .createdAt(p.getCreatedAt())
@@ -105,7 +110,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .id(prescription.getId())
                 .imageUrl(prescription.getImageUrl())
                 .prescriptionDate(prescription.getPrescriptionDate())
+                .patientName(prescription.getPatientName())
                 .hospitalName(prescription.getHospitalName())
+                .diagnosis(prescription.getDiagnosis())
+                .durationDays(prescription.getDurationDays())
+                .endDate(prescription.getEndDate())
+                .status(prescription.getStatus())
                 .notes(prescription.getNotes())
                 .medications(medicationSummaries)
                 .createdAt(prescription.getCreatedAt())
@@ -118,7 +128,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         prescription.update(
                 request.getPrescriptionDate(),
+                request.getPatientName(),
                 request.getHospitalName(),
+                request.getDiagnosis(),
+                request.getDurationDays(),
                 request.getNotes()
         );
 
@@ -128,7 +141,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .id(prescription.getId())
                 .imageUrl(prescription.getImageUrl())
                 .prescriptionDate(prescription.getPrescriptionDate())
+                .patientName(prescription.getPatientName())
                 .hospitalName(prescription.getHospitalName())
+                .diagnosis(prescription.getDiagnosis())
+                .durationDays(prescription.getDurationDays())
+                .endDate(prescription.getEndDate())
+                .status(prescription.getStatus())
                 .notes(prescription.getNotes())
                 .medicationCount(medicationCount)
                 .createdAt(prescription.getCreatedAt())

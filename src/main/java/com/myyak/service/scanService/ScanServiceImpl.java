@@ -12,6 +12,7 @@ import com.myyak.web.dto.ScanDTO.ScanResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +29,7 @@ import java.util.*;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "scan.strategy", havingValue = "vision-only", matchIfMissing = true)
 public class ScanServiceImpl implements ScanService {
 
     private final WebClient webClient;
@@ -50,15 +52,20 @@ public class ScanServiceImpl implements ScanService {
     @Value("${ai.gemini.model:gemini-3-pro-preview}")
     private String geminiModel;
 
+    @Value("${app.debug.save-scan-images:true}")
+    private boolean saveScanImages;
+
+    @Value("${app.debug.image-dir:#{systemProperties['java.io.tmpdir']}/myyak/scan_debug}")
+    private String debugImageDir;
+
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final String DEBUG_IMAGE_DIR = "C:\\tmp\\scan_debug";
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
             당신은 한국에서 처방되는 모든 의약품에 대한 깊은 지식을 갖추고 있습니다.
 
-            이미지에서 의약품 정보를 추출하여 JSON 형식으로 반환하세요.
+            이미지에서 의약품 정보와 처방전 메타정보를 추출하여 JSON 형식으로 반환하세요.
 
             ## 중요: confidence 판단 기준
             - "high": 1개 이상의 약품명을 명확히 읽을 수 있음
@@ -72,6 +79,10 @@ public class ScanServiceImpl implements ScanService {
             {
               "success": true,
               "confidence": "high",
+              "patientName": "홍길동",
+              "hospitalName": "서울내과의원",
+              "diagnosis": "급성 상기도감염",
+              "durationDays": 7,
               "medications": [
                 {
                   "name": "메드론정",
@@ -85,12 +96,20 @@ public class ScanServiceImpl implements ScanService {
               "notes": null
             }
 
-            ## 필드 설명:
+            ## 처방전 메타정보 필드 (최상위 레벨):
+            - patientName: 환자명 (처방전에 기재된 이름, 없으면 null)
+            - hospitalName: 병원/약국명 (없으면 null)
+            - diagnosis: 진단명, 질환명, 증상 (처방전에 기재되어 있거나 처방 약물로 추론 가능하면 작성, 없으면 null)
+              - 예시: "급성 상기도감염", "고혈압", "당뇨", "위염", "감기" 등
+              - 진단명이 직접 기재되어 있지 않아도, 처방된 약물 조합으로 추론 가능하면 작성
+            - durationDays: 총 복용 기간 (일). 약물별 durationDays 중 가장 긴 기간 또는 처방전에 명시된 기간
+
+            ## 약물 필드 설명:
             - name: 순수 약품명만 (예: "메드론정", "아스피린정", "타이레놀정")
             - dosage: 1회 복용량 (알 개수, 기본값 1)
             - frequency: 하루 복용 횟수 (기본값 1)
             - timings: 복용 시간대 배열
-            - durationDays: 총 복용 일수 (기본값 7)
+            - durationDays: 해당 약물의 복용 일수 (기본값 7)
             - totalCount: 총 약 개수 (dosage × frequency × durationDays)
 
             ## 약품명(name) 작성 규칙 (매우 중요):
@@ -396,6 +415,12 @@ public class ScanServiceImpl implements ScanService {
             String confidence = resultJson.path("confidence").asText("low");
             String notes = resultJson.path("notes").isNull() ? null : resultJson.path("notes").asText();
 
+            // 처방전 메타정보 추출
+            String patientName = resultJson.path("patientName").isNull() ? null : resultJson.path("patientName").asText();
+            String hospitalName = resultJson.path("hospitalName").isNull() ? null : resultJson.path("hospitalName").asText();
+            String diagnosis = resultJson.path("diagnosis").isNull() ? null : resultJson.path("diagnosis").asText();
+            Integer totalDurationDays = resultJson.path("durationDays").isNull() ? null : resultJson.path("durationDays").asInt();
+
             List<ScanResponseDTO.ScannedMedication> medications = new ArrayList<>();
             JsonNode medsNode = resultJson.path("medications");
 
@@ -462,6 +487,10 @@ public class ScanServiceImpl implements ScanService {
                     .confidence(confidence)
                     .medications(medications)
                     .notes(notes)
+                    .patientName(patientName)
+                    .hospitalName(hospitalName)
+                    .diagnosis(diagnosis)
+                    .durationDays(totalDurationDays)
                     .build();
 
         } catch (Exception e) {
@@ -542,8 +571,13 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private void saveDebugImage(MultipartFile image) {
+        if (!saveScanImages) {
+            log.debug("[DEBUG] 스캔 이미지 저장이 비활성화되어 있습니다.");
+            return;
+        }
+
         try {
-            Path debugDir = Paths.get(DEBUG_IMAGE_DIR);
+            Path debugDir = Paths.get(debugImageDir);
             if (!Files.exists(debugDir)) {
                 Files.createDirectories(debugDir);
             }

@@ -67,6 +67,9 @@ dependencies {
 	// Apache PDFBox (PDF 파싱)
 	implementation 'org.apache.pdfbox:pdfbox:3.0.3'
 
+	// Google Cloud Vision (OCR)
+	implementation 'com.google.cloud:google-cloud-vision:3.31.0'
+
 	// DevTools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
