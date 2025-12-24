@@ -35,10 +35,16 @@ public class DrugInfo extends BaseEntity {
     private String entpName;  // 업체명 (제약회사)
 
     @Column(columnDefinition = "TEXT")
-    private String efficacy;  // efcyQesitm - 효능/효과
+    private String efficacy;  // efcyQesitm - 효능/효과 (Q컬럼 PDF)
 
     @Column(columnDefinition = "TEXT")
-    private String useMethod;  // useMethodQesitm - 용법/용량
+    private String usage;  // useMethodQesitm - 용법/용량 (R컬럼 PDF)
+
+    @Column(columnDefinition = "TEXT")
+    private String precaution;  // 사용상 주의사항 (S컬럼 PDF)
+
+    @Column(length = 500)
+    private String productImage;  // 제품 안내사항 이미지 URL (T컬럼)
 
     @Column(columnDefinition = "TEXT")
     private String warning;  // atpnWarnQesitm - 주의사항 경고
@@ -74,7 +80,7 @@ public class DrugInfo extends BaseEntity {
 
     public void updateFromApi(String itemName, String displayName, String ingredientKr,
                                String entpName, String efficacy,
-                               String useMethod, String warning, String caution,
+                               String usage, String warning, String caution,
                                String interaction, String sideEffect, String storageMethod,
                                String imageUrl, LocalDate openDate, LocalDate apiUpdateDate) {
         this.itemName = itemName;
@@ -82,7 +88,7 @@ public class DrugInfo extends BaseEntity {
         this.ingredientKr = ingredientKr;
         this.entpName = entpName;
         this.efficacy = efficacy;
-        this.useMethod = useMethod;
+        this.usage = usage;
         this.warning = warning;
         this.caution = caution;
         this.interaction = interaction;
@@ -95,7 +101,7 @@ public class DrugInfo extends BaseEntity {
 
     public void updateFromPermitApi(String itemName, String displayName, String ingredientKr,
                                       String entpName, DrugType drugType,
-                                      String ingredientName, String efficacy, String useMethod,
+                                      String ingredientName, String efficacy, String usage,
                                       String caution, String storageMethod, String imageUrl, LocalDate permitDate) {
         this.itemName = itemName;
         this.displayName = displayName;
@@ -107,8 +113,8 @@ public class DrugInfo extends BaseEntity {
         if ((this.efficacy == null || this.efficacy.isBlank()) && efficacy != null) {
             this.efficacy = efficacy;
         }
-        if ((this.useMethod == null || this.useMethod.isBlank()) && useMethod != null) {
-            this.useMethod = useMethod;
+        if ((this.usage == null || this.usage.isBlank()) && usage != null) {
+            this.usage = usage;
         }
         if ((this.caution == null || this.caution.isBlank()) && caution != null) {
             this.caution = caution;
@@ -120,5 +126,48 @@ public class DrugInfo extends BaseEntity {
             this.imageUrl = imageUrl;
         }
         this.permitDate = permitDate;
+    }
+
+    /**
+     * 크롤링으로 효능 정보만 업데이트
+     */
+    public void updateEfficacy(String efficacy) {
+        if (efficacy != null && !efficacy.isBlank()) {
+            this.efficacy = efficacy;
+        }
+    }
+
+    /**
+     * 파싱된 displayName, ingredientKr 업데이트
+     */
+    public void updateParsedNames(String displayName, String ingredientKr) {
+        if (displayName != null && !displayName.isBlank()) {
+            this.displayName = displayName;
+        }
+        if (ingredientKr != null && !ingredientKr.isBlank()) {
+            this.ingredientKr = ingredientKr;
+        }
+    }
+
+    /**
+     * PDF 파싱 데이터로 업데이트
+     */
+    public void updateFromPdfData(String efficacy, String usage, String precaution,
+                                   String productImage, String storageMethod) {
+        if (efficacy != null && !efficacy.isBlank()) {
+            this.efficacy = efficacy;
+        }
+        if (usage != null && !usage.isBlank()) {
+            this.usage = usage;
+        }
+        if (precaution != null && !precaution.isBlank()) {
+            this.precaution = precaution;
+        }
+        if (productImage != null && !productImage.isBlank()) {
+            this.productImage = productImage;
+        }
+        if (storageMethod != null && !storageMethod.isBlank()) {
+            this.storageMethod = storageMethod;
+        }
     }
 }

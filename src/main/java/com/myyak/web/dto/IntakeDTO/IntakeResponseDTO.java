@@ -51,9 +51,12 @@ public class IntakeResponseDTO {
     public static class ScheduleMedication {
         private Long id;
         private String name;
+        private String displayName;      // 표시용 약물명 (한글 이름만)
+        private String ingredientKr;     // 한글 성분명
         private Integer dosage;
         private Boolean taken;
         private LocalDateTime takenAt;
+        private String imageUrl;         // 약 이미지
     }
 
     @Getter

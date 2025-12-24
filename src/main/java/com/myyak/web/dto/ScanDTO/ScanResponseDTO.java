@@ -42,5 +42,11 @@ public class ScanResponseDTO {
         private String confidence;       // high, medium, low
         private List<ScannedMedication> medications;
         private String notes;            // 추가 안내 메시지
+
+        // 처방전 메타정보 (AI 인식)
+        private String patientName;      // 환자명
+        private String hospitalName;     // 병원명
+        private String diagnosis;        // 진단명/증상
+        private Integer durationDays;    // 총 복용 기간 (일)
     }
 }
