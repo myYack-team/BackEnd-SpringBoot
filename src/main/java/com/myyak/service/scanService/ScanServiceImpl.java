@@ -50,9 +50,14 @@ public class ScanServiceImpl implements ScanService {
     @Value("${ai.gemini.model:gemini-3-pro-preview}")
     private String geminiModel;
 
+    @Value("${app.debug.save-scan-images:true}")
+    private boolean saveScanImages;
+
+    @Value("${app.debug.image-dir:#{systemProperties['java.io.tmpdir']}/myyak/scan_debug}")
+    private String debugImageDir;
+
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final String DEBUG_IMAGE_DIR = "C:\\tmp\\scan_debug";
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
@@ -542,8 +547,13 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private void saveDebugImage(MultipartFile image) {
+        if (!saveScanImages) {
+            log.debug("[DEBUG] 스캔 이미지 저장이 비활성화되어 있습니다.");
+            return;
+        }
+
         try {
-            Path debugDir = Paths.get(DEBUG_IMAGE_DIR);
+            Path debugDir = Paths.get(debugImageDir);
             if (!Files.exists(debugDir)) {
                 Files.createDirectories(debugDir);
             }
