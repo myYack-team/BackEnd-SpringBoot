@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.repository.DrugInfoRepository;
+import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.service.ocr.OcrClient;
 import com.myyak.service.ocr.OcrResult;
 import com.myyak.web.dto.ScanDTO.ScanResponseDTO;
@@ -18,6 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * OCR + LLM 텍스트 파싱 방식의 스캔 서비스
@@ -34,6 +39,8 @@ public class OcrLlmScanService implements ScanService {
     private final OcrClient ocrClient;
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final DrugInfoRepository drugInfoRepository;
+    private final DrugSearchService drugSearchService;
 
     // LLM 프로바이더 설정
     @Value("${scan.llm-provider:gemini}")
@@ -80,8 +87,8 @@ public class OcrLlmScanService implements ScanService {
 
             각 약물에 대해:
             - name: 약품명 (정제, 캡슐, 시럽 등 제형 포함)
-            - dosage: 1회 복용량 (예: "1정", "2캡슐", "5ml")
-            - frequency: 복용 횟수 (예: "1일 2회", "1일 3회")
+            - dosage: 1회 복용량 (숫자만, 예: 1, 2)
+            - frequency: 하루 복용 횟수 (숫자만, 예: 1, 2, 3)
             - timings: 복용 시간대 배열
             - durationDays: 복용 일수 (숫자만)
             - totalCount: 총 수량 (숫자만)
@@ -105,8 +112,8 @@ public class OcrLlmScanService implements ScanService {
               "medications": [
                 {
                   "name": "록사틴정500밀리그램",
-                  "dosage": "1정",
-                  "frequency": "1일 2회",
+                  "dosage": 1,
+                  "frequency": 2,
                   "timings": ["AFTER_BREAKFAST", "AFTER_DINNER"],
                   "durationDays": 7,
                   "totalCount": 14
@@ -477,19 +484,133 @@ public class OcrLlmScanService implements ScanService {
                 timings.add(MedicationTiming.AFTER_BREAKFAST);
             }
 
-            return ScanResponseDTO.ScannedMedication.builder()
+            // 빌더 생성
+            ScanResponseDTO.ScannedMedication.ScannedMedicationBuilder builder = ScanResponseDTO.ScannedMedication.builder()
                     .name(name)
-                    .dosage(null)
-                    .frequency(null)
+                    .dosage(getIntOrNull(node, "dosage"))
+                    .frequency(getIntOrNull(node, "frequency"))
                     .timings(timings)
                     .durationDays(getIntOrNull(node, "durationDays"))
-                    .totalCount(getIntOrNull(node, "totalCount"))
-                    .build();
+                    .totalCount(getIntOrNull(node, "totalCount"));
+
+            // DB 매칭 로직 추가
+            DrugInfo matchedDrug = matchDrugFromDatabase(name);
+
+            if (matchedDrug != null) {
+                // DB 매칭 성공 - 정확한 약물 정보로 보강
+                builder.name(extractPureDrugName(matchedDrug.getItemName()))
+                       .drugItemSeq(matchedDrug.getItemSeq())
+                       .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))
+                       .efficacy(matchedDrug.getEfficacy())
+                       .imageUrl(matchedDrug.getImageUrl())
+                       .entpName(matchedDrug.getEntpName());
+                log.info("약물 '{}' → DB 매칭: '{}'", name, matchedDrug.getItemName());
+            } else {
+                // DB 매칭 실패 → 편집거리 검색으로 OCR 오타 보정
+                Optional<DrugInfo> editDistanceMatch = drugSearchService.findByEditDistance(name);
+                if (editDistanceMatch.isPresent()) {
+                    DrugInfo foundDrug = editDistanceMatch.get();
+                    builder.name(extractPureDrugName(foundDrug.getItemName()))
+                           .drugItemSeq(foundDrug.getItemSeq())
+                           .ingredient(resolveIngredient(foundDrug.getItemName(), foundDrug.getIngredientName()))
+                           .efficacy(foundDrug.getEfficacy())
+                           .imageUrl(foundDrug.getImageUrl())
+                           .entpName(foundDrug.getEntpName())
+                           .matchedByEditDistance(true);
+                    log.info("약물 '{}' → 편집거리 매칭: '{}'", name, foundDrug.getItemName());
+                } else {
+                    log.warn("약물 '{}' → DB 매칭 실패", name);
+                }
+            }
+
+            return builder.build();
 
         } catch (Exception e) {
             log.warn("약물 파싱 실패: ", e);
             return null;
         }
+    }
+
+    /**
+     * DB에서 약물 검색 (정확한 매칭)
+     */
+    private DrugInfo matchDrugFromDatabase(String drugName) {
+        if (drugName == null || drugName.isBlank()) {
+            return null;
+        }
+
+        // 약물명에서 검색 키워드 추출 (용량, 제형 제외)
+        String searchKeyword = extractDrugNameForSearch(drugName);
+
+        // 1. 정확한 이름으로 검색
+        Optional<DrugInfo> exactMatch = drugInfoRepository.findByItemNameContaining(searchKeyword)
+                .stream()
+                .findFirst();
+
+        if (exactMatch.isPresent()) {
+            return exactMatch.get();
+        }
+
+        // 2. 약물명 정규화 후 검색
+        String normalizedName = normalizeDrugName(drugName);
+        return drugInfoRepository.findByItemNameContaining(normalizedName)
+                .stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * 검색용 약물명 추출 (용량, 단위 제거)
+     */
+    private String extractDrugNameForSearch(String drugName) {
+        // "메치론정 4mg" → "메치론정"
+        // "셀벡스 캡슐 50mg" → "셀벡스"
+        String cleaned = drugName
+                .replaceAll("\\s*\\d+(\\.\\d+)?\\s*(mg|ml|g|정|캡슐|시럽|밀리그램|그램).*", "")
+                .replaceAll("\\s*(정|캡슐|시럽|연고|크림|주사)$", "")
+                .trim();
+        return cleaned.isEmpty() ? drugName : cleaned;
+    }
+
+    /**
+     * 약물명 정규화
+     */
+    private String normalizeDrugName(String drugName) {
+        return drugName
+                .replaceAll("\\s+", "")
+                .replaceAll("mg", "밀리그램")
+                .replaceAll("ml", "밀리리터")
+                .replaceAll("g", "그램")
+                .toLowerCase();
+    }
+
+    /**
+     * DB에서 가져온 약물명에서 순수 약물명 추출
+     * 예: "타이레놀정500밀리그램(아세트아미노펜)" → "타이레놀정500밀리그램"
+     */
+    private String extractPureDrugName(String fullName) {
+        if (fullName == null) return null;
+        int parenIdx = fullName.indexOf('(');
+        if (parenIdx > 0) {
+            return fullName.substring(0, parenIdx).trim();
+        }
+        return fullName.trim();
+    }
+
+    /**
+     * 성분명 결정 (괄호 안 성분명 또는 ingredientName 필드)
+     */
+    private String resolveIngredient(String itemName, String ingredientName) {
+        // 1. 약품명에서 괄호 안의 성분명 추출 시도
+        if (itemName != null) {
+            Pattern pattern = Pattern.compile("\\(([^)]+)\\)");
+            Matcher matcher = pattern.matcher(itemName);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        // 2. ingredientName 필드 사용
+        return ingredientName;
     }
 
     private String extractJsonFromText(String text) {
