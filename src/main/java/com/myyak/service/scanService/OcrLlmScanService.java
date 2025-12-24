@@ -6,7 +6,6 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
-import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.service.ocr.OcrClient;
 import com.myyak.service.ocr.OcrResult;
@@ -39,7 +38,6 @@ public class OcrLlmScanService implements ScanService {
     private final OcrClient ocrClient;
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
-    private final DrugInfoRepository drugInfoRepository;
     private final DrugSearchService drugSearchService;
 
     // LLM 프로바이더 설정
@@ -532,7 +530,7 @@ public class OcrLlmScanService implements ScanService {
     }
 
     /**
-     * DB에서 약물 검색 (정확한 매칭)
+     * 메모리 캐시에서 약물 검색 (DB 쿼리 없음, 매우 빠름)
      */
     private DrugInfo matchDrugFromDatabase(String drugName) {
         if (drugName == null || drugName.isBlank()) {
@@ -542,21 +540,15 @@ public class OcrLlmScanService implements ScanService {
         // 약물명에서 검색 키워드 추출 (용량, 제형 제외)
         String searchKeyword = extractDrugNameForSearch(drugName);
 
-        // 1. 정확한 이름으로 검색
-        Optional<DrugInfo> exactMatch = drugInfoRepository.findByItemNameContaining(searchKeyword)
-                .stream()
-                .findFirst();
-
-        if (exactMatch.isPresent()) {
-            return exactMatch.get();
+        // 1. 메모리 캐시에서 부분 일치 검색
+        Optional<DrugInfo> cacheMatch = drugSearchService.findByNameContaining(searchKeyword);
+        if (cacheMatch.isPresent()) {
+            return cacheMatch.get();
         }
 
-        // 2. 약물명 정규화 후 검색
+        // 2. 약물명 정규화 후 캐시에서 검색
         String normalizedName = normalizeDrugName(drugName);
-        return drugInfoRepository.findByItemNameContaining(normalizedName)
-                .stream()
-                .findFirst()
-                .orElse(null);
+        return drugSearchService.findByNameContaining(normalizedName).orElse(null);
     }
 
     /**
