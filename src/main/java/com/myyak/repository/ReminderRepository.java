@@ -18,6 +18,10 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     List<Reminder> findByUserMedication(UserMedication userMedication);
 
+    // 여러 UserMedication의 리마인더를 한 번에 조회 (N+1 방지)
+    @Query("SELECT r FROM Reminder r WHERE r.userMedication IN :medications")
+    List<Reminder> findByUserMedicationIn(@Param("medications") List<UserMedication> medications);
+
     void deleteByUserMedication(UserMedication userMedication);
 
     @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE um.user.id = :userId AND um.isActive = true")

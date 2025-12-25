@@ -19,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -71,11 +70,12 @@ public class MedicationServiceImpl implements MedicationService {
         User user = userService.findById(userId);
         List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
 
-        Map<Long, List<Reminder>> remindersMap = new HashMap<>();
-        for (UserMedication medication : medications) {
-            List<Reminder> reminders = reminderRepository.findByUserMedication(medication);
-            remindersMap.put(medication.getId(), reminders);
-        }
+        // N+1 방지: 모든 리마인더를 한 번에 조회 후 Map으로 그룹화
+        List<Reminder> allReminders = medications.isEmpty()
+                ? List.of()
+                : reminderRepository.findByUserMedicationIn(medications);
+        Map<Long, List<Reminder>> remindersMap = allReminders.stream()
+                .collect(Collectors.groupingBy(r -> r.getUserMedication().getId()));
 
         return MedicationConverter.toList(medications, remindersMap);
     }
