@@ -7,6 +7,7 @@ import com.myyak.web.dto.PrescriptionDTO.PrescriptionResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
@@ -31,6 +32,17 @@ public class PrescriptionController {
             @Parameter(description = "처방 날짜 (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate prescriptionDate) {
 
         PrescriptionResponseDTO.UploadResult result = prescriptionService.uploadPrescription(userId, file, prescriptionDate);
+        return ApiResponse.onSuccess(result);
+    }
+
+    @Operation(summary = "처방전 + 약물 일괄 등록", description = "처방전 이미지와 약물 정보를 한번에 등록합니다. 실패 시 전체 롤백됩니다.")
+    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<PrescriptionResponseDTO.RegisterResult> registerPrescription(
+            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            @Parameter(description = "처방전 이미지") @RequestPart("file") MultipartFile file,
+            @Parameter(description = "처방전 및 약물 정보") @Valid @RequestPart("data") PrescriptionRequestDTO.RegisterRequest request) {
+
+        PrescriptionResponseDTO.RegisterResult result = prescriptionService.registerPrescription(userId, file, request);
         return ApiResponse.onSuccess(result);
     }
 

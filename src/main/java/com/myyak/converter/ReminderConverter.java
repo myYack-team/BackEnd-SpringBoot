@@ -5,6 +5,7 @@ import com.myyak.domain.UserMedication;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.web.dto.ReminderDTO.ReminderResponseDTO;
 
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -18,6 +19,18 @@ public class ReminderConverter {
                 .userMedication(userMedication)
                 .timing(timing)
                 .time(timing.getDefaultTime())
+                .enabled(true)
+                .build();
+    }
+
+    /**
+     * 커스텀 시간을 사용하여 Reminder 생성
+     */
+    public static Reminder toEntity(UserMedication userMedication, MedicationTiming timing, LocalTime customTime) {
+        return Reminder.builder()
+                .userMedication(userMedication)
+                .timing(timing)
+                .time(customTime)
                 .enabled(true)
                 .build();
     }

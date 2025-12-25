@@ -79,4 +79,34 @@ public class PrescriptionResponseDTO {
         private String imageUrl;
         private LocalDate prescriptionDate;
     }
+
+    /**
+     * 처방전 + 약물 일괄 등록 결과
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RegisterResult {
+        private Long prescriptionId;
+        private String imageUrl;
+        private LocalDate prescriptionDate;
+        private List<RegisteredMedication> medications;
+        private Integer totalMedicationCount;
+    }
+
+    /**
+     * 등록된 약물 정보 (일괄 등록 결과용)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RegisteredMedication {
+        private Long id;
+        private String drugName;
+        private Integer dosage;
+        private Integer frequency;
+        private Integer durationDays;
+    }
 }
