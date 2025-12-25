@@ -24,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -40,6 +42,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final DrugInfoRepository drugInfoRepository;
     private final ReminderRepository reminderRepository;
     private final FileUploadUtil fileUploadUtil;
+
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     @Override
     public PrescriptionResponseDTO.UploadResult uploadPrescription(Long userId, MultipartFile file, LocalDate prescriptionDate) {
@@ -69,10 +73,31 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO.PrescriptionList getPrescriptionList(Long userId) {
         List<Prescription> prescriptions = prescriptionRepository.findByUserId(userId);
 
+        if (prescriptions.isEmpty()) {
+            return PrescriptionResponseDTO.PrescriptionList.builder()
+                    .prescriptions(List.of())
+                    .totalCount(0)
+                    .build();
+        }
+
+        // N+1 방지: 모든 처방전의 약물을 한 번에 조회
+        List<Long> prescriptionIds = prescriptions.stream()
+                .map(Prescription::getId)
+                .collect(Collectors.toList());
+        List<UserMedication> allMedications = userMedicationRepository.findByPrescriptionIdIn(prescriptionIds);
+
+        // 처방전 ID별로 약물 그룹화
+        Map<Long, List<UserMedication>> medicationsMap = allMedications.stream()
+                .collect(Collectors.groupingBy(UserMedication::getPrescriptionId));
+
         List<PrescriptionResponseDTO.PrescriptionInfo> prescriptionInfos = prescriptions.stream()
                 .map(p -> {
-                    // 연결된 약품 수 계산
-                    int medicationCount = userMedicationRepository.countByPrescriptionId(p.getId());
+                    // 그룹화된 맵에서 약물 목록 조회 (추가 쿼리 없음)
+                    List<UserMedication> medications = medicationsMap.getOrDefault(p.getId(), List.of());
+                    int medicationCount = medications.size();
+
+                    // 연결된 약물 중 최대 복용일수를 기준으로 복용 상태 계산
+                    String status = calculateStatus(p.getPrescriptionDate(), medications);
 
                     return PrescriptionResponseDTO.PrescriptionInfo.builder()
                             .id(p.getId())
@@ -80,10 +105,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                             .prescriptionDate(p.getPrescriptionDate())
                             .patientName(p.getPatientName())
                             .hospitalName(p.getHospitalName())
+                            .doctorName(p.getDoctorName())
                             .diagnosis(p.getDiagnosis())
                             .durationDays(p.getDurationDays())
                             .endDate(p.getEndDate())
-                            .status(p.getStatus())
+                            .status(status)
                             .notes(p.getNotes())
                             .medicationCount(medicationCount)
                             .createdAt(p.getCreatedAt())
@@ -97,6 +123,48 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .build();
     }
 
+    /**
+     * 처방전의 복용 상태 계산
+     * 연결된 약물 중 최대 복용일수를 기준으로 판단
+     */
+    private String calculateStatus(LocalDate prescriptionDate, List<UserMedication> medications) {
+        if (prescriptionDate == null) {
+            return "IN_PROGRESS";
+        }
+
+        LocalDate today = LocalDate.now();
+
+        // 처방일이 미래인 경우
+        if (today.isBefore(prescriptionDate)) {
+            return "UPCOMING";
+        }
+
+        // 연결된 약물이 없으면 처방전 자체의 durationDays 사용 불가 → 복용 중으로 처리
+        if (medications.isEmpty()) {
+            return "IN_PROGRESS";
+        }
+
+        // 연결된 약물 중 최대 복용일수
+        int maxDurationDays = medications.stream()
+                .map(UserMedication::getDurationDays)
+                .filter(d -> d != null && d > 0)
+                .max(Integer::compareTo)
+                .orElse(0);
+
+        if (maxDurationDays == 0) {
+            return "IN_PROGRESS";
+        }
+
+        // 복용 종료일 = 처방일 + 최대 복용일수 - 1
+        LocalDate endDate = prescriptionDate.plusDays(maxDurationDays - 1);
+
+        if (today.isAfter(endDate)) {
+            return "COMPLETED";
+        }
+
+        return "IN_PROGRESS";
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PrescriptionResponseDTO.PrescriptionDetail getPrescriptionDetail(Long userId, Long prescriptionId) {
@@ -105,15 +173,48 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 연결된 약품 목록
         List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescriptionId);
 
+        // N+1 방지: 모든 리마인더를 한 번에 조회
+        List<Reminder> allReminders = medications.isEmpty()
+                ? List.of()
+                : reminderRepository.findByUserMedicationIn(medications);
+        Map<Long, List<Reminder>> remindersMap = allReminders.stream()
+                .collect(Collectors.groupingBy(r -> r.getUserMedication().getId()));
+
         List<PrescriptionResponseDTO.MedicationSummary> medicationSummaries = medications.stream()
-                .map(m -> PrescriptionResponseDTO.MedicationSummary.builder()
-                        .id(m.getId())
-                        .drugName(m.getDrugName())
-                        .imageUrl(m.getDrugInfo() != null ? m.getDrugInfo().getImageUrl() : null)
-                        .dosage(m.getDosage())
-                        .frequency(m.getFrequency())
-                        .build())
+                .map(m -> {
+                    List<Reminder> reminders = remindersMap.getOrDefault(m.getId(), List.of());
+                    List<PrescriptionResponseDTO.ReminderInfo> reminderInfos = reminders.stream()
+                            .map(r -> PrescriptionResponseDTO.ReminderInfo.builder()
+                                    .id(r.getId())
+                                    .time(r.getTime().format(TIME_FORMATTER))
+                                    .enabled(r.getEnabled())
+                                    .build())
+                            .collect(Collectors.toList());
+
+                    // 남은 복용 일수 계산
+                    int daysLeft = calculateDaysLeft(m.getRemainingCount(), m.getFrequency(),
+                            m.getDosage() != null ? parseDosage(m.getDosage()) : 1);
+
+                    // displayName: DrugInfo가 있으면 itemName, 없으면 customDrugName
+                    String displayName = m.getDrugName();
+
+                    return PrescriptionResponseDTO.MedicationSummary.builder()
+                            .id(m.getId())
+                            .drugName(m.getDrugName())
+                            .displayName(displayName)
+                            .imageUrl(m.getDrugInfo() != null ? m.getDrugInfo().getImageUrl() : null)
+                            .dosage(m.getDosage())
+                            .frequency(m.getFrequency())
+                            .durationDays(m.getDurationDays())
+                            .remainingCount(m.getRemainingCount())
+                            .daysLeft(daysLeft)
+                            .reminders(reminderInfos)
+                            .build();
+                })
                 .collect(Collectors.toList());
+
+        // 복용 상태 계산
+        String status = calculateStatus(prescription.getPrescriptionDate(), medications);
 
         return PrescriptionResponseDTO.PrescriptionDetail.builder()
                 .id(prescription.getId())
@@ -121,14 +222,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .prescriptionDate(prescription.getPrescriptionDate())
                 .patientName(prescription.getPatientName())
                 .hospitalName(prescription.getHospitalName())
+                .doctorName(prescription.getDoctorName())
                 .diagnosis(prescription.getDiagnosis())
                 .durationDays(prescription.getDurationDays())
                 .endDate(prescription.getEndDate())
-                .status(prescription.getStatus())
+                .status(status)
                 .notes(prescription.getNotes())
                 .medications(medicationSummaries)
                 .createdAt(prescription.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * 남은 복용 일수 계산
+     */
+    private int calculateDaysLeft(Integer remainingCount, Integer frequency, int dosagePerTime) {
+        if (remainingCount == null || remainingCount <= 0) {
+            return 0;
+        }
+        if (frequency == null || frequency <= 0) {
+            return remainingCount;
+        }
+        int dailyUsage = frequency * dosagePerTime;
+        return (int) Math.ceil((double) remainingCount / dailyUsage);
+    }
+
+    /**
+     * "1정" 같은 문자열에서 숫자 추출
+     */
+    private int parseDosage(String dosage) {
+        if (dosage == null || dosage.isEmpty()) {
+            return 1;
+        }
+        try {
+            return Integer.parseInt(dosage.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 1;
+        }
     }
 
     @Override
@@ -139,12 +269,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 request.getPrescriptionDate(),
                 request.getPatientName(),
                 request.getHospitalName(),
+                request.getDoctorName(),
                 request.getDiagnosis(),
                 request.getDurationDays(),
                 request.getNotes()
         );
 
-        int medicationCount = userMedicationRepository.countByPrescriptionId(prescriptionId);
+        // 연결된 약물 목록 조회하여 상태 계산
+        List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescriptionId);
+        String status = calculateStatus(prescription.getPrescriptionDate(), medications);
 
         return PrescriptionResponseDTO.PrescriptionInfo.builder()
                 .id(prescription.getId())
@@ -152,12 +285,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .prescriptionDate(prescription.getPrescriptionDate())
                 .patientName(prescription.getPatientName())
                 .hospitalName(prescription.getHospitalName())
+                .doctorName(prescription.getDoctorName())
                 .diagnosis(prescription.getDiagnosis())
                 .durationDays(prescription.getDurationDays())
                 .endDate(prescription.getEndDate())
-                .status(prescription.getStatus())
+                .status(status)
                 .notes(prescription.getNotes())
-                .medicationCount(medicationCount)
+                .medicationCount(medications.size())
                 .createdAt(prescription.getCreatedAt())
                 .build();
     }
@@ -195,6 +329,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescriptionDate,
                 request.getPatientName(),
                 request.getHospitalName(),
+                null, // doctorName
                 request.getDiagnosis(),
                 request.getDurationDays(),
                 request.getNotes()

@@ -33,7 +33,7 @@ public class DrugApiServiceImpl implements DrugApiService {
     private final DrugInfoRepository drugInfoRepository;
     private final DrugCrawlerService drugCrawlerService;
 
-    @Value("${api.data.go.kr.key}")
+    @Value("${api.data.go.kr.key:}")
     private String apiKey;
 
     private static final String E_DRUG_API_URL = "http://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList";
