@@ -47,4 +47,13 @@ public interface PrescriptionService {
      * @param prescriptionId 처방전 ID
      */
     void deletePrescription(Long userId, Long prescriptionId);
+
+    /**
+     * 처방전 + 약물 일괄 등록
+     * @param userId 사용자 ID
+     * @param file 처방전 이미지 파일
+     * @param request 처방전 및 약물 정보
+     * @return 등록 결과
+     */
+    PrescriptionResponseDTO.RegisterResult registerPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request);
 }

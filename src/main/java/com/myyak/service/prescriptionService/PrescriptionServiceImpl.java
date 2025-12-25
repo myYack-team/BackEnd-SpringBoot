@@ -2,10 +2,16 @@ package com.myyak.service.prescriptionService;
 
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.ReminderConverter;
+import com.myyak.domain.DrugInfo;
 import com.myyak.domain.Prescription;
+import com.myyak.domain.Reminder;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.PrescriptionRepository;
+import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.UserMedicationRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.util.FileUploadUtil;
@@ -18,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,6 +37,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final PrescriptionRepository prescriptionRepository;
     private final UserRepository userRepository;
     private final UserMedicationRepository userMedicationRepository;
+    private final DrugInfoRepository drugInfoRepository;
+    private final ReminderRepository reminderRepository;
     private final FileUploadUtil fileUploadUtil;
 
     @Override
@@ -168,6 +177,87 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         prescriptionRepository.delete(prescription);
 
         log.info("Prescription deleted: userId={}, prescriptionId={}", userId, prescriptionId);
+    }
+
+    @Override
+    public PrescriptionResponseDTO.RegisterResult registerPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request) {
+        User user = findUserById(userId);
+
+        // 1. 파일 업로드
+        String imageUrl = fileUploadUtil.uploadPrescriptionImage(file, userId);
+
+        // 2. 처방 날짜 (없으면 오늘)
+        LocalDate prescriptionDate = request.getPrescriptionDate() != null ? request.getPrescriptionDate() : LocalDate.now();
+
+        // 3. Prescription 저장
+        Prescription prescription = Prescription.create(user, imageUrl, prescriptionDate);
+        prescription.update(
+                prescriptionDate,
+                request.getPatientName(),
+                request.getHospitalName(),
+                request.getDiagnosis(),
+                request.getDurationDays(),
+                request.getNotes()
+        );
+        prescriptionRepository.save(prescription);
+
+        // 4. 약물들 일괄 등록
+        List<PrescriptionResponseDTO.RegisteredMedication> registeredMedications = new ArrayList<>();
+
+        for (PrescriptionRequestDTO.MedicationInfo medInfo : request.getMedications()) {
+            // DrugInfo 조회
+            DrugInfo drugInfo = null;
+            if (medInfo.getDrugItemSeq() != null && !medInfo.getDrugItemSeq().isEmpty()) {
+                drugInfo = drugInfoRepository.findById(medInfo.getDrugItemSeq()).orElse(null);
+            }
+
+            // UserMedication 생성
+            UserMedication medication = UserMedication.builder()
+                    .user(user)
+                    .drugInfo(drugInfo)
+                    .customDrugName(drugInfo == null ? medInfo.getCustomDrugName() : null)
+                    .dosage(medInfo.getDosage() + "정")
+                    .frequency(medInfo.getFrequency())
+                    .durationDays(medInfo.getDurationDays())
+                    .totalCount(medInfo.getTotalCount())
+                    .remainingCount(medInfo.getTotalCount())
+                    .startDate(medInfo.getStartDate())
+                    .endDate(medInfo.getStartDate().plusDays(medInfo.getDurationDays()))
+                    .isActive(true)
+                    .memo(medInfo.getMemo())
+                    .prescriptionId(prescription.getId())
+                    .build();
+            userMedicationRepository.save(medication);
+
+            // 리마인더 생성 (커스텀 시간 사용)
+            for (PrescriptionRequestDTO.TimingWithTime twt : medInfo.getTimings()) {
+                MedicationTiming timing = twt.getTiming();
+                if (timing != MedicationTiming.AS_NEEDED && twt.getTime() != null) {
+                    Reminder reminder = ReminderConverter.toEntity(medication, timing, twt.getTime());
+                    reminderRepository.save(reminder);
+                }
+            }
+
+            // 결과 DTO 생성
+            registeredMedications.add(PrescriptionResponseDTO.RegisteredMedication.builder()
+                    .id(medication.getId())
+                    .drugName(medication.getDrugName())
+                    .dosage(medInfo.getDosage())
+                    .frequency(medInfo.getFrequency())
+                    .durationDays(medInfo.getDurationDays())
+                    .build());
+        }
+
+        log.info("Prescription registered: userId={}, prescriptionId={}, medicationCount={}",
+                userId, prescription.getId(), registeredMedications.size());
+
+        return PrescriptionResponseDTO.RegisterResult.builder()
+                .prescriptionId(prescription.getId())
+                .imageUrl(imageUrl)
+                .prescriptionDate(prescriptionDate)
+                .medications(registeredMedications)
+                .totalMedicationCount(registeredMedications.size())
+                .build();
     }
 
     private User findUserById(Long userId) {
