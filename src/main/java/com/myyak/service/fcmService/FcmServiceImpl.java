@@ -7,8 +7,8 @@ import com.myyak.domain.Reminder;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
 import com.myyak.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,12 +16,23 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional
 public class FcmServiceImpl implements FcmService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final UserRepository userRepository;
+
+    @Autowired
+    public FcmServiceImpl(
+            @Autowired(required = false) FirebaseMessaging firebaseMessaging,
+            UserRepository userRepository) {
+        this.firebaseMessaging = firebaseMessaging;
+        this.userRepository = userRepository;
+
+        if (firebaseMessaging == null) {
+            log.warn("FirebaseMessaging이 주입되지 않았습니다. FCM 기능이 비활성화됩니다.");
+        }
+    }
 
     @Override
     public void registerToken(Long userId, String fcmToken) {

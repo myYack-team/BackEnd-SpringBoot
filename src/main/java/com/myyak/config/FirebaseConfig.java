@@ -18,11 +18,16 @@ import java.io.InputStream;
 @Configuration
 public class FirebaseConfig {
 
-    @Value("${firebase.credentials-path}")
+    @Value("${firebase.credentials-path:}")
     private String credentialsPath;
 
     @PostConstruct
     public void initialize() {
+        if (credentialsPath == null || credentialsPath.isBlank()) {
+            log.warn("Firebase credentials-path가 설정되지 않았습니다. FCM 기능이 비활성화됩니다.");
+            return;
+        }
+
         try {
             if (FirebaseApp.getApps().isEmpty()) {
                 ClassPathResource resource = new ClassPathResource(credentialsPath);

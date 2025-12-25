@@ -22,6 +22,14 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
             @Param("end") LocalDateTime end
     );
 
+    // N+1 방지: UserMedication을 함께 조회
+    @Query("SELECT i FROM Intake i JOIN FETCH i.userMedication WHERE i.userMedication.user.id = :userId AND i.takenAt BETWEEN :start AND :end")
+    List<Intake> findByUserIdAndDateRangeWithMedication(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
+
     @Query("SELECT i FROM Intake i WHERE i.userMedication.id = :userMedicationId AND i.takenAt BETWEEN :start AND :end")
     List<Intake> findByUserMedicationIdAndDateRange(
             @Param("userMedicationId") Long userMedicationId,

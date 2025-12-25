@@ -45,6 +45,10 @@ public class Prescription extends BaseEntity {
     @Column(length = 200)
     private String hospitalName;
 
+    // 처방의사 (처방 의료인의 성명)
+    @Column(length = 100)
+    private String doctorName;
+
     // 진단명/증상 (OCR 인식 or AI 추론)
     @Column(length = 500)
     private String diagnosis;
@@ -64,12 +68,13 @@ public class Prescription extends BaseEntity {
      * 처방전 정보 업데이트
      */
     public void update(LocalDate prescriptionDate, String patientName, String hospitalName,
-                       String diagnosis, Integer durationDays, String notes) {
+                       String doctorName, String diagnosis, Integer durationDays, String notes) {
         if (prescriptionDate != null) {
             this.prescriptionDate = prescriptionDate;
         }
         this.patientName = patientName;
         this.hospitalName = hospitalName;
+        this.doctorName = doctorName;
         this.diagnosis = diagnosis;
         this.durationDays = durationDays;
         this.notes = notes;
@@ -83,9 +88,11 @@ public class Prescription extends BaseEntity {
     /**
      * 스캔 결과로 처방전 정보 업데이트
      */
-    public void updateFromScan(String patientName, String hospitalName, String diagnosis, Integer durationDays) {
+    public void updateFromScan(String patientName, String hospitalName, String doctorName,
+                                String diagnosis, Integer durationDays) {
         this.patientName = patientName;
         this.hospitalName = hospitalName;
+        this.doctorName = doctorName;
         this.diagnosis = diagnosis;
         this.durationDays = durationDays;
 
@@ -124,8 +131,8 @@ public class Prescription extends BaseEntity {
      * 정적 팩토리 메서드 (확장)
      */
     public static Prescription create(User user, String imageUrl, LocalDate prescriptionDate,
-                                       String patientName, String hospitalName, String diagnosis,
-                                       Integer durationDays) {
+                                       String patientName, String hospitalName, String doctorName,
+                                       String diagnosis, Integer durationDays) {
         LocalDate endDate = null;
         if (prescriptionDate != null && durationDays != null && durationDays > 0) {
             endDate = prescriptionDate.plusDays(durationDays - 1);
@@ -137,6 +144,7 @@ public class Prescription extends BaseEntity {
                 .prescriptionDate(prescriptionDate)
                 .patientName(patientName)
                 .hospitalName(hospitalName)
+                .doctorName(doctorName)
                 .diagnosis(diagnosis)
                 .durationDays(durationDays)
                 .endDate(endDate)

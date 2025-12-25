@@ -121,4 +121,31 @@ public class MedicationResponseDTO {
         private Integer frequency;
         private List<MedicationTiming> timings;
     }
+
+    /**
+     * 중복 약물 체크 응답
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DuplicateCheckResult {
+        private List<DuplicateMedication> duplicates;
+        private Integer duplicateCount;
+    }
+
+    /**
+     * 중복된 약물 정보
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DuplicateMedication {
+        private String drugItemSeq;       // 요청한 약물 코드
+        private String drugName;          // 약물명
+        private Long existingMedicationId; // 기존 등록된 약물 ID
+        private Integer remainingCount;   // 기존 약물의 남은 개수
+        private Integer daysLeft;         // 기존 약물의 남은 일수
+    }
 }

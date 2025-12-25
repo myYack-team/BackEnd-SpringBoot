@@ -55,4 +55,14 @@ public class MedicationRequestDTO {
         private Integer remainingCount;
         private String memo;
     }
+
+    /**
+     * 중복 약물 체크 요청
+     */
+    @Getter
+    @NoArgsConstructor
+    public static class DuplicateCheckRequest {
+        @NotEmpty(message = "약물 코드 목록은 필수입니다")
+        private List<String> drugItemSeqs;  // 체크할 약물 코드 목록
+    }
 }

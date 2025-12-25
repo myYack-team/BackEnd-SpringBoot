@@ -17,4 +17,12 @@ public interface MedicationService {
     MedicationResponseDTO.UpdateResult updateMedication(Long userId, Long medicationId, MedicationRequestDTO.UpdateRequest request);
 
     void deleteMedication(Long userId, Long medicationId);
+
+    /**
+     * 중복 약물 체크
+     * @param userId 사용자 ID
+     * @param drugItemSeqs 체크할 약물 코드 목록
+     * @return 중복된 약물 정보
+     */
+    MedicationResponseDTO.DuplicateCheckResult checkDuplicates(Long userId, java.util.List<String> drugItemSeqs);
 }

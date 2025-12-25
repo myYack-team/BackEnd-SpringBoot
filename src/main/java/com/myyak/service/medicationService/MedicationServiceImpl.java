@@ -142,6 +142,58 @@ public class MedicationServiceImpl implements MedicationService {
         medication.deactivate();
     }
 
+    @Override
+    public MedicationResponseDTO.DuplicateCheckResult checkDuplicates(Long userId, List<String> drugItemSeqs) {
+        User user = userService.findById(userId);
+
+        // 사용자의 활성 약물 중 drugItemSeq가 일치하는 것 찾기
+        List<UserMedication> userMedications = userMedicationRepository.findByUserWithDrugInfo(user);
+
+        List<MedicationResponseDTO.DuplicateMedication> duplicates = drugItemSeqs.stream()
+                .flatMap(itemSeq -> userMedications.stream()
+                        .filter(med -> med.getDrugInfo() != null &&
+                                itemSeq.equals(med.getDrugInfo().getItemSeq()))
+                        .map(med -> {
+                            // 남은 일수 계산
+                            int daysLeft = calculateDaysLeft(med);
+                            return MedicationResponseDTO.DuplicateMedication.builder()
+                                    .drugItemSeq(itemSeq)
+                                    .drugName(med.getDrugName())
+                                    .existingMedicationId(med.getId())
+                                    .remainingCount(med.getRemainingCount())
+                                    .daysLeft(daysLeft)
+                                    .build();
+                        }))
+                .collect(Collectors.toList());
+
+        return MedicationResponseDTO.DuplicateCheckResult.builder()
+                .duplicates(duplicates)
+                .duplicateCount(duplicates.size())
+                .build();
+    }
+
+    /**
+     * 남은 복용 일수 계산
+     */
+    private int calculateDaysLeft(UserMedication med) {
+        if (med.getRemainingCount() == null || med.getRemainingCount() <= 0) {
+            return 0;
+        }
+        if (med.getFrequency() == null || med.getFrequency() <= 0) {
+            return med.getRemainingCount();
+        }
+        int dosagePerTime = 1;
+        if (med.getDosage() != null && !med.getDosage().isEmpty()) {
+            try {
+                dosagePerTime = Integer.parseInt(med.getDosage().replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException e) {
+                dosagePerTime = 1;
+            }
+        }
+        int dailyUsage = med.getFrequency() * dosagePerTime;
+        return (int) Math.ceil((double) med.getRemainingCount() / dailyUsage);
+    }
+
     private void validateMedicationOwner(UserMedication medication, User user) {
         if (!medication.getUser().getId().equals(user.getId())) {
             throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
