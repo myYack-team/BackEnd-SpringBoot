@@ -1,6 +1,7 @@
 package com.myyak.repository;
 
 import com.myyak.domain.DrugInfo;
+import com.myyak.repository.projection.DrugInfoSummary;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -53,4 +54,10 @@ public interface DrugInfoRepository extends JpaRepository<DrugInfo, String> {
     @Query(value = "SELECT item_seq, item_name, display_name, ingredient_kr, entp_name, image_url, drug_type " +
                    "FROM drug_info WHERE item_seq IN :itemSeqs", nativeQuery = true)
     List<Object[]> findSummaryByItemSeqIn(@Param("itemSeqs") List<String> itemSeqs);
+
+    // 목록용 경량 조회 (TEXT 컬럼 제외) - Projection 사용
+    @Query("SELECT d.itemSeq as itemSeq, d.itemName as itemName, d.displayName as displayName, " +
+           "d.ingredientKr as ingredientKr, d.entpName as entpName, d.imageUrl as imageUrl, d.drugType as drugType " +
+           "FROM DrugInfo d WHERE d.itemSeq IN :itemSeqs")
+    List<DrugInfoSummary> findSummaryProjectionByItemSeqIn(@Param("itemSeqs") List<String> itemSeqs);
 }
