@@ -170,8 +170,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO.PrescriptionDetail getPrescriptionDetail(Long userId, Long prescriptionId) {
         Prescription prescription = findPrescriptionByIdAndUser(prescriptionId, userId);
 
-        // 연결된 약품 목록
-        List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescriptionId);
+        // 연결된 약품 목록 (DrugInfo TEXT 컬럼 제외 - 성능 최적화)
+        List<UserMedication> medications = userMedicationRepository.findByPrescriptionIdInLight(List.of(prescriptionId));
+
+        // DrugInfo 경량 데이터 조회
+        List<String> drugItemSeqs = medications.stream()
+                .filter(m -> m.getDrugInfo() != null)
+                .map(m -> m.getDrugInfo().getItemSeq())
+                .distinct()
+                .toList();
+
+        Map<String, Object[]> drugInfoMap = Map.of();
+        if (!drugItemSeqs.isEmpty()) {
+            List<Object[]> drugSummaries = drugInfoRepository.findSummaryByItemSeqIn(drugItemSeqs);
+            drugInfoMap = drugSummaries.stream()
+                    .collect(Collectors.toMap(
+                            row -> (String) row[0],  // item_seq
+                            row -> row
+                    ));
+        }
+        final Map<String, Object[]> finalDrugInfoMap = drugInfoMap;
 
         // N+1 방지: 모든 리마인더를 한 번에 조회
         List<Reminder> allReminders = medications.isEmpty()
@@ -195,14 +213,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     int daysLeft = calculateDaysLeft(m.getRemainingCount(), m.getFrequency(),
                             m.getDosage() != null ? parseDosage(m.getDosage()) : 1);
 
-                    // displayName: DrugInfo가 있으면 itemName, 없으면 customDrugName
+                    // displayName과 imageUrl: 경량 DrugInfo 맵에서 조회
                     String displayName = m.getDrugName();
+                    String imageUrl = null;
+                    if (m.getDrugInfo() != null) {
+                        Object[] summary = finalDrugInfoMap.get(m.getDrugInfo().getItemSeq());
+                        if (summary != null) {
+                            // [item_seq, item_name, display_name, ingredient_kr, entp_name, image_url, drug_type]
+                            imageUrl = (String) summary[5];
+                        }
+                    }
 
                     return PrescriptionResponseDTO.MedicationSummary.builder()
                             .id(m.getId())
                             .drugName(m.getDrugName())
                             .displayName(displayName)
-                            .imageUrl(m.getDrugInfo() != null ? m.getDrugInfo().getImageUrl() : null)
+                            .imageUrl(imageUrl)
                             .dosage(m.getDosage())
                             .frequency(m.getFrequency())
                             .durationDays(m.getDurationDays())
