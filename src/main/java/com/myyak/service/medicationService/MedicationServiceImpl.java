@@ -13,6 +13,7 @@ import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.UserMedicationRepository;
 import com.myyak.service.userService.UserService;
+import com.myyak.util.MedicationCalculator;
 import com.myyak.web.dto.MedicationDTO.MedicationRequestDTO;
 import com.myyak.web.dto.MedicationDTO.MedicationResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -178,9 +179,21 @@ public class MedicationServiceImpl implements MedicationService {
         // 비활성화 처리
         medications.forEach(UserMedication::deactivate);
 
+        // 삭제된 ID 목록
+        List<Long> deletedIds = medications.stream()
+                .map(UserMedication::getId)
+                .toList();
+
+        // 삭제 실패한 ID 목록 (요청 ID 중 삭제되지 않은 것)
+        List<Long> failedIds = ids.stream()
+                .filter(id -> !deletedIds.contains(id))
+                .toList();
+
         return MedicationResponseDTO.BatchDeleteResult.builder()
                 .requestedCount(ids.size())
                 .deletedCount(medications.size())
+                .failedCount(failedIds.size())
+                .failedIds(failedIds.isEmpty() ? null : failedIds)
                 .build();
     }
 
@@ -218,22 +231,11 @@ public class MedicationServiceImpl implements MedicationService {
      * 남은 복용 일수 계산
      */
     private int calculateDaysLeft(UserMedication med) {
-        if (med.getRemainingCount() == null || med.getRemainingCount() <= 0) {
-            return 0;
-        }
-        if (med.getFrequency() == null || med.getFrequency() <= 0) {
-            return med.getRemainingCount();
-        }
-        int dosagePerTime = 1;
-        if (med.getDosage() != null && !med.getDosage().isEmpty()) {
-            try {
-                dosagePerTime = Integer.parseInt(med.getDosage().replaceAll("[^0-9]", ""));
-            } catch (NumberFormatException e) {
-                dosagePerTime = 1;
-            }
-        }
-        int dailyUsage = med.getFrequency() * dosagePerTime;
-        return (int) Math.ceil((double) med.getRemainingCount() / dailyUsage);
+        return MedicationCalculator.calculateDaysLeft(
+                med.getRemainingCount(),
+                med.getFrequency(),
+                med.getDosage()
+        );
     }
 
     private void validateMedicationOwner(UserMedication medication, User user) {

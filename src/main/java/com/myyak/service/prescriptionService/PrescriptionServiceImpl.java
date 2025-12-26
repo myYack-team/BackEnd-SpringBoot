@@ -15,6 +15,7 @@ import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.UserMedicationRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.util.FileUploadUtil;
+import com.myyak.util.MedicationCalculator;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionRequestDTO;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -210,8 +211,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                             .collect(Collectors.toList());
 
                     // 남은 복용 일수 계산
-                    int daysLeft = calculateDaysLeft(m.getRemainingCount(), m.getFrequency(),
-                            m.getDosage() != null ? parseDosage(m.getDosage()) : 1);
+                    int daysLeft = MedicationCalculator.calculateDaysLeft(
+                            m.getRemainingCount(), m.getFrequency(), m.getDosage());
 
                     // displayName과 imageUrl: 경량 DrugInfo 맵에서 조회
                     String displayName = m.getDrugName();
@@ -259,33 +260,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .build();
     }
 
-    /**
-     * 남은 복용 일수 계산
-     */
-    private int calculateDaysLeft(Integer remainingCount, Integer frequency, int dosagePerTime) {
-        if (remainingCount == null || remainingCount <= 0) {
-            return 0;
-        }
-        if (frequency == null || frequency <= 0) {
-            return remainingCount;
-        }
-        int dailyUsage = frequency * dosagePerTime;
-        return (int) Math.ceil((double) remainingCount / dailyUsage);
-    }
-
-    /**
-     * "1정" 같은 문자열에서 숫자 추출
-     */
-    private int parseDosage(String dosage) {
-        if (dosage == null || dosage.isEmpty()) {
-            return 1;
-        }
-        try {
-            return Integer.parseInt(dosage.replaceAll("[^0-9]", ""));
-        } catch (NumberFormatException e) {
-            return 1;
-        }
-    }
 
     @Override
     public PrescriptionResponseDTO.PrescriptionInfo updatePrescription(Long userId, Long prescriptionId, PrescriptionRequestDTO.UpdateRequest request) {
@@ -466,12 +440,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
         fileUploadUtil.deleteFilesAsync(imageUrls);
 
-        log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}",
-                userId, ids.size(), prescriptions.size());
+        // 삭제된 ID 목록
+        List<Long> deletedIds = prescriptions.stream()
+                .map(Prescription::getId)
+                .toList();
+
+        // 삭제 실패한 ID 목록 (요청 ID 중 삭제되지 않은 것)
+        List<Long> failedIds = ids.stream()
+                .filter(id -> !deletedIds.contains(id))
+                .toList();
+
+        log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}, failedCount={}",
+                userId, ids.size(), prescriptions.size(), failedIds.size());
 
         return PrescriptionResponseDTO.BatchDeleteResult.builder()
                 .requestedCount(ids.size())
                 .deletedCount(prescriptions.size())
+                .failedCount(failedIds.size())
+                .failedIds(failedIds.isEmpty() ? null : failedIds)
                 .build();
     }
 }

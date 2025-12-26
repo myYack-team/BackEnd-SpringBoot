@@ -6,6 +6,7 @@ import com.myyak.converter.IntakeConverter;
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.enums.IntakeDayStatus;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.repository.IntakeRepository;
@@ -157,25 +158,25 @@ public class IntakeServiceImpl implements IntakeService {
 
     private String determineStatus(int totalScheduled, int totalTaken, LocalDate date, LocalDate today) {
         if (totalScheduled == 0) {
-            return "NONE";  // 예정된 복약 없음
+            return IntakeDayStatus.NONE.name();
         }
 
         if (date.isAfter(today)) {
-            return "PENDING";  // 미래 날짜
+            return IntakeDayStatus.PENDING.name();
         }
 
         if (totalTaken >= totalScheduled) {
-            return "COMPLETE";  // 모든 약 복용 완료
+            return IntakeDayStatus.COMPLETE.name();
         }
 
         if (totalTaken > 0) {
-            return "PARTIAL";  // 일부만 복용
+            return IntakeDayStatus.PARTIAL.name();
         }
 
         if (date.isBefore(today)) {
-            return "MISSED";  // 과거인데 복용 안 함
+            return IntakeDayStatus.MISSED.name();
         }
 
-        return "PENDING";  // 오늘인데 아직 복용 전
+        return IntakeDayStatus.PENDING.name();
     }
 }

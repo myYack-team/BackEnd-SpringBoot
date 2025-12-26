@@ -9,10 +9,13 @@ import com.myyak.domain.User;
 import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.domain.enums.SupplementTag;
+import com.myyak.config.CacheConfig;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserSupplementRepository;
 import com.myyak.service.userService.UserService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +26,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -75,6 +77,7 @@ public class SupplementServiceImpl implements SupplementService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.POPULAR_SUPPLEMENTS, key = "'page_' + #page + '_size_' + #size")
     public SupplementResponseDTO.SupplementList getPopularSupplements(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Supplement> supplementPage = supplementRepository.findAllOrderByPopularity(pageable);
@@ -126,6 +129,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
+    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
         User user = userService.findById(userId);
         Supplement supplement = findById(request.getSupplementId());
@@ -159,14 +163,17 @@ public class SupplementServiceImpl implements SupplementService {
         User user = userService.findById(userId);
         List<UserSupplement> supplements = userSupplementRepository.findByUserWithSupplement(user);
 
-        Map<Long, List<MedicationTiming>> timingsMap = new HashMap<>();
-        for (UserSupplement supplement : supplements) {
-            List<Reminder> reminders = reminderRepository.findByUserSupplement(supplement);
-            List<MedicationTiming> timings = reminders.stream()
-                    .map(Reminder::getTiming)
-                    .collect(Collectors.toList());
-            timingsMap.put(supplement.getId(), timings);
+        if (supplements.isEmpty()) {
+            return SupplementConverter.toUserSupplementList(supplements, Map.of());
         }
+
+        // N+1 방지: 모든 리마인더를 한 번에 조회 후 그룹핑
+        List<Reminder> allReminders = reminderRepository.findByUserSupplementIn(supplements);
+        Map<Long, List<MedicationTiming>> timingsMap = allReminders.stream()
+                .collect(Collectors.groupingBy(
+                        r -> r.getUserSupplement().getId(),
+                        Collectors.mapping(Reminder::getTiming, Collectors.toList())
+                ));
 
         return SupplementConverter.toUserSupplementList(supplements, timingsMap);
     }
@@ -219,6 +226,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
+    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public void deleteUserSupplement(Long userId, Long userSupplementId) {
         User user = userService.findById(userId);
         UserSupplement userSupplement = findUserSupplementById(userSupplementId);
