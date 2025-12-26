@@ -69,6 +69,27 @@ public class SupplementConverter {
                 .build();
     }
 
+    /**
+     * 캐시 기반 검색 결과를 SupplementList로 변환
+     */
+    public static SupplementResponseDTO.SupplementList toListFromCache(List<Supplement> supplements, int page, int size, long totalCount) {
+        List<SupplementResponseDTO.SupplementListItem> items = supplements.stream()
+                .map(SupplementConverter::toListItem)
+                .collect(Collectors.toList());
+
+        int totalPages = (int) Math.ceil((double) totalCount / size);
+        boolean hasNext = (long) (page + 1) * size < totalCount;
+
+        return SupplementResponseDTO.SupplementList.builder()
+                .supplements(items)
+                .totalCount((int) totalCount)
+                .page(page)
+                .size(size)
+                .totalPages(totalPages)
+                .hasNext(hasNext)
+                .build();
+    }
+
     public static SupplementResponseDTO.SupplementDetail toDetail(Supplement supplement) {
         return SupplementResponseDTO.SupplementDetail.builder()
                 .id(supplement.getId())

@@ -7,6 +7,7 @@ import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
 import com.myyak.service.drugCrawlerService.DrugCrawlerService;
 import com.myyak.service.drugPdfBatchService.DrugPdfBatchService;
+import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
@@ -14,9 +15,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,30 +30,30 @@ public class DrugApiController {
     private final DrugInfoRepository drugInfoRepository;
     private final DrugCrawlerService drugCrawlerService;
     private final DrugPdfBatchService drugPdfBatchService;
+    private final DrugSearchService drugSearchService;
 
-    @Operation(summary = "약 검색 (DB)", description = "DB에서 약 이름으로 검색")
-    @GetMapping("/search")
-    public ApiResponse<List<DrugInfoResponseDTO.DrugInfoSummary>> searchDrugs(
-            @Parameter(description = "약 이름") @RequestParam String name) {
-
-        List<DrugInfo> drugInfos = drugInfoRepository.searchByKeyword(name);
-        List<DrugInfoResponseDTO.DrugInfoSummary> result = drugInfos.stream()
-                .map(DrugInfoConverter::toSummary)
-                .collect(Collectors.toList());
-
-        return ApiResponse.onSuccess(result);
-    }
-
-    @Operation(summary = "약 검색 (DB, 페이징)", description = "DB에서 약 이름으로 검색 (페이징 지원)")
-    @GetMapping("/search/page")
-    public ApiResponse<DrugInfoResponseDTO.DrugSearchPageResult> searchDrugsWithPaging(
+    @Operation(summary = "약 검색 (캐시, 페이징)", description = "메모리 캐시에서 약 이름으로 검색 (DB 쿼리 없음, 매우 빠름)")
+    @GetMapping("/search/fast")
+    public ApiResponse<DrugInfoResponseDTO.DrugSearchPageResult> searchDrugsFast(
             @Parameter(description = "약 이름") @RequestParam String name,
             @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<DrugInfo> drugPage = drugInfoRepository.searchByKeyword(name, pageable);
-        DrugInfoResponseDTO.DrugSearchPageResult result = DrugInfoConverter.toSearchPageResult(drugPage);
+        List<DrugInfo> drugList = drugSearchService.searchFromCache(name, page, size);
+        long total = drugSearchService.countFromCache(name);
+
+        List<DrugInfoResponseDTO.DrugInfoSummary> drugs = drugList.stream()
+                .map(DrugInfoConverter::toSummary)
+                .collect(Collectors.toList());
+
+        DrugInfoResponseDTO.DrugSearchPageResult result = DrugInfoResponseDTO.DrugSearchPageResult.builder()
+                .drugs(drugs)
+                .page(page)
+                .size(size)
+                .totalCount((int) total)
+                .totalPages((int) Math.ceil((double) total / size))
+                .hasNext((long) (page + 1) * size < total)
+                .build();
 
         return ApiResponse.onSuccess(result);
     }

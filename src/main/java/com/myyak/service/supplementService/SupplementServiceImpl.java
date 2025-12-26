@@ -9,20 +9,14 @@ import com.myyak.domain.User;
 import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.domain.enums.SupplementTag;
-import com.myyak.config.CacheConfig;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserSupplementRepository;
+import com.myyak.service.supplementSearchService.SupplementSearchService;
 import com.myyak.service.userService.UserService;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +33,7 @@ public class SupplementServiceImpl implements SupplementService {
     private final UserSupplementRepository userSupplementRepository;
     private final ReminderRepository reminderRepository;
     private final UserService userService;
+    private final SupplementSearchService supplementSearchService;
 
     // ============ Supplement (마스터) ============
 
@@ -55,33 +50,28 @@ public class SupplementServiceImpl implements SupplementService {
         Supplement supplement = SupplementConverter.toEntity(request, user);
         supplementRepository.save(supplement);
 
+        // 캐시에 추가
+        supplementSearchService.addOrUpdateCache(supplement);
+
         return SupplementConverter.toCreateResult(supplement);
     }
 
     @Override
     public SupplementResponseDTO.SupplementList searchSupplements(String keyword, SupplementTag tag, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "selectionCount"));
-        Page<Supplement> supplementPage;
+        // 캐시 기반 검색 (DB 쿼리 없음)
+        List<Supplement> supplements = supplementSearchService.searchFromCache(keyword, tag, page, size);
+        long totalCount = supplementSearchService.countFromCache(keyword, tag);
 
-        if (keyword != null && !keyword.isBlank() && tag != null) {
-            supplementPage = supplementRepository.searchByTagAndKeyword(tag, keyword, pageable);
-        } else if (keyword != null && !keyword.isBlank()) {
-            supplementPage = supplementRepository.searchByKeyword(keyword, pageable);
-        } else if (tag != null) {
-            supplementPage = supplementRepository.findByTag(tag, pageable);
-        } else {
-            supplementPage = supplementRepository.findAll(pageable);
-        }
-
-        return SupplementConverter.toList(supplementPage);
+        return SupplementConverter.toListFromCache(supplements, page, size, totalCount);
     }
 
     @Override
-    @Cacheable(value = CacheConfig.POPULAR_SUPPLEMENTS, key = "'page_' + #page + '_size_' + #size")
     public SupplementResponseDTO.SupplementList getPopularSupplements(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Supplement> supplementPage = supplementRepository.findAllOrderByPopularity(pageable);
-        return SupplementConverter.toList(supplementPage);
+        // 캐시 기반 인기 영양제 조회 (DB 쿼리 없음)
+        List<Supplement> supplements = supplementSearchService.getPopularFromCache(page, size);
+        long totalCount = supplementSearchService.countAll();
+
+        return SupplementConverter.toListFromCache(supplements, page, size, totalCount);
     }
 
     @Override
@@ -105,6 +95,9 @@ public class SupplementServiceImpl implements SupplementService {
 
         supplement.update(name, description, tag, imageUrl);
 
+        // 캐시 갱신
+        supplementSearchService.addOrUpdateCache(supplement);
+
         return SupplementConverter.toDetail(supplement);
     }
 
@@ -117,6 +110,9 @@ public class SupplementServiceImpl implements SupplementService {
         validateSupplementOwner(supplement, user);
 
         supplementRepository.delete(supplement);
+
+        // 캐시에서 제거
+        supplementSearchService.removeFromCache(supplementId);
     }
 
     // ============ UserSupplement ============
@@ -129,7 +125,6 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
-    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
         User user = userService.findById(userId);
         Supplement supplement = findById(request.getSupplementId());
@@ -145,6 +140,9 @@ public class SupplementServiceImpl implements SupplementService {
 
         // 선택 횟수 증가
         supplement.incrementSelectionCount();
+
+        // 캐시 갱신 (선택 횟수 변경됨)
+        supplementSearchService.addOrUpdateCache(supplement);
 
         // 리마인더 생성
         List<MedicationTiming> timings = request.getTimings();
@@ -226,7 +224,6 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
-    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public void deleteUserSupplement(Long userId, Long userSupplementId) {
         User user = userService.findById(userId);
         UserSupplement userSupplement = findUserSupplementById(userSupplementId);
@@ -234,7 +231,11 @@ public class SupplementServiceImpl implements SupplementService {
         validateUserSupplementOwner(userSupplement, user);
 
         // 선택 횟수 감소
-        userSupplement.getSupplement().decrementSelectionCount();
+        Supplement supplement = userSupplement.getSupplement();
+        supplement.decrementSelectionCount();
+
+        // 캐시 갱신 (선택 횟수 변경됨)
+        supplementSearchService.addOrUpdateCache(supplement);
 
         userSupplement.deactivate();
     }

@@ -2,6 +2,7 @@ package com.myyak.service.drugSearchService;
 
 import com.myyak.domain.DrugInfo;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -43,4 +44,23 @@ public interface DrugSearchService {
      * @return 캐시된 약물 수
      */
     int getCacheSize();
+
+    /**
+     * 메모리 캐시에서 약물 검색 (페이징, 관련도 정렬)
+     * - prefix 매칭 우선, 그 다음 contains 매칭
+     * - DB 쿼리 없이 ~1ms 응답
+     *
+     * @param keyword 검색 키워드
+     * @param page 페이지 번호 (0부터 시작)
+     * @param size 페이지 크기
+     * @return 검색 결과 리스트
+     */
+    List<DrugInfo> searchFromCache(String keyword, int page, int size);
+
+    /**
+     * 메모리 캐시에서 약물 검색 결과 총 개수
+     * @param keyword 검색 키워드
+     * @return 매칭된 총 약물 수
+     */
+    long countFromCache(String keyword);
 }

@@ -1,5 +1,7 @@
 package com.myyak.service.drugSearchService;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import jakarta.annotation.PostConstruct;
@@ -8,10 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 자모 기반 편집거리 검색 서비스 구현체
@@ -48,6 +52,26 @@ public class DrugSearchServiceImpl implements DrugSearchService {
      * Key: itemSeq, Value: DrugInfo 객체
      */
     private final Map<String, DrugInfo> drugInfoCache = new ConcurrentHashMap<>();
+
+    /**
+     * 검색 결과 캐시 (동일 키워드 반복 검색 최적화)
+     * Key: "keyword:page:size", Value: 검색 결과 리스트
+     * TTL: 5분, 최대 1000개 엔트리
+     */
+    private final Cache<String, List<DrugInfo>> searchResultCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
+
+    /**
+     * 검색 결과 카운트 캐시
+     * Key: keyword, Value: 매칭된 총 개수
+     * TTL: 5분, 최대 500개 엔트리
+     */
+    private final Cache<String, Long> searchCountCache = Caffeine.newBuilder()
+            .maximumSize(500)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
 
     @PostConstruct
     public void init() {
@@ -137,12 +161,115 @@ public class DrugSearchServiceImpl implements DrugSearchService {
         jamoCache.clear();
         nameCache.clear();
         drugInfoCache.clear();
+        searchResultCache.invalidateAll();
+        searchCountCache.invalidateAll();
         init();
     }
 
     @Override
     public int getCacheSize() {
         return jamoCache.size();
+    }
+
+    @Override
+    public List<DrugInfo> searchFromCache(String keyword, int page, int size) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+
+        String normalizedKeyword = keyword.replaceAll("\\s+", "").toLowerCase();
+        String cacheKey = normalizedKeyword + ":" + page + ":" + size;
+
+        // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
+        return searchResultCache.get(cacheKey, key -> {
+            // prefix 매칭과 contains 매칭을 분리하여 관련도 정렬
+            // 1순위: 약물명이 키워드로 시작하는 것
+            // 2순위: displayName이 키워드로 시작하는 것
+            // 3순위: 약물명에 키워드가 포함된 것
+            // 4순위: displayName에 키워드가 포함된 것
+            return drugInfoCache.values().parallelStream()
+                    .filter(drug -> matchesKeyword(drug, normalizedKeyword))
+                    .sorted(Comparator.comparingInt((DrugInfo drug) -> getRelevanceScore(drug, normalizedKeyword))
+                            .thenComparing(DrugInfo::getItemName))
+                    .skip((long) page * size)
+                    .limit(size)
+                    .toList();
+        });
+    }
+
+    @Override
+    public long countFromCache(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return 0;
+        }
+
+        String normalizedKeyword = keyword.replaceAll("\\s+", "").toLowerCase();
+
+        // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
+        return searchCountCache.get(normalizedKeyword, key ->
+                drugInfoCache.values().parallelStream()
+                        .filter(drug -> matchesKeyword(drug, key))
+                        .count()
+        );
+    }
+
+    /**
+     * 약물이 키워드와 매칭되는지 확인
+     */
+    private boolean matchesKeyword(DrugInfo drug, String normalizedKeyword) {
+        String itemName = drug.getItemName();
+        String displayName = drug.getDisplayName();
+
+        if (itemName != null) {
+            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
+            if (normalizedName.contains(normalizedKeyword)) {
+                return true;
+            }
+        }
+
+        if (displayName != null) {
+            String normalizedDisplayName = displayName.replaceAll("\\s+", "").toLowerCase();
+            if (normalizedDisplayName.contains(normalizedKeyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 관련도 점수 계산 (낮을수록 관련도 높음)
+     * 0: itemName이 키워드로 시작
+     * 1: displayName이 키워드로 시작
+     * 2: itemName에 키워드 포함
+     * 3: displayName에 키워드 포함
+     */
+    private int getRelevanceScore(DrugInfo drug, String normalizedKeyword) {
+        String itemName = drug.getItemName();
+        String displayName = drug.getDisplayName();
+
+        if (itemName != null) {
+            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
+            if (normalizedName.startsWith(normalizedKeyword)) {
+                return 0;
+            }
+        }
+
+        if (displayName != null) {
+            String normalizedDisplayName = displayName.replaceAll("\\s+", "").toLowerCase();
+            if (normalizedDisplayName.startsWith(normalizedKeyword)) {
+                return 1;
+            }
+        }
+
+        if (itemName != null) {
+            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
+            if (normalizedName.contains(normalizedKeyword)) {
+                return 2;
+            }
+        }
+
+        return 3;
     }
 
     /**
