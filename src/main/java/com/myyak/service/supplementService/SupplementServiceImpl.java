@@ -23,7 +23,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -159,14 +158,17 @@ public class SupplementServiceImpl implements SupplementService {
         User user = userService.findById(userId);
         List<UserSupplement> supplements = userSupplementRepository.findByUserWithSupplement(user);
 
-        Map<Long, List<MedicationTiming>> timingsMap = new HashMap<>();
-        for (UserSupplement supplement : supplements) {
-            List<Reminder> reminders = reminderRepository.findByUserSupplement(supplement);
-            List<MedicationTiming> timings = reminders.stream()
-                    .map(Reminder::getTiming)
-                    .collect(Collectors.toList());
-            timingsMap.put(supplement.getId(), timings);
+        if (supplements.isEmpty()) {
+            return SupplementConverter.toUserSupplementList(supplements, Map.of());
         }
+
+        // N+1 방지: 모든 리마인더를 한 번에 조회 후 그룹핑
+        List<Reminder> allReminders = reminderRepository.findByUserSupplementIn(supplements);
+        Map<Long, List<MedicationTiming>> timingsMap = allReminders.stream()
+                .collect(Collectors.groupingBy(
+                        r -> r.getUserSupplement().getId(),
+                        Collectors.mapping(Reminder::getTiming, Collectors.toList())
+                ));
 
         return SupplementConverter.toUserSupplementList(supplements, timingsMap);
     }
