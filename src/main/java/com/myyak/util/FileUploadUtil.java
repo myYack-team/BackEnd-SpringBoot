@@ -4,6 +4,7 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,6 +15,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -70,7 +72,7 @@ public class FileUploadUtil {
     }
 
     /**
-     * 파일 삭제
+     * 파일 삭제 (동기)
      * @param fileUrl 파일 URL (상대 경로)
      */
     public void deleteFile(String fileUrl) {
@@ -94,6 +96,32 @@ public class FileUploadUtil {
         } catch (IOException e) {
             log.warn("Failed to delete file: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 파일 삭제 (비동기)
+     * DB 삭제 후 파일 삭제를 백그라운드에서 처리하여 응답 속도 개선
+     * @param fileUrl 파일 URL (상대 경로)
+     */
+    @Async
+    public void deleteFileAsync(String fileUrl) {
+        deleteFile(fileUrl);
+    }
+
+    /**
+     * 여러 파일 삭제 (비동기)
+     * @param fileUrls 파일 URL 목록
+     */
+    @Async
+    public void deleteFilesAsync(List<String> fileUrls) {
+        if (fileUrls == null || fileUrls.isEmpty()) {
+            return;
+        }
+
+        for (String fileUrl : fileUrls) {
+            deleteFile(fileUrl);
+        }
+        log.info("Async file deletion completed: {} files", fileUrls.size());
     }
 
     /**

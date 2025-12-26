@@ -143,11 +143,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescriptionId);
         medications.forEach(m -> m.setPrescriptionId(null));
 
-        // 이미지 파일 삭제
-        fileUploadUtil.deleteFile(prescription.getImageUrl());
+        // 파일 URL 저장 (DB 삭제 전에 추출)
+        String imageUrl = prescription.getImageUrl();
 
-        // 처방전 삭제
+        // 처방전 삭제 (DB 먼저)
         prescriptionRepository.delete(prescription);
+
+        // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
+        fileUploadUtil.deleteFileAsync(imageUrl);
 
         log.info("Prescription deleted: userId={}, prescriptionId={}", userId, prescriptionId);
     }
@@ -175,18 +178,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .filter(p -> p.getUser().getId().equals(userId))
                 .toList();
 
+        // 파일 URL 목록 수집 (DB 삭제 전에 추출)
+        List<String> imageUrls = prescriptions.stream()
+                .map(Prescription::getImageUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .toList();
+
         // 각 처방전에 대해 삭제 처리
         for (Prescription prescription : prescriptions) {
             // 연결된 약품들의 prescriptionId를 null로 설정
             List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescription.getId());
             medications.forEach(m -> m.setPrescriptionId(null));
 
-            // 이미지 파일 삭제
-            fileUploadUtil.deleteFile(prescription.getImageUrl());
-
-            // 처방전 삭제
+            // 처방전 삭제 (DB 먼저)
             prescriptionRepository.delete(prescription);
         }
+
+        // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
+        fileUploadUtil.deleteFilesAsync(imageUrls);
 
         log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}",
                 userId, ids.size(), prescriptions.size());
