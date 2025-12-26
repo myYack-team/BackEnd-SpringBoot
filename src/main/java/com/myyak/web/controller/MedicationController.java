@@ -77,4 +77,13 @@ public class MedicationController {
             @Valid @RequestBody MedicationRequestDTO.BatchDeleteRequest request) {
         return ApiResponse.of(SuccessStatus.MEDICATION_DELETED, medicationService.deleteMedicationsBatch(userId, request.getIds()));
     }
+
+    @Operation(summary = "중복 약물 체크", description = "등록하려는 약물이 이미 복용 중인지 확인합니다.")
+    @PostMapping("/check-duplicates")
+    public ApiResponse<MedicationResponseDTO.DuplicateCheckResult> checkDuplicates(
+            @Parameter(description = "사용자 ID (임시)")
+            @RequestParam Long userId,
+            @Valid @RequestBody MedicationRequestDTO.DuplicateCheckRequest request) {
+        return ApiResponse.onSuccess(medicationService.checkDuplicates(userId, request.getDrugItemSeqs()));
+    }
 }

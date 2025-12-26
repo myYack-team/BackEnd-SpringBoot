@@ -19,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -71,11 +70,12 @@ public class MedicationServiceImpl implements MedicationService {
         User user = userService.findById(userId);
         List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
 
-        Map<Long, List<Reminder>> remindersMap = new HashMap<>();
-        for (UserMedication medication : medications) {
-            List<Reminder> reminders = reminderRepository.findByUserMedication(medication);
-            remindersMap.put(medication.getId(), reminders);
-        }
+        // N+1 방지: 모든 리마인더를 한 번에 조회 후 Map으로 그룹화
+        List<Reminder> allReminders = medications.isEmpty()
+                ? List.of()
+                : reminderRepository.findByUserMedicationIn(medications);
+        Map<Long, List<Reminder>> remindersMap = allReminders.stream()
+                .collect(Collectors.groupingBy(r -> r.getUserMedication().getId()));
 
         return MedicationConverter.toList(medications, remindersMap);
     }
@@ -160,6 +160,58 @@ public class MedicationServiceImpl implements MedicationService {
                 .requestedCount(ids.size())
                 .deletedCount(medications.size())
                 .build();
+    }
+
+    @Override
+    public MedicationResponseDTO.DuplicateCheckResult checkDuplicates(Long userId, List<String> drugItemSeqs) {
+        User user = userService.findById(userId);
+
+        // 사용자의 활성 약물 중 drugItemSeq가 일치하는 것 찾기
+        List<UserMedication> userMedications = userMedicationRepository.findByUserWithDrugInfo(user);
+
+        List<MedicationResponseDTO.DuplicateMedication> duplicates = drugItemSeqs.stream()
+                .flatMap(itemSeq -> userMedications.stream()
+                        .filter(med -> med.getDrugInfo() != null &&
+                                itemSeq.equals(med.getDrugInfo().getItemSeq()))
+                        .map(med -> {
+                            // 남은 일수 계산
+                            int daysLeft = calculateDaysLeft(med);
+                            return MedicationResponseDTO.DuplicateMedication.builder()
+                                    .drugItemSeq(itemSeq)
+                                    .drugName(med.getDrugName())
+                                    .existingMedicationId(med.getId())
+                                    .remainingCount(med.getRemainingCount())
+                                    .daysLeft(daysLeft)
+                                    .build();
+                        }))
+                .collect(Collectors.toList());
+
+        return MedicationResponseDTO.DuplicateCheckResult.builder()
+                .duplicates(duplicates)
+                .duplicateCount(duplicates.size())
+                .build();
+    }
+
+    /**
+     * 남은 복용 일수 계산
+     */
+    private int calculateDaysLeft(UserMedication med) {
+        if (med.getRemainingCount() == null || med.getRemainingCount() <= 0) {
+            return 0;
+        }
+        if (med.getFrequency() == null || med.getFrequency() <= 0) {
+            return med.getRemainingCount();
+        }
+        int dosagePerTime = 1;
+        if (med.getDosage() != null && !med.getDosage().isEmpty()) {
+            try {
+                dosagePerTime = Integer.parseInt(med.getDosage().replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException e) {
+                dosagePerTime = 1;
+            }
+        }
+        int dailyUsage = med.getFrequency() * dosagePerTime;
+        return (int) Math.ceil((double) med.getRemainingCount() / dailyUsage);
     }
 
     private void validateMedicationOwner(UserMedication medication, User user) {

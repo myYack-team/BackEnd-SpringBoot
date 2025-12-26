@@ -1,6 +1,9 @@
 package com.myyak.web.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.ApiResponse;
+import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.service.prescriptionService.PrescriptionService;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionRequestDTO;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionResponseDTO;
@@ -23,6 +26,7 @@ import java.time.LocalDate;
 public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
+    private final ObjectMapper objectMapper;
 
     @Operation(summary = "처방전 이미지 업로드", description = "처방전 이미지를 업로드하고 처방 기록을 생성합니다")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -33,6 +37,22 @@ public class PrescriptionController {
 
         PrescriptionResponseDTO.UploadResult result = prescriptionService.uploadPrescription(userId, file, prescriptionDate);
         return ApiResponse.onSuccess(result);
+    }
+
+    @Operation(summary = "처방전 + 약물 일괄 등록", description = "처방전 이미지와 약물 정보를 한번에 등록합니다. 실패 시 전체 롤백됩니다.")
+    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<PrescriptionResponseDTO.RegisterResult> registerPrescription(
+            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            @Parameter(description = "처방전 이미지") @RequestPart("file") MultipartFile file,
+            @Parameter(description = "처방전 및 약물 정보 (JSON 문자열)") @RequestPart("data") String dataJson) {
+
+        try {
+            PrescriptionRequestDTO.RegisterRequest request = objectMapper.readValue(dataJson, PrescriptionRequestDTO.RegisterRequest.class);
+            PrescriptionResponseDTO.RegisterResult result = prescriptionService.registerPrescription(userId, file, request);
+            return ApiResponse.onSuccess(result);
+        } catch (Exception e) {
+            throw new GeneralException(ErrorStatus._BAD_REQUEST);
+        }
     }
 
     @Operation(summary = "처방전 목록 조회", description = "사용자의 모든 처방전 목록을 조회합니다")

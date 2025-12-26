@@ -55,4 +55,13 @@ public interface PrescriptionService {
      * @return 삭제 결과 (요청 수, 실제 삭제 수)
      */
     PrescriptionResponseDTO.BatchDeleteResult deletePrescriptionsBatch(Long userId, java.util.List<Long> ids);
+
+    /**
+     * 처방전 + 약물 일괄 등록
+     * @param userId 사용자 ID
+     * @param file 처방전 이미지 파일
+     * @param request 처방전 및 약물 정보
+     * @return 등록 결과
+     */
+    PrescriptionResponseDTO.RegisterResult registerPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request);
 }

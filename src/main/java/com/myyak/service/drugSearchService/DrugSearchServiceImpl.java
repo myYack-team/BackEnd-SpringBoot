@@ -39,13 +39,19 @@ public class DrugSearchServiceImpl implements DrugSearchService {
 
     /**
      * 약물명 원본 캐시
-     * Key: itemSeq, Value: 원본 약물명
+     * Key: itemSeq, Value: 원본 약물명 (괄호 제거)
      */
     private final Map<String, String> nameCache = new ConcurrentHashMap<>();
 
+    /**
+     * 전체 DrugInfo 캐시 (DB 쿼리 없이 검색용)
+     * Key: itemSeq, Value: DrugInfo 객체
+     */
+    private final Map<String, DrugInfo> drugInfoCache = new ConcurrentHashMap<>();
+
     @PostConstruct
     public void init() {
-        log.info("약물명 자모 캐시 초기화 시작...");
+        log.info("약물 캐시 초기화 시작...");
         long startTime = System.currentTimeMillis();
 
         List<DrugInfo> allDrugs = drugInfoRepository.findAll();
@@ -57,11 +63,34 @@ public class DrugSearchServiceImpl implements DrugSearchService {
                 String pureName = extractPureDrugName(itemName);
                 jamoCache.put(itemSeq, decomposeToJamo(pureName));
                 nameCache.put(itemSeq, pureName);
+                // DrugInfo 전체 캐시 (DB 쿼리 없이 검색용)
+                drugInfoCache.put(itemSeq, drug);
             }
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
-        log.info("약물명 자모 캐시 초기화 완료: {}개 약물, {}ms", jamoCache.size(), elapsed);
+        log.info("약물 캐시 초기화 완료: {}개 약물, {}ms", drugInfoCache.size(), elapsed);
+    }
+
+    @Override
+    public Optional<DrugInfo> findByNameContaining(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return Optional.empty();
+        }
+
+        // 공백 제거 (DB의 약물명은 공백 없이 저장됨)
+        String normalizedKeyword = keyword.replaceAll("\\s+", "");
+
+        // 메모리 캐시에서 부분 일치 검색 (DB 쿼리 없음)
+        return drugInfoCache.values().parallelStream()
+                .filter(drug -> {
+                    String itemName = drug.getItemName();
+                    if (itemName == null) return false;
+                    // 공백 제거 후 비교
+                    String normalizedName = itemName.replaceAll("\\s+", "");
+                    return normalizedName.contains(normalizedKeyword);
+                })
+                .findFirst();
     }
 
     @Override
@@ -94,7 +123,8 @@ public class DrugSearchServiceImpl implements DrugSearchService {
             String matchedName = nameCache.get(match.itemSeq);
             log.info("편집거리 매칭 성공: '{}' → '{}' (거리: {})",
                     drugName, matchedName, match.distance);
-            return drugInfoRepository.findById(match.itemSeq);
+            // 캐시에서 조회 (DB 쿼리 없음)
+            return Optional.ofNullable(drugInfoCache.get(match.itemSeq));
         }
 
         log.debug("편집거리 매칭 실패: '{}' (임계값 {} 이내 결과 없음)", drugName, threshold);
@@ -103,9 +133,10 @@ public class DrugSearchServiceImpl implements DrugSearchService {
 
     @Override
     public void refreshCache() {
-        log.info("약물명 자모 캐시 갱신 시작...");
+        log.info("약물 캐시 갱신 시작...");
         jamoCache.clear();
         nameCache.clear();
+        drugInfoCache.clear();
         init();
     }
 

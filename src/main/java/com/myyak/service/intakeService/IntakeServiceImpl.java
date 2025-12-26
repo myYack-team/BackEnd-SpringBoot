@@ -47,6 +47,8 @@ public class IntakeServiceImpl implements IntakeService {
 
         MedicationTiming timing = request.getTiming();
 
+        IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
+
         for (Long medicationId : request.getMedicationIds()) {
             UserMedication medication = userMedicationRepository.findById(medicationId)
                     .orElseThrow(() -> new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND));
@@ -55,9 +57,7 @@ public class IntakeServiceImpl implements IntakeService {
                 throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
             }
 
-            IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
             Intake intake = IntakeConverter.toEntity(medication, timing, request.getTakenAt(), status);
-            intakeRepository.save(intake);
             intakes.add(intake);
 
             // TAKEN 상태일 때만 남은 개수 차감
@@ -69,6 +69,9 @@ public class IntakeServiceImpl implements IntakeService {
             medications.add(medication);
         }
 
+        // 배치 저장 (개별 save 대신 saveAll 사용)
+        intakeRepository.saveAll(intakes);
+
         return IntakeConverter.toCreateResult(intakes, medications);
     }
 
@@ -79,8 +82,9 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        List<Reminder> reminders = reminderRepository.findEnabledByUserId(userId);
-        List<Intake> intakes = intakeRepository.findByUserIdAndDateRange(userId, startOfDay, endOfDay);
+        // N+1 방지: Fetch Join으로 UserMedication 함께 조회
+        List<Reminder> reminders = reminderRepository.findEnabledByUserIdWithMedication(userId);
+        List<Intake> intakes = intakeRepository.findByUserIdAndDateRangeWithMedication(userId, startOfDay, endOfDay);
 
         Map<Long, List<Intake>> intakesByMedicationId = intakes.stream()
                 .collect(Collectors.groupingBy(i -> i.getUserMedication().getId()));
@@ -97,13 +101,13 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDate endDate = yearMonth.atEndOfMonth();
         LocalDate today = LocalDate.now();
 
-        // 해당 월의 모든 리마인더 가져오기 (활성화된 약품 스케줄)
-        List<Reminder> reminders = reminderRepository.findEnabledByUserId(userId);
+        // 해당 월의 모든 리마인더 가져오기 (N+1 방지)
+        List<Reminder> reminders = reminderRepository.findEnabledByUserIdWithMedication(userId);
 
-        // 해당 월의 모든 복약 기록 가져오기
+        // 해당 월의 모든 복약 기록 가져오기 (N+1 방지)
         LocalDateTime monthStart = startDate.atStartOfDay();
         LocalDateTime monthEnd = endDate.atTime(LocalTime.MAX);
-        List<Intake> monthlyIntakes = intakeRepository.findByUserIdAndDateRange(userId, monthStart, monthEnd);
+        List<Intake> monthlyIntakes = intakeRepository.findByUserIdAndDateRangeWithMedication(userId, monthStart, monthEnd);
 
         // 날짜별로 복약 기록 그룹화
         Map<LocalDate, List<Intake>> intakesByDate = monthlyIntakes.stream()

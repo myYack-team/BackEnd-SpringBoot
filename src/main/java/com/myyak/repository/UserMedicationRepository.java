@@ -43,4 +43,8 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     // 처방전 ID로 약물 개수 조회
     @Query("SELECT COUNT(um) FROM UserMedication um WHERE um.prescriptionId = :prescriptionId")
     int countByPrescriptionId(@Param("prescriptionId") Long prescriptionId);
+
+    // 여러 처방전 ID로 약물 목록 한 번에 조회 (N+1 방지)
+    @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo WHERE um.prescriptionId IN :prescriptionIds")
+    List<UserMedication> findByPrescriptionIdIn(@Param("prescriptionIds") List<Long> prescriptionIds);
 }

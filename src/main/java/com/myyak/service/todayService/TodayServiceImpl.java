@@ -35,8 +35,9 @@ public class TodayServiceImpl implements TodayService {
         LocalDateTime startOfDay = today.atStartOfDay();
         LocalDateTime endOfDay = today.atTime(LocalTime.MAX);
 
-        List<Reminder> reminders = reminderRepository.findEnabledByUserId(userId);
-        List<Intake> intakes = intakeRepository.findByUserIdAndDateRange(userId, startOfDay, endOfDay);
+        // N+1 방지: Fetch Join으로 UserMedication 함께 조회
+        List<Reminder> reminders = reminderRepository.findEnabledByUserIdWithMedication(userId);
+        List<Intake> intakes = intakeRepository.findByUserIdAndDateRangeWithMedication(userId, startOfDay, endOfDay);
 
         Map<Long, List<Intake>> intakesByMedicationId = intakes.stream()
                 .collect(Collectors.groupingBy(i -> i.getUserMedication().getId()));

@@ -18,6 +18,10 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     List<Reminder> findByUserMedication(UserMedication userMedication);
 
+    // 여러 UserMedication의 리마인더를 한 번에 조회 (N+1 방지)
+    @Query("SELECT r FROM Reminder r WHERE r.userMedication IN :medications")
+    List<Reminder> findByUserMedicationIn(@Param("medications") List<UserMedication> medications);
+
     void deleteByUserMedication(UserMedication userMedication);
 
     @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE um.user.id = :userId AND um.isActive = true")
@@ -25,6 +29,10 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE um.user.id = :userId AND r.enabled = true AND um.isActive = true")
     List<Reminder> findEnabledByUserId(@Param("userId") Long userId);
+
+    // N+1 방지: UserMedication을 함께 조회
+    @Query("SELECT r FROM Reminder r JOIN FETCH r.userMedication um WHERE um.user.id = :userId AND r.enabled = true AND um.isActive = true")
+    List<Reminder> findEnabledByUserIdWithMedication(@Param("userId") Long userId);
 
     @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE r.time = :time AND r.enabled = true AND um.isActive = true")
     List<Reminder> findByTimeAndEnabledTrue(@Param("time") LocalTime time);
