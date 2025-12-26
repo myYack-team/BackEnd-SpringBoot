@@ -466,12 +466,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
         fileUploadUtil.deleteFilesAsync(imageUrls);
 
-        log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}",
-                userId, ids.size(), prescriptions.size());
+        // 삭제된 ID 목록
+        List<Long> deletedIds = prescriptions.stream()
+                .map(Prescription::getId)
+                .toList();
+
+        // 삭제 실패한 ID 목록 (요청 ID 중 삭제되지 않은 것)
+        List<Long> failedIds = ids.stream()
+                .filter(id -> !deletedIds.contains(id))
+                .toList();
+
+        log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}, failedCount={}",
+                userId, ids.size(), prescriptions.size(), failedIds.size());
 
         return PrescriptionResponseDTO.BatchDeleteResult.builder()
                 .requestedCount(ids.size())
                 .deletedCount(prescriptions.size())
+                .failedCount(failedIds.size())
+                .failedIds(failedIds.isEmpty() ? null : failedIds)
                 .build();
     }
 }

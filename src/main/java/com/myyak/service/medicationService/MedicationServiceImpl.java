@@ -178,9 +178,21 @@ public class MedicationServiceImpl implements MedicationService {
         // 비활성화 처리
         medications.forEach(UserMedication::deactivate);
 
+        // 삭제된 ID 목록
+        List<Long> deletedIds = medications.stream()
+                .map(UserMedication::getId)
+                .toList();
+
+        // 삭제 실패한 ID 목록 (요청 ID 중 삭제되지 않은 것)
+        List<Long> failedIds = ids.stream()
+                .filter(id -> !deletedIds.contains(id))
+                .toList();
+
         return MedicationResponseDTO.BatchDeleteResult.builder()
                 .requestedCount(ids.size())
                 .deletedCount(medications.size())
+                .failedCount(failedIds.size())
+                .failedIds(failedIds.isEmpty() ? null : failedIds)
                 .build();
     }
 

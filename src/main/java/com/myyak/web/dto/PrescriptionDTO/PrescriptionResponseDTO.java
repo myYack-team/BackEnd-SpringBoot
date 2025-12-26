@@ -104,6 +104,8 @@ public class PrescriptionResponseDTO {
     public static class BatchDeleteResult {
         private int requestedCount;
         private int deletedCount;
+        private int failedCount;
+        private List<Long> failedIds;
     }
 
     /**
