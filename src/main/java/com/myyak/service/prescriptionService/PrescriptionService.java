@@ -47,4 +47,12 @@ public interface PrescriptionService {
      * @param prescriptionId 처방전 ID
      */
     void deletePrescription(Long userId, Long prescriptionId);
+
+    /**
+     * 처방전 일괄 삭제
+     * @param userId 사용자 ID
+     * @param ids 삭제할 처방전 ID 목록
+     * @return 삭제 결과 (요청 수, 실제 삭제 수)
+     */
+    PrescriptionResponseDTO.BatchDeleteResult deletePrescriptionsBatch(Long userId, java.util.List<Long> ids);
 }

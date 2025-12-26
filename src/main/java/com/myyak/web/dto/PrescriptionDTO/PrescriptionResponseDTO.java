@@ -69,4 +69,13 @@ public class PrescriptionResponseDTO {
         private String imageUrl;
         private LocalDate prescriptionDate;
     }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BatchDeleteResult {
+        private int requestedCount;
+        private int deletedCount;
+    }
 }

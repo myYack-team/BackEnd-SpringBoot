@@ -167,4 +167,33 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         return prescription;
     }
+
+    @Override
+    public PrescriptionResponseDTO.BatchDeleteResult deletePrescriptionsBatch(Long userId, List<Long> ids) {
+        // 사용자 소유의 처방전만 필터링
+        List<Prescription> prescriptions = prescriptionRepository.findAllById(ids).stream()
+                .filter(p -> p.getUser().getId().equals(userId))
+                .toList();
+
+        // 각 처방전에 대해 삭제 처리
+        for (Prescription prescription : prescriptions) {
+            // 연결된 약품들의 prescriptionId를 null로 설정
+            List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescription.getId());
+            medications.forEach(m -> m.setPrescriptionId(null));
+
+            // 이미지 파일 삭제
+            fileUploadUtil.deleteFile(prescription.getImageUrl());
+
+            // 처방전 삭제
+            prescriptionRepository.delete(prescription);
+        }
+
+        log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}",
+                userId, ids.size(), prescriptions.size());
+
+        return PrescriptionResponseDTO.BatchDeleteResult.builder()
+                .requestedCount(ids.size())
+                .deletedCount(prescriptions.size())
+                .build();
+    }
 }

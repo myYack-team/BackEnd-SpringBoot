@@ -7,6 +7,7 @@ import com.myyak.web.dto.PrescriptionDTO.PrescriptionResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
@@ -72,5 +73,15 @@ public class PrescriptionController {
 
         prescriptionService.deletePrescription(userId, prescriptionId);
         return ApiResponse.onSuccess("처방전이 삭제되었습니다.");
+    }
+
+    @Operation(summary = "처방전 일괄 삭제", description = "여러 처방전을 한 번에 삭제합니다. 연결된 약품들의 처방전 연결이 해제됩니다.")
+    @DeleteMapping("/batch")
+    public ApiResponse<PrescriptionResponseDTO.BatchDeleteResult> deletePrescriptionsBatch(
+            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            @Valid @RequestBody PrescriptionRequestDTO.BatchDeleteRequest request) {
+
+        PrescriptionResponseDTO.BatchDeleteResult result = prescriptionService.deletePrescriptionsBatch(userId, request.getIds());
+        return ApiResponse.onSuccess(result);
     }
 }
