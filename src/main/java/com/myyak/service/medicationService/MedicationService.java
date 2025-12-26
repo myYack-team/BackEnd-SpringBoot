@@ -4,6 +4,8 @@ import com.myyak.domain.UserMedication;
 import com.myyak.web.dto.MedicationDTO.MedicationRequestDTO;
 import com.myyak.web.dto.MedicationDTO.MedicationResponseDTO;
 
+import java.util.List;
+
 public interface MedicationService {
 
     UserMedication findById(Long userMedicationId);
@@ -17,4 +19,6 @@ public interface MedicationService {
     MedicationResponseDTO.UpdateResult updateMedication(Long userId, Long medicationId, MedicationRequestDTO.UpdateRequest request);
 
     void deleteMedication(Long userId, Long medicationId);
+
+    MedicationResponseDTO.BatchDeleteResult deleteMedicationsBatch(Long userId, List<Long> ids);
 }

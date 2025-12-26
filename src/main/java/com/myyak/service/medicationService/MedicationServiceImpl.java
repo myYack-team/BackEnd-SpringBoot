@@ -142,6 +142,26 @@ public class MedicationServiceImpl implements MedicationService {
         medication.deactivate();
     }
 
+    @Override
+    @Transactional
+    public MedicationResponseDTO.BatchDeleteResult deleteMedicationsBatch(Long userId, List<Long> ids) {
+        User user = userService.findById(userId);
+
+        // 사용자 소유의 활성 약물만 조회
+        List<UserMedication> medications = userMedicationRepository.findAllById(ids).stream()
+                .filter(med -> med.getUser().getId().equals(user.getId()))
+                .filter(UserMedication::getIsActive)
+                .toList();
+
+        // 비활성화 처리
+        medications.forEach(UserMedication::deactivate);
+
+        return MedicationResponseDTO.BatchDeleteResult.builder()
+                .requestedCount(ids.size())
+                .deletedCount(medications.size())
+                .build();
+    }
+
     private void validateMedicationOwner(UserMedication medication, User user) {
         if (!medication.getUser().getId().equals(user.getId())) {
             throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);

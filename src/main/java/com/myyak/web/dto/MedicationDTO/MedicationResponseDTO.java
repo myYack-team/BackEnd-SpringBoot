@@ -121,4 +121,13 @@ public class MedicationResponseDTO {
         private Integer frequency;
         private List<MedicationTiming> timings;
     }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BatchDeleteResult {
+        private int requestedCount;
+        private int deletedCount;
+    }
 }

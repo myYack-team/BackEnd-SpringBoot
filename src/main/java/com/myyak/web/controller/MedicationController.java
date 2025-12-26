@@ -68,4 +68,13 @@ public class MedicationController {
         medicationService.deleteMedication(userId, medicationId);
         return ApiResponse.of(SuccessStatus.MEDICATION_DELETED, null);
     }
+
+    @Operation(summary = "약 일괄 삭제", description = "여러 약을 한 번에 삭제합니다.")
+    @DeleteMapping("/batch")
+    public ApiResponse<MedicationResponseDTO.BatchDeleteResult> deleteMedicationsBatch(
+            @Parameter(description = "사용자 ID (임시)")
+            @RequestParam Long userId,
+            @Valid @RequestBody MedicationRequestDTO.BatchDeleteRequest request) {
+        return ApiResponse.of(SuccessStatus.MEDICATION_DELETED, medicationService.deleteMedicationsBatch(userId, request.getIds()));
+    }
 }

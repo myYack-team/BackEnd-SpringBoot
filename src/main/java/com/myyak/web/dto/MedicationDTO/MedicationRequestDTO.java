@@ -55,4 +55,11 @@ public class MedicationRequestDTO {
         private Integer remainingCount;
         private String memo;
     }
+
+    @Getter
+    @NoArgsConstructor
+    public static class BatchDeleteRequest {
+        @NotEmpty(message = "삭제할 ID 목록은 필수입니다")
+        private List<Long> ids;
+    }
 }
