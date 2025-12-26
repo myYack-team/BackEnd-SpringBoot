@@ -57,19 +57,25 @@ public class TodayConverter {
                                 .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date)
                                         && i.getTiming() == timing);
 
-                        // DrugInfo에서 drugType과 imageUrl 가져오기
+                        // DrugInfo에서 drugType, imageUrl, displayName 가져오기
                         DrugType drugType = DrugType.UNKNOWN;
                         String imageUrl = null;
+                        String displayName = um.getCustomDrugName(); // 기본값: customDrugName
                         if (um.getDrugInfo() != null) {
                             drugType = um.getDrugInfo().getDrugType() != null
                                     ? um.getDrugInfo().getDrugType()
                                     : DrugType.UNKNOWN;
                             imageUrl = um.getDrugInfo().getImageUrl();
+                            // displayName 우선순위: DrugInfo.displayName > DrugInfo.itemName
+                            displayName = um.getDrugInfo().getDisplayName() != null
+                                    ? um.getDrugInfo().getDisplayName()
+                                    : um.getDrugInfo().getItemName();
                         }
 
                         return TodayResponseDTO.TodayMedication.builder()
                                 .id(um.getId())
                                 .name(um.getDrugName())
+                                .displayName(displayName)
                                 .dosage(parseDosage(um.getDosage()))
                                 .taken(taken)
                                 .reminderId(r.getId())

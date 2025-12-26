@@ -17,7 +17,8 @@ public class TodayResponseDTO {
     @AllArgsConstructor
     public static class TodayMedication {
         private Long id;
-        private String name;
+        private String name;          // 원본 약 이름 (성분 포함)
+        private String displayName;   // 표시용 약 이름 (성분 제외)
         private Integer dosage;
         private Boolean taken;
         private Long reminderId;      // 알림 ID (스누즈용)
