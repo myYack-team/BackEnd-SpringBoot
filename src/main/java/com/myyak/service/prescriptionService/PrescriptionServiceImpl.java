@@ -80,11 +80,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .build();
         }
 
-        // N+1 방지: 모든 처방전의 약물을 한 번에 조회
+        // N+1 방지: 모든 처방전의 약물을 한 번에 조회 (DrugInfo 제외 - 성능 최적화)
         List<Long> prescriptionIds = prescriptions.stream()
                 .map(Prescription::getId)
                 .collect(Collectors.toList());
-        List<UserMedication> allMedications = userMedicationRepository.findByPrescriptionIdIn(prescriptionIds);
+        List<UserMedication> allMedications = userMedicationRepository.findByPrescriptionIdInLight(prescriptionIds);
 
         // 처방전 ID별로 약물 그룹화
         Map<Long, List<UserMedication>> medicationsMap = allMedications.stream()

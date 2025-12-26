@@ -28,9 +28,13 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     @Query("SELECT um FROM UserMedication um WHERE um.user.id = :userId AND um.isActive = true")
     List<UserMedication> findActiveByUserId(@Param("userId") Long userId);
 
-    // DrugInfo와 함께 조회 (N+1 방지)
+    // DrugInfo와 함께 조회 (N+1 방지) - 전체 필드 (상세 조회용)
     @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo WHERE um.user = :user AND um.isActive = true")
     List<UserMedication> findByUserWithDrugInfo(@Param("user") User user);
+
+    // DrugInfo 없이 조회 (목록용) - DrugInfo는 별도 경량 쿼리로 조회
+    @Query("SELECT um FROM UserMedication um WHERE um.user = :user AND um.isActive = true")
+    List<UserMedication> findByUserActiveOnly(@Param("user") User user);
 
     // 특정 DrugInfo를 사용하는 사용자의 약물
     @Query("SELECT um FROM UserMedication um WHERE um.user = :user AND um.drugInfo.itemSeq = :itemSeq AND um.isActive = true")
@@ -44,7 +48,11 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     @Query("SELECT COUNT(um) FROM UserMedication um WHERE um.prescriptionId = :prescriptionId")
     int countByPrescriptionId(@Param("prescriptionId") Long prescriptionId);
 
-    // 여러 처방전 ID로 약물 목록 한 번에 조회 (N+1 방지)
+    // 여러 처방전 ID로 약물 목록 한 번에 조회 (N+1 방지) - 상세 조회용
     @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo WHERE um.prescriptionId IN :prescriptionIds")
     List<UserMedication> findByPrescriptionIdIn(@Param("prescriptionIds") List<Long> prescriptionIds);
+
+    // 여러 처방전 ID로 약물 목록 조회 (DrugInfo 제외) - 목록 조회용 (성능 최적화)
+    @Query("SELECT um FROM UserMedication um WHERE um.prescriptionId IN :prescriptionIds")
+    List<UserMedication> findByPrescriptionIdInLight(@Param("prescriptionIds") List<Long> prescriptionIds);
 }

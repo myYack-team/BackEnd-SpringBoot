@@ -48,4 +48,9 @@ public interface DrugInfoRepository extends JpaRepository<DrugInfo, String> {
     // ingredientKr이 NULL인 약물 수 조회
     @Query("SELECT COUNT(d) FROM DrugInfo d WHERE d.ingredientKr IS NULL")
     long countByIngredientKrIsNull();
+
+    // 목록용 경량 조회 (TEXT 컬럼 제외) - Native Query
+    @Query(value = "SELECT item_seq, item_name, display_name, ingredient_kr, entp_name, image_url, drug_type " +
+                   "FROM drug_info WHERE item_seq IN :itemSeqs", nativeQuery = true)
+    List<Object[]> findSummaryByItemSeqIn(@Param("itemSeqs") List<String> itemSeqs);
 }

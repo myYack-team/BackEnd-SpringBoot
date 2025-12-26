@@ -68,16 +68,38 @@ public class MedicationServiceImpl implements MedicationService {
     @Override
     public MedicationResponseDTO.MedicationList getMedications(Long userId) {
         User user = userService.findById(userId);
-        List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
 
-        // N+1 방지: 모든 리마인더를 한 번에 조회 후 Map으로 그룹화
-        List<Reminder> allReminders = medications.isEmpty()
-                ? List.of()
-                : reminderRepository.findByUserMedicationIn(medications);
+        // 1. UserMedication만 조회 (DrugInfo의 TEXT 컬럼 제외)
+        List<UserMedication> medications = userMedicationRepository.findByUserActiveOnly(user);
+
+        if (medications.isEmpty()) {
+            return MedicationConverter.toList(medications, Map.of(), Map.of());
+        }
+
+        // 2. 필요한 DrugInfo만 경량 조회 (TEXT 컬럼 제외)
+        List<String> drugItemSeqs = medications.stream()
+                .map(UserMedication::getDrugInfo)
+                .filter(di -> di != null)
+                .map(DrugInfo::getItemSeq)
+                .distinct()
+                .toList();
+
+        Map<String, Object[]> drugInfoMap = Map.of();
+        if (!drugItemSeqs.isEmpty()) {
+            List<Object[]> drugSummaries = drugInfoRepository.findSummaryByItemSeqIn(drugItemSeqs);
+            drugInfoMap = drugSummaries.stream()
+                    .collect(Collectors.toMap(
+                            row -> (String) row[0],  // item_seq
+                            row -> row
+                    ));
+        }
+
+        // 3. 리마인더 조회
+        List<Reminder> allReminders = reminderRepository.findByUserMedicationIn(medications);
         Map<Long, List<Reminder>> remindersMap = allReminders.stream()
                 .collect(Collectors.groupingBy(r -> r.getUserMedication().getId()));
 
-        return MedicationConverter.toList(medications, remindersMap);
+        return MedicationConverter.toList(medications, remindersMap, drugInfoMap);
     }
 
     @Override
