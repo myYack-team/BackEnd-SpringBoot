@@ -15,6 +15,7 @@ import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.UserMedicationRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.util.FileUploadUtil;
+import com.myyak.util.MedicationCalculator;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionRequestDTO;
 import com.myyak.web.dto.PrescriptionDTO.PrescriptionResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -210,8 +211,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                             .collect(Collectors.toList());
 
                     // 남은 복용 일수 계산
-                    int daysLeft = calculateDaysLeft(m.getRemainingCount(), m.getFrequency(),
-                            m.getDosage() != null ? parseDosage(m.getDosage()) : 1);
+                    int daysLeft = MedicationCalculator.calculateDaysLeft(
+                            m.getRemainingCount(), m.getFrequency(), m.getDosage());
 
                     // displayName과 imageUrl: 경량 DrugInfo 맵에서 조회
                     String displayName = m.getDrugName();
@@ -259,33 +260,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .build();
     }
 
-    /**
-     * 남은 복용 일수 계산
-     */
-    private int calculateDaysLeft(Integer remainingCount, Integer frequency, int dosagePerTime) {
-        if (remainingCount == null || remainingCount <= 0) {
-            return 0;
-        }
-        if (frequency == null || frequency <= 0) {
-            return remainingCount;
-        }
-        int dailyUsage = frequency * dosagePerTime;
-        return (int) Math.ceil((double) remainingCount / dailyUsage);
-    }
-
-    /**
-     * "1정" 같은 문자열에서 숫자 추출
-     */
-    private int parseDosage(String dosage) {
-        if (dosage == null || dosage.isEmpty()) {
-            return 1;
-        }
-        try {
-            return Integer.parseInt(dosage.replaceAll("[^0-9]", ""));
-        } catch (NumberFormatException e) {
-            return 1;
-        }
-    }
 
     @Override
     public PrescriptionResponseDTO.PrescriptionInfo updatePrescription(Long userId, Long prescriptionId, PrescriptionRequestDTO.UpdateRequest request) {
