@@ -9,10 +9,13 @@ import com.myyak.domain.User;
 import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.domain.enums.SupplementTag;
+import com.myyak.config.CacheConfig;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserSupplementRepository;
 import com.myyak.service.userService.UserService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +77,7 @@ public class SupplementServiceImpl implements SupplementService {
     }
 
     @Override
+    @Cacheable(value = CacheConfig.POPULAR_SUPPLEMENTS, key = "'page_' + #page + '_size_' + #size")
     public SupplementResponseDTO.SupplementList getPopularSupplements(int page, int size) {
         Pageable pageable = PageRequest.of(page, size);
         Page<Supplement> supplementPage = supplementRepository.findAllOrderByPopularity(pageable);
@@ -125,6 +129,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
+    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
         User user = userService.findById(userId);
         Supplement supplement = findById(request.getSupplementId());
@@ -221,6 +226,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
+    @CacheEvict(value = CacheConfig.POPULAR_SUPPLEMENTS, allEntries = true)
     public void deleteUserSupplement(Long userId, Long userSupplementId) {
         User user = userService.findById(userId);
         UserSupplement userSupplement = findUserSupplementById(userSupplementId);
