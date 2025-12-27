@@ -34,8 +34,19 @@ public class AuthController {
      */
     @Operation(summary = "카카오 로그인 시작", description = "카카오 OAuth 로그인 페이지로 리다이렉트합니다.")
     @GetMapping("/kakao/login")
-    public void kakaoLoginRedirect(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    public void kakaoLoginRedirect(
+            @Parameter(description = "앱 리다이렉트 URI (Expo Go: exp://..., Production: myyak://...)")
+            @RequestParam(required = false) String app_redirect_uri,
+            HttpServletRequest request,
+            HttpServletResponse response) throws IOException {
         String baseUrl = getBaseUrl(request);
+
+        // 앱에서 전달한 redirect_uri를 세션에 저장 (콜백에서 사용)
+        if (app_redirect_uri != null && !app_redirect_uri.isBlank()) {
+            request.getSession().setAttribute("app_redirect_uri", app_redirect_uri);
+            log.info("앱 리다이렉트 URI 저장: {}", app_redirect_uri);
+        }
+
         String authUrl = authService.getKakaoAuthorizationUrl(baseUrl);
         log.info("카카오 로그인 페이지로 리다이렉트: {}, baseUrl: {}", authUrl, baseUrl);
         response.sendRedirect(authUrl);
@@ -70,20 +81,28 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response) throws IOException {
 
+        // 세션에서 앱 리다이렉트 URI 가져오기 (Expo Go: exp://..., Production: myyak://...)
+        String appRedirectUri = (String) request.getSession().getAttribute("app_redirect_uri");
+        // 기본값: 프로덕션용 딥링크
+        if (appRedirectUri == null || appRedirectUri.isBlank()) {
+            appRedirectUri = "myyak://oauth/callback";
+        }
+        log.info("앱 리다이렉트 URI: {}", appRedirectUri);
+
         // 에러 발생 시 앱으로 에러 전달
         if (error != null) {
             log.error("카카오 OAuth 에러: {} - {}", error, error_description);
             String errorMessage = error_description != null ? error_description : error;
-            String deepLink = "myyak://oauth/callback?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
-            response.sendRedirect(deepLink);
+            String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+            response.sendRedirect(redirectUrl);
             return;
         }
 
         // 인가 코드 없으면 에러
         if (code == null || code.isBlank()) {
             log.error("카카오 OAuth 인가 코드 없음");
-            String deepLink = "myyak://oauth/callback?error=" + URLEncoder.encode("인가 코드가 없습니다", StandardCharsets.UTF_8);
-            response.sendRedirect(deepLink);
+            String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode("인가 코드가 없습니다", StandardCharsets.UTF_8);
+            response.sendRedirect(redirectUrl);
             return;
         }
 
@@ -93,28 +112,26 @@ public class AuthController {
             log.debug("콜백 처리 baseUrl: {}", baseUrl);
             AuthResponseDTO.LoginResponse loginResponse = authService.loginWithKakaoCode(code, baseUrl);
 
-            // 딥링크로 앱에 토큰 전달
-            String deepLink = String.format(
-                    "myyak://oauth/callback?accessToken=%s&refreshToken=%s&isNewUser=%s",
+            // 앱으로 리다이렉트 (Expo Go: exp://..., Production: myyak://...)
+            String redirectUrl = String.format(
+                    "%s?accessToken=%s&refreshToken=%s&isNewUser=%s",
+                    appRedirectUri,
                     loginResponse.getAccessToken(),
                     loginResponse.getRefreshToken(),
                     loginResponse.isNewUser()
             );
 
-            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}", loginResponse.isNewUser());
-            response.sendRedirect(deepLink);
+            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}, redirectUrl={}", loginResponse.isNewUser(), redirectUrl);
+            response.sendRedirect(redirectUrl);
 
         } catch (Exception e) {
             log.error("카카오 로그인 처리 실패", e);
             String errorMessage = e.getMessage() != null ? e.getMessage() : "로그인 처리 실패";
-            String deepLink = "myyak://oauth/callback?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
-            response.sendRedirect(deepLink);
+            String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+            response.sendRedirect(redirectUrl);
         }
     }
 
-    /**
-     * 카카오 액세스 토큰으로 직접 로그인 (기존 방식 유지, 필요 시 사용)
-     */
     @Operation(summary = "카카오 토큰 로그인", description = "카카오 액세스 토큰으로 직접 로그인합니다. (하위 호환용)")
     @PostMapping("/kakao")
     public ApiResponse<AuthResponseDTO.LoginResponse> loginWithKakao(
