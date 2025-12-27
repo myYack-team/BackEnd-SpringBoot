@@ -5,9 +5,9 @@ import com.myyak.service.userService.UserService;
 import com.myyak.web.dto.UserDTO.UserRequestDTO;
 import com.myyak.web.dto.UserDTO.UserResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "User", description = "사용자 API")
@@ -20,26 +20,17 @@ public class UserController {
 
     @Operation(summary = "내 정보 조회", description = "현재 로그인한 사용자의 정보를 조회합니다.")
     @GetMapping("/me")
-    public ApiResponse<UserResponseDTO.UserInfo> getMyInfo(
-            @Parameter(description = "사용자 ID (임시, 인증 구현 후 제거)")
-            @RequestParam Long userId) {
+    public ApiResponse<UserResponseDTO.UserInfo> getMyInfo(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.getMyInfo(userId));
     }
 
     @Operation(summary = "내 정보 수정", description = "현재 로그인한 사용자의 정보를 수정합니다.")
     @PatchMapping("/me")
     public ApiResponse<UserResponseDTO.UpdateResult> updateMyInfo(
-            @Parameter(description = "사용자 ID (임시, 인증 구현 후 제거)")
-            @RequestParam Long userId,
+            Authentication authentication,
             @RequestBody UserRequestDTO.UpdateRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.updateMyInfo(userId, request));
-    }
-
-    @Operation(summary = "테스트 사용자 생성", description = "테스트용 사용자를 생성합니다.")
-    @PostMapping("/test")
-    public ApiResponse<UserResponseDTO.UserInfo> createTestUser(
-            @Parameter(description = "사용자 이름")
-            @RequestParam(defaultValue = "테스트사용자") String name) {
-        return ApiResponse.onSuccess(userService.createTestUser(name));
     }
 }

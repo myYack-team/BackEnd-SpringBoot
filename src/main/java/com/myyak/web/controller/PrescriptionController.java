@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -31,10 +32,10 @@ public class PrescriptionController {
     @Operation(summary = "처방전 이미지 업로드", description = "처방전 이미지를 업로드하고 처방 기록을 생성합니다")
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<PrescriptionResponseDTO.UploadResult> uploadPrescription(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Parameter(description = "처방전 이미지") @RequestPart("file") MultipartFile file,
             @Parameter(description = "처방 날짜 (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate prescriptionDate) {
-
+        Long userId = (Long) authentication.getPrincipal();
         PrescriptionResponseDTO.UploadResult result = prescriptionService.uploadPrescription(userId, file, prescriptionDate);
         return ApiResponse.onSuccess(result);
     }
@@ -42,10 +43,10 @@ public class PrescriptionController {
     @Operation(summary = "처방전 + 약물 일괄 등록", description = "처방전 이미지와 약물 정보를 한번에 등록합니다. 실패 시 전체 롤백됩니다.")
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<PrescriptionResponseDTO.RegisterResult> registerPrescription(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Parameter(description = "처방전 이미지") @RequestPart("file") MultipartFile file,
             @Parameter(description = "처방전 및 약물 정보 (JSON 문자열)") @RequestPart("data") String dataJson) {
-
+        Long userId = (Long) authentication.getPrincipal();
         try {
             PrescriptionRequestDTO.RegisterRequest request = objectMapper.readValue(dataJson, PrescriptionRequestDTO.RegisterRequest.class);
             PrescriptionResponseDTO.RegisterResult result = prescriptionService.registerPrescription(userId, file, request);
@@ -57,9 +58,8 @@ public class PrescriptionController {
 
     @Operation(summary = "처방전 목록 조회", description = "사용자의 모든 처방전 목록을 조회합니다")
     @GetMapping
-    public ApiResponse<PrescriptionResponseDTO.PrescriptionList> getPrescriptionList(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId) {
-
+    public ApiResponse<PrescriptionResponseDTO.PrescriptionList> getPrescriptionList(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
         PrescriptionResponseDTO.PrescriptionList list = prescriptionService.getPrescriptionList(userId);
         return ApiResponse.onSuccess(list);
     }
@@ -67,9 +67,9 @@ public class PrescriptionController {
     @Operation(summary = "처방전 상세 조회", description = "특정 처방전의 상세 정보와 연결된 약품 목록을 조회합니다")
     @GetMapping("/{prescriptionId}")
     public ApiResponse<PrescriptionResponseDTO.PrescriptionDetail> getPrescriptionDetail(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Parameter(description = "처방전 ID") @PathVariable Long prescriptionId) {
-
+        Long userId = (Long) authentication.getPrincipal();
         PrescriptionResponseDTO.PrescriptionDetail detail = prescriptionService.getPrescriptionDetail(userId, prescriptionId);
         return ApiResponse.onSuccess(detail);
     }
@@ -77,10 +77,10 @@ public class PrescriptionController {
     @Operation(summary = "처방전 정보 수정", description = "처방전의 날짜, 병원명, 메모를 수정합니다")
     @PatchMapping("/{prescriptionId}")
     public ApiResponse<PrescriptionResponseDTO.PrescriptionInfo> updatePrescription(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Parameter(description = "처방전 ID") @PathVariable Long prescriptionId,
             @RequestBody PrescriptionRequestDTO.UpdateRequest request) {
-
+        Long userId = (Long) authentication.getPrincipal();
         PrescriptionResponseDTO.PrescriptionInfo info = prescriptionService.updatePrescription(userId, prescriptionId, request);
         return ApiResponse.onSuccess(info);
     }
@@ -88,9 +88,9 @@ public class PrescriptionController {
     @Operation(summary = "처방전 삭제", description = "처방전을 삭제합니다. 연결된 약품들의 처방전 연결이 해제됩니다.")
     @DeleteMapping("/{prescriptionId}")
     public ApiResponse<String> deletePrescription(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Parameter(description = "처방전 ID") @PathVariable Long prescriptionId) {
-
+        Long userId = (Long) authentication.getPrincipal();
         prescriptionService.deletePrescription(userId, prescriptionId);
         return ApiResponse.onSuccess("처방전이 삭제되었습니다.");
     }
@@ -98,9 +98,9 @@ public class PrescriptionController {
     @Operation(summary = "처방전 일괄 삭제", description = "여러 처방전을 한 번에 삭제합니다. 연결된 약품들의 처방전 연결이 해제됩니다.")
     @DeleteMapping("/batch")
     public ApiResponse<PrescriptionResponseDTO.BatchDeleteResult> deletePrescriptionsBatch(
-            @Parameter(description = "사용자 ID") @RequestParam Long userId,
+            Authentication authentication,
             @Valid @RequestBody PrescriptionRequestDTO.BatchDeleteRequest request) {
-
+        Long userId = (Long) authentication.getPrincipal();
         PrescriptionResponseDTO.BatchDeleteResult result = prescriptionService.deletePrescriptionsBatch(userId, request.getIds());
         return ApiResponse.onSuccess(result);
     }
