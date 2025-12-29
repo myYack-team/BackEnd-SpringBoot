@@ -43,6 +43,7 @@ public class MedicationRequestDTO {
 
         // 선택 필드
         private String memo;  // 사용자 메모
+        private List<String> reminderTimes;  // 알림 시간 목록 ("HH:mm" 형식)
     }
 
     @Getter
