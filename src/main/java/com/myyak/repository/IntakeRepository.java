@@ -52,4 +52,26 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end
     );
+
+    /**
+     * 의약품의 특정 타이밍에 대한 복용/건너뛰기 기록 존재 여부 확인
+     */
+    @Query("SELECT COUNT(i) > 0 FROM Intake i WHERE i.userMedication.id = :userMedicationId AND i.timing = :timing AND i.takenAt BETWEEN :start AND :end")
+    boolean existsByUserMedicationIdAndTimingAndDateRange(
+            @Param("userMedicationId") Long userMedicationId,
+            @Param("timing") MedicationTiming timing,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
+
+    /**
+     * 영양제의 특정 타이밍에 대한 복용/건너뛰기 기록 존재 여부 확인
+     */
+    @Query("SELECT COUNT(i) > 0 FROM Intake i WHERE i.userSupplement.id = :userSupplementId AND i.timing = :timing AND i.takenAt BETWEEN :start AND :end")
+    boolean existsByUserSupplementIdAndTimingAndDateRange(
+            @Param("userSupplementId") Long userSupplementId,
+            @Param("timing") MedicationTiming timing,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
 }
