@@ -32,4 +32,12 @@ public class UserResponseDTO {
         private String name;
         private FontSize fontSize;
     }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class NotificationSettings {
+        private Boolean notificationEnabled;
+    }
 }

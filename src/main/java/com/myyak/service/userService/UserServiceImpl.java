@@ -97,6 +97,25 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponseDTO.NotificationSettings getNotificationSettings(Long userId) {
+        User user = findById(userId);
+        return UserResponseDTO.NotificationSettings.builder()
+                .notificationEnabled(user.getNotificationEnabled())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO.NotificationSettings updateNotificationSettings(Long userId, UserRequestDTO.UpdateNotificationSettings request) {
+        User user = findById(userId);
+        user.updateNotificationEnabled(request.getNotificationEnabled());
+        log.info("알림 설정 변경 - userId: {}, notificationEnabled: {}", userId, request.getNotificationEnabled());
+        return UserResponseDTO.NotificationSettings.builder()
+                .notificationEnabled(user.getNotificationEnabled())
+                .build();
+    }
+
+    @Override
     @Transactional
     public UserResponseDTO.UserInfo createTestUser(String name) {
         User user = User.builder()

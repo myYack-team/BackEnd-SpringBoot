@@ -18,6 +18,16 @@ public interface UserService {
      */
     void deleteMe(Long userId);
 
+    /**
+     * 알림 설정 조회
+     */
+    UserResponseDTO.NotificationSettings getNotificationSettings(Long userId);
+
+    /**
+     * 알림 설정 수정
+     */
+    UserResponseDTO.NotificationSettings updateNotificationSettings(Long userId, UserRequestDTO.UpdateNotificationSettings request);
+
     // 테스트용 사용자 생성
     UserResponseDTO.UserInfo createTestUser(String name);
 }

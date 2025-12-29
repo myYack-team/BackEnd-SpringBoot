@@ -42,6 +42,10 @@ public class User extends BaseEntity {
 
     private String fcmToken;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean notificationEnabled = true;
+
     public void updateProfile(String name, String profileImage) {
         this.name = name;
         this.profileImage = profileImage;
@@ -67,5 +71,9 @@ public class User extends BaseEntity {
 
     public void updateFcmToken(String fcmToken) {
         this.fcmToken = fcmToken;
+    }
+
+    public void updateNotificationEnabled(Boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
     }
 }
