@@ -58,3 +58,4 @@ google-cloud-credentials.json
 
 # firebase 키
 /src/main/resources/firebase-service-account.json
+firebase-service-account.json
