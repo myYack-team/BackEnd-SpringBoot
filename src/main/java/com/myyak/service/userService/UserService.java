@@ -12,6 +12,12 @@ public interface UserService {
 
     UserResponseDTO.UpdateResult updateMyInfo(Long userId, UserRequestDTO.UpdateRequest request);
 
+    /**
+     * 회원 탈퇴 (Cascade 삭제)
+     * 사용자의 모든 관련 데이터를 삭제합니다.
+     */
+    void deleteMe(Long userId);
+
     // 테스트용 사용자 생성
     UserResponseDTO.UserInfo createTestUser(String name);
 }

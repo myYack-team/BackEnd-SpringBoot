@@ -33,4 +33,12 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.updateMyInfo(userId, request));
     }
+
+    @Operation(summary = "회원 탈퇴", description = "현재 로그인한 사용자의 계정과 모든 관련 데이터를 삭제합니다.")
+    @DeleteMapping("/me")
+    public ApiResponse<Void> deleteMe(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        userService.deleteMe(userId);
+        return ApiResponse.onSuccess(null);
+    }
 }
