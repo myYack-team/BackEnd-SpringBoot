@@ -2,7 +2,9 @@ package com.myyak.converter;
 
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
+import com.myyak.domain.Supplement;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.web.dto.IntakeDTO.IntakeResponseDTO;
@@ -70,10 +72,14 @@ public class IntakeConverter {
                 .build();
     }
 
+    /**
+     * 일별 복용 결과 변환 (약물 + 영양제 통합)
+     */
     public static IntakeResponseDTO.DailyIntakeResult toDailyResult(
             LocalDate date,
             List<Reminder> reminders,
-            Map<Long, List<Intake>> intakesByMedicationId) {
+            Map<Long, List<Intake>> intakesByMedicationId,
+            Map<Long, List<Intake>> intakesBySupplementId) {
 
         Map<MedicationTiming, List<Reminder>> remindersByTiming = reminders.stream()
                 .collect(Collectors.groupingBy(Reminder::getTiming));
@@ -87,33 +93,7 @@ public class IntakeConverter {
             if (timingReminders.isEmpty()) continue;
 
             List<IntakeResponseDTO.ScheduleMedication> meds = timingReminders.stream()
-                    .map(r -> {
-                        UserMedication um = r.getUserMedication();
-                        List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
-                        // 해당 날짜 + 해당 시간대(timing)에 복용 기록 찾기
-                        Intake todayIntake = findIntakeForDateAndTiming(medicationIntakes, date, timing);
-
-                        // DrugInfo에서 displayName, ingredientKr, imageUrl 가져오기
-                        String displayName = null;
-                        String ingredientKr = null;
-                        String imageUrl = null;
-                        if (um.getDrugInfo() != null) {
-                            displayName = um.getDrugInfo().getDisplayName();
-                            ingredientKr = um.getDrugInfo().getIngredientKr();
-                            imageUrl = um.getDrugInfo().getImageUrl();
-                        }
-
-                        return IntakeResponseDTO.ScheduleMedication.builder()
-                                .id(um.getId())
-                                .name(um.getDrugName())
-                                .displayName(displayName)
-                                .ingredientKr(ingredientKr)
-                                .dosage(parseDosage(um.getDosage()))
-                                .taken(todayIntake != null)
-                                .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
-                                .imageUrl(imageUrl)
-                                .build();
-                    })
+                    .map(r -> convertReminderToScheduleMedication(r, date, timing, intakesByMedicationId, intakesBySupplementId))
                     .collect(Collectors.toList());
 
             boolean allTaken = meds.stream().allMatch(IntakeResponseDTO.ScheduleMedication::getTaken);
@@ -145,6 +125,84 @@ public class IntakeConverter {
                         .totalTaken(totalTaken)
                         .completionRate(Math.round(completionRate * 10) / 10.0)
                         .build())
+                .build();
+    }
+
+    /**
+     * Reminder를 ScheduleMedication으로 변환 (약물/영양제 모두 지원)
+     */
+    private static IntakeResponseDTO.ScheduleMedication convertReminderToScheduleMedication(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesByMedicationId,
+            Map<Long, List<Intake>> intakesBySupplementId) {
+
+        if (reminder.isMedicationReminder()) {
+            return convertMedicationReminder(reminder, date, timing, intakesByMedicationId);
+        } else {
+            return convertSupplementReminder(reminder, date, timing, intakesBySupplementId);
+        }
+    }
+
+    /**
+     * 약물 리마인더 변환
+     */
+    private static IntakeResponseDTO.ScheduleMedication convertMedicationReminder(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesByMedicationId) {
+
+        UserMedication um = reminder.getUserMedication();
+        List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
+        Intake todayIntake = findIntakeForDateAndTiming(medicationIntakes, date, timing);
+
+        String displayName = null;
+        String ingredientKr = null;
+        String imageUrl = null;
+
+        if (um.getDrugInfo() != null) {
+            displayName = um.getDrugInfo().getDisplayName();
+            ingredientKr = um.getDrugInfo().getIngredientKr();
+            imageUrl = um.getDrugInfo().getImageUrl();
+        }
+
+        return IntakeResponseDTO.ScheduleMedication.builder()
+                .id(um.getId())
+                .name(um.getDrugName())
+                .displayName(displayName)
+                .ingredientKr(ingredientKr)
+                .dosage(parseDosage(um.getDosage()))
+                .taken(todayIntake != null)
+                .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
+                .imageUrl(imageUrl)
+                .build();
+    }
+
+    /**
+     * 영양제 리마인더 변환
+     */
+    private static IntakeResponseDTO.ScheduleMedication convertSupplementReminder(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesBySupplementId) {
+
+        UserSupplement us = reminder.getUserSupplement();
+        Supplement supplement = us.getSupplement();
+        List<Intake> supplementIntakes = intakesBySupplementId.getOrDefault(us.getId(), List.of());
+        Intake todayIntake = findIntakeForDateAndTiming(supplementIntakes, date, timing);
+
+        return IntakeResponseDTO.ScheduleMedication.builder()
+                .id(us.getId())
+                .name(supplement.getName())
+                .displayName(supplement.getName())
+                .ingredientKr(null)
+                .dosage(parseDosage(us.getDosage()))
+                .taken(todayIntake != null)
+                .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
+                .imageUrl(supplement.getImageUrl())
                 .build();
     }
 

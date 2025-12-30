@@ -2,9 +2,12 @@ package com.myyak.converter;
 
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
+import com.myyak.domain.Supplement;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.DrugType;
 import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.domain.enums.SupplementTag;
 import com.myyak.web.dto.TodayDTO.TodayResponseDTO;
 
 import java.time.DayOfWeek;
@@ -30,10 +33,14 @@ public class TodayConverter {
             DayOfWeek.SUNDAY, "일"
     );
 
+    /**
+     * 오늘의 복약 결과 변환 (약물 + 영양제 통합)
+     */
     public static TodayResponseDTO.TodayResult toResult(
             LocalDate date,
             List<Reminder> reminders,
-            Map<Long, List<Intake>> intakesByMedicationId) {
+            Map<Long, List<Intake>> intakesByMedicationId,
+            Map<Long, List<Intake>> intakesBySupplementId) {
 
         Map<MedicationTiming, List<Reminder>> remindersByTiming = reminders.stream()
                 .collect(Collectors.groupingBy(Reminder::getTiming));
@@ -49,40 +56,7 @@ public class TodayConverter {
             if (timingReminders.isEmpty()) continue;
 
             List<TodayResponseDTO.TodayMedication> meds = timingReminders.stream()
-                    .map(r -> {
-                        UserMedication um = r.getUserMedication();
-                        List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
-                        // 해당 날짜 + 해당 시간대(timing)에 복용 기록이 있는지 확인
-                        boolean taken = medicationIntakes.stream()
-                                .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date)
-                                        && i.getTiming() == timing);
-
-                        // DrugInfo에서 drugType, imageUrl, displayName 가져오기
-                        DrugType drugType = DrugType.UNKNOWN;
-                        String imageUrl = null;
-                        String displayName = um.getCustomDrugName(); // 기본값: customDrugName
-                        if (um.getDrugInfo() != null) {
-                            drugType = um.getDrugInfo().getDrugType() != null
-                                    ? um.getDrugInfo().getDrugType()
-                                    : DrugType.UNKNOWN;
-                            imageUrl = um.getDrugInfo().getImageUrl();
-                            // displayName 우선순위: DrugInfo.displayName > DrugInfo.itemName
-                            displayName = um.getDrugInfo().getDisplayName() != null
-                                    ? um.getDrugInfo().getDisplayName()
-                                    : um.getDrugInfo().getItemName();
-                        }
-
-                        return TodayResponseDTO.TodayMedication.builder()
-                                .id(um.getId())
-                                .name(um.getDrugName())
-                                .displayName(displayName)
-                                .dosage(parseDosage(um.getDosage()))
-                                .taken(taken)
-                                .reminderId(r.getId())
-                                .drugType(drugType)
-                                .imageUrl(imageUrl)
-                                .build();
-                    })
+                    .map(r -> convertReminderToMedication(r, date, timing, intakesByMedicationId, intakesBySupplementId))
                     .collect(Collectors.toList());
 
             totalMedications += meds.size();
@@ -109,6 +83,100 @@ public class TodayConverter {
                         .takenCount(takenCount)
                         .remainingCount(totalMedications - takenCount)
                         .build())
+                .build();
+    }
+
+    /**
+     * Reminder를 TodayMedication으로 변환 (약물/영양제 모두 지원)
+     */
+    private static TodayResponseDTO.TodayMedication convertReminderToMedication(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesByMedicationId,
+            Map<Long, List<Intake>> intakesBySupplementId) {
+
+        if (reminder.isMedicationReminder()) {
+            return convertMedicationReminder(reminder, date, timing, intakesByMedicationId);
+        } else {
+            return convertSupplementReminder(reminder, date, timing, intakesBySupplementId);
+        }
+    }
+
+    /**
+     * 약물 리마인더 변환
+     */
+    private static TodayResponseDTO.TodayMedication convertMedicationReminder(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesByMedicationId) {
+
+        UserMedication um = reminder.getUserMedication();
+        List<Intake> medicationIntakes = intakesByMedicationId.getOrDefault(um.getId(), List.of());
+
+        boolean taken = medicationIntakes.stream()
+                .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date) && i.getTiming() == timing);
+
+        DrugType drugType = DrugType.UNKNOWN;
+        String imageUrl = null;
+        String displayName = um.getCustomDrugName();
+
+        if (um.getDrugInfo() != null) {
+            drugType = um.getDrugInfo().getDrugType() != null
+                    ? um.getDrugInfo().getDrugType()
+                    : DrugType.UNKNOWN;
+            imageUrl = um.getDrugInfo().getImageUrl();
+            displayName = um.getDrugInfo().getDisplayName() != null
+                    ? um.getDrugInfo().getDisplayName()
+                    : um.getDrugInfo().getItemName();
+        }
+
+        return TodayResponseDTO.TodayMedication.builder()
+                .id(um.getId())
+                .name(um.getDrugName())
+                .displayName(displayName)
+                .dosage(parseDosage(um.getDosage()))
+                .taken(taken)
+                .reminderId(reminder.getId())
+                .drugType(drugType)
+                .supplementTag(null)
+                .isSupplement(false)
+                .imageUrl(imageUrl)
+                .build();
+    }
+
+    /**
+     * 영양제 리마인더 변환
+     */
+    private static TodayResponseDTO.TodayMedication convertSupplementReminder(
+            Reminder reminder,
+            LocalDate date,
+            MedicationTiming timing,
+            Map<Long, List<Intake>> intakesBySupplementId) {
+
+        UserSupplement us = reminder.getUserSupplement();
+        Supplement supplement = us.getSupplement();
+        List<Intake> supplementIntakes = intakesBySupplementId.getOrDefault(us.getId(), List.of());
+
+        boolean taken = supplementIntakes.stream()
+                .anyMatch(i -> i.getTakenAt().toLocalDate().equals(date) && i.getTiming() == timing);
+
+        SupplementTag supplementTag = supplement.getTag();
+        String imageUrl = supplement.getImageUrl();
+        String displayName = supplement.getName();
+
+        return TodayResponseDTO.TodayMedication.builder()
+                .id(us.getId())
+                .name(supplement.getName())
+                .displayName(displayName)
+                .dosage(parseDosage(us.getDosage()))
+                .taken(taken)
+                .reminderId(reminder.getId())
+                .drugType(null)
+                .supplementTag(supplementTag)
+                .isSupplement(true)
+                .imageUrl(imageUrl)
                 .build();
     }
 
