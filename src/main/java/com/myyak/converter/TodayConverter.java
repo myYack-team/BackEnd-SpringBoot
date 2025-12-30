@@ -14,6 +14,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -57,6 +58,7 @@ public class TodayConverter {
 
             List<TodayResponseDTO.TodayMedication> meds = timingReminders.stream()
                     .map(r -> convertReminderToMedication(r, date, timing, intakesByMedicationId, intakesBySupplementId))
+                    .sorted(Comparator.comparing(TodayResponseDTO.TodayMedication::getIsSupplement))
                     .collect(Collectors.toList());
 
             totalMedications += meds.size();

@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -94,6 +95,7 @@ public class IntakeConverter {
 
             List<IntakeResponseDTO.ScheduleMedication> meds = timingReminders.stream()
                     .map(r -> convertReminderToScheduleMedication(r, date, timing, intakesByMedicationId, intakesBySupplementId))
+                    .sorted(Comparator.comparing(IntakeResponseDTO.ScheduleMedication::getIsSupplement))
                     .collect(Collectors.toList());
 
             boolean allTaken = meds.stream().allMatch(IntakeResponseDTO.ScheduleMedication::getTaken);
@@ -177,6 +179,7 @@ public class IntakeConverter {
                 .taken(todayIntake != null)
                 .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
                 .imageUrl(imageUrl)
+                .isSupplement(false)
                 .build();
     }
 
@@ -203,6 +206,7 @@ public class IntakeConverter {
                 .taken(todayIntake != null)
                 .takenAt(todayIntake != null ? todayIntake.getTakenAt() : null)
                 .imageUrl(supplement.getImageUrl())
+                .isSupplement(true)
                 .build();
     }
 
