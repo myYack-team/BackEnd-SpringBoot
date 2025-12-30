@@ -91,7 +91,7 @@ public class IntakeResponseDTO {
         private DailySummary summary;
     }
 
-    // 월별 복약 요약용 DTO
+    // 복용 달력 데이터용 DTO
     @Getter
     @Builder
     @NoArgsConstructor

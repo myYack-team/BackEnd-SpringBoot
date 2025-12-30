@@ -46,7 +46,7 @@ public class IntakeController {
         return ApiResponse.onSuccess(intakeService.getIntakes(userId, date));
     }
 
-    @Operation(summary = "월별 복약 요약 조회", description = "특정 월의 복약 요약 정보를 조회합니다. 각 날짜별 복약 상태(COMPLETE, PARTIAL, MISSED, PENDING, NONE)를 반환합니다.")
+    @Operation(summary = "복용 달력 데이터 조회", description = "특정 월의 복용 달력 데이터를 조회합니다. 각 날짜별 복약 상태(COMPLETE, PARTIAL, MISSED, PENDING, NONE)를 반환합니다.")
     @GetMapping("/monthly-summary")
     public ApiResponse<IntakeResponseDTO.MonthlySummaryResult> getMonthlySummary(
             Authentication authentication,
