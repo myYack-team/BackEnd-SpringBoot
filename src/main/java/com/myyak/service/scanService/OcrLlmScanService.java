@@ -92,13 +92,9 @@ public class OcrLlmScanService implements ScanService {
             - totalCount: 총 수량 (숫자만)
 
             ## timings 값 (해당하는 것만 배열에 포함):
-            - BEFORE_BREAKFAST: 아침 식전
-            - AFTER_BREAKFAST: 아침 식후
-            - BEFORE_LUNCH: 점심 식전
-            - AFTER_LUNCH: 점심 식후
-            - BEFORE_DINNER: 저녁 식전
-            - AFTER_DINNER: 저녁 식후
-            - BEFORE_BED: 취침 전
+            - MORNING: 아침
+            - AFTERNOON: 점심
+            - EVENING: 저녁
             - AS_NEEDED: 필요시
 
             ## 출력 형식 (JSON만 출력, 설명 없음):
@@ -112,7 +108,7 @@ public class OcrLlmScanService implements ScanService {
                   "name": "록사틴정500밀리그램",
                   "dosage": 1,
                   "frequency": 2,
-                  "timings": ["AFTER_BREAKFAST", "AFTER_DINNER"],
+                  "timings": ["MORNING", "EVENING"],
                   "durationDays": 7,
                   "totalCount": 14
                 }
@@ -479,7 +475,7 @@ public class OcrLlmScanService implements ScanService {
 
             // 기본 timings 설정 (비어있으면)
             if (timings.isEmpty()) {
-                timings.add(MedicationTiming.AFTER_BREAKFAST);
+                timings.add(MedicationTiming.MORNING);
             }
 
             // 빌더 생성

@@ -20,6 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +43,8 @@ public class MedicationServiceImpl implements MedicationService {
                 .orElseThrow(() -> new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND));
     }
 
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+
     @Override
     @Transactional
     public MedicationResponseDTO.CreateResult createMedication(Long userId, MedicationRequestDTO.CreateRequest request) {
@@ -54,12 +59,21 @@ public class MedicationServiceImpl implements MedicationService {
         UserMedication userMedication = MedicationConverter.toEntity(request, user, drugInfo);
         userMedicationRepository.save(userMedication);
 
-        // 리마인더 생성
-        List<MedicationTiming> timings = request.getTimings();
-        for (MedicationTiming timing : timings) {
-            if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                Reminder reminder = ReminderConverter.toEntity(userMedication, timing);
-                reminderRepository.save(reminder);
+        // 리마인더 생성 (reminderTimes 기반)
+        List<MedicationTiming> timings = new ArrayList<>();
+        List<String> reminderTimes = request.getReminderTimes();
+
+        if (reminderTimes != null && !reminderTimes.isEmpty()) {
+            // reminderTimes 기반으로 Timing 자동 계산 및 리마인더 생성
+            for (String timeStr : reminderTimes) {
+                LocalTime time = LocalTime.parse(timeStr, TIME_FORMATTER);
+                MedicationTiming timing = MedicationTiming.fromTime(time);
+                timings.add(timing);
+
+                if (timing != MedicationTiming.AS_NEEDED) {
+                    Reminder reminder = ReminderConverter.toEntity(userMedication, timing, time);
+                    reminderRepository.save(reminder);
+                }
             }
         }
 

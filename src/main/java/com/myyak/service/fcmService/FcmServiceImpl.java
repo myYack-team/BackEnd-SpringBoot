@@ -6,18 +6,24 @@ import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.UserSupplement;
 import com.myyak.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @Slf4j
 @Service
 @Transactional
 public class FcmServiceImpl implements FcmService {
+
+    private static final String NOTIFICATION_TITLE = "마이약";
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final FirebaseMessaging firebaseMessaging;
     private final UserRepository userRepository;
@@ -90,10 +96,72 @@ public class FcmServiceImpl implements FcmService {
         UserMedication medication = reminder.getUserMedication();
         User user = medication.getUser();
 
-        String title = "복약 알림";
-        String body = String.format("%s 복용 시간입니다.", medication.getDrugName());
+        String title = NOTIFICATION_TITLE;
+        String body = String.format("%s 복용시간입니다.", medication.getDrugName());
 
         sendNotification(user.getFcmToken(), title, body);
+    }
+
+    @Override
+    public void sendGroupedMedicationReminder(User user, List<Reminder> reminders) {
+        if (reminders == null || reminders.isEmpty()) {
+            return;
+        }
+
+        // 알림 설정이 꺼져있으면 발송하지 않음
+        if (!user.getNotificationEnabled()) {
+            log.debug("알림 설정이 꺼져있어 발송하지 않음 - userId: {}", user.getId());
+            return;
+        }
+
+        String body = buildMedicationReminderBody(reminders);
+        sendNotification(user.getFcmToken(), NOTIFICATION_TITLE, body);
+    }
+
+    @Override
+    public void sendMissedMedicationReminder(User user, List<Reminder> reminders, LocalTime originalTime) {
+        if (reminders == null || reminders.isEmpty()) {
+            return;
+        }
+
+        // 알림 설정이 꺼져있으면 발송하지 않음
+        if (!user.getNotificationEnabled()) {
+            log.debug("알림 설정이 꺼져있어 발송하지 않음 - userId: {}", user.getId());
+            return;
+        }
+
+        String timeStr = originalTime.format(TIME_FORMATTER);
+        String body = String.format("%s의 약 %d개를 아직 먹지 않았습니다.", timeStr, reminders.size());
+
+        sendNotification(user.getFcmToken(), NOTIFICATION_TITLE, body);
+    }
+
+    /**
+     * 복약 알림 본문 생성
+     * - 1개: "{약 이름} 복용시간입니다."
+     * - 2개 이상: "{약 이름} 외 {n}개의 약 복용시간입니다."
+     */
+    private String buildMedicationReminderBody(List<Reminder> reminders) {
+        String firstDrugName = getDrugName(reminders.get(0));
+        int count = reminders.size();
+
+        if (count == 1) {
+            return String.format("%s 복용시간입니다.", firstDrugName);
+        } else {
+            return String.format("%s 외 %d개의 약 복용시간입니다.", firstDrugName, count - 1);
+        }
+    }
+
+    /**
+     * Reminder에서 약 이름 추출 (의약품 또는 영양제)
+     */
+    private String getDrugName(Reminder reminder) {
+        if (reminder.getUserMedication() != null) {
+            return reminder.getUserMedication().getDrugName();
+        } else if (reminder.getUserSupplement() != null) {
+            return reminder.getUserSupplement().getSupplementName();
+        }
+        return "약";
     }
 
     @Override

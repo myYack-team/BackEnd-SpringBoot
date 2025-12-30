@@ -88,7 +88,7 @@ public class ScanServiceImpl implements ScanService {
                   "name": "메드론정",
                   "dosage": 1,
                   "frequency": 2,
-                  "timings": ["AFTER_BREAKFAST", "AFTER_DINNER"],
+                  "timings": ["MORNING", "EVENING"],
                   "durationDays": 7,
                   "totalCount": 14
                 }
@@ -151,19 +151,16 @@ public class ScanServiceImpl implements ScanService {
                - 환자 연령대 정보가 있다면 소아용/성인용 구분
 
             ## timings 값 (복용 시간대):
-            - BEFORE_BREAKFAST: 아침 식전
-            - AFTER_BREAKFAST: 아침 식후
-            - BEFORE_LUNCH: 점심 식전
-            - AFTER_LUNCH: 점심 식후
-            - BEFORE_DINNER: 저녁 식전
-            - AFTER_DINNER: 저녁 식후
-            - BEFORE_BED: 취침 전
+            - MORNING: 아침
+            - AFTERNOON: 점심
+            - EVENING: 저녁
             - AS_NEEDED: 필요시
 
             ## 복용 시간 해석 규칙:
-            - "1일 2회" → frequency: 2, timings: ["AFTER_BREAKFAST", "AFTER_DINNER"]
-            - "1일 3회" → frequency: 3, timings: ["AFTER_BREAKFAST", "AFTER_LUNCH", "AFTER_DINNER"]
-            - 시간대 정보 없으면 기본값: ["AFTER_BREAKFAST"]
+            - "1일 1회" → frequency: 1, timings: ["MORNING"]
+            - "1일 2회" → frequency: 2, timings: ["MORNING", "EVENING"]
+            - "1일 3회" → frequency: 3, timings: ["MORNING", "AFTERNOON", "EVENING"]
+            - 시간대 정보 없으면 기본값: ["MORNING"]
 
             ## 주의사항:
             1. 반드시 유효한 JSON만 출력 (마크다운 코드블록 없이)
@@ -610,7 +607,7 @@ public class ScanServiceImpl implements ScanService {
                                 .drugItemSeq("200003933")
                                 .dosage(1)
                                 .frequency(2)
-                                .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
+                                .timings(List.of(MedicationTiming.MORNING, MedicationTiming.EVENING))
                                 .durationDays(30)
                                 .totalCount(60)
                                 .entpName("바이엘코리아(주)")
@@ -619,7 +616,7 @@ public class ScanServiceImpl implements ScanService {
                                 .name("메트포민500mg")
                                 .dosage(1)
                                 .frequency(2)
-                                .timings(List.of(MedicationTiming.AFTER_BREAKFAST, MedicationTiming.AFTER_DINNER))
+                                .timings(List.of(MedicationTiming.MORNING, MedicationTiming.EVENING))
                                 .durationDays(30)
                                 .totalCount(60)
                                 .build()

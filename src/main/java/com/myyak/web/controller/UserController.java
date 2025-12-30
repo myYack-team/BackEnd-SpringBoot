@@ -6,6 +6,7 @@ import com.myyak.web.dto.UserDTO.UserRequestDTO;
 import com.myyak.web.dto.UserDTO.UserResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -40,5 +41,21 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         userService.deleteMe(userId);
         return ApiResponse.onSuccess(null);
+    }
+
+    @Operation(summary = "알림 설정 조회", description = "현재 로그인한 사용자의 알림 설정을 조회합니다.")
+    @GetMapping("/me/notification-settings")
+    public ApiResponse<UserResponseDTO.NotificationSettings> getNotificationSettings(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.getNotificationSettings(userId));
+    }
+
+    @Operation(summary = "알림 설정 수정", description = "현재 로그인한 사용자의 알림 설정을 수정합니다.")
+    @PatchMapping("/me/notification-settings")
+    public ApiResponse<UserResponseDTO.NotificationSettings> updateNotificationSettings(
+            Authentication authentication,
+            @Valid @RequestBody UserRequestDTO.UpdateNotificationSettings request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.updateNotificationSettings(userId, request));
     }
 }

@@ -27,9 +27,6 @@ public class MedicationRequestDTO {
         @Positive(message = "복용 횟수는 양수여야 합니다")
         private Integer frequency;
 
-        @NotEmpty(message = "복용 시점은 최소 1개 이상 필요합니다")
-        private List<MedicationTiming> timings;
-
         @NotNull(message = "처방 일수는 필수입니다")
         @Positive(message = "처방 일수는 양수여야 합니다")
         private Integer durationDays;
@@ -43,6 +40,7 @@ public class MedicationRequestDTO {
 
         // 선택 필드
         private String memo;  // 사용자 메모
+        private List<String> reminderTimes;  // 알림 시간 목록 ("HH:mm" 형식)
     }
 
     @Getter
