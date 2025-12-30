@@ -64,7 +64,7 @@ public class MedicationServiceImpl implements MedicationService {
         List<String> reminderTimes = request.getReminderTimes();
 
         if (reminderTimes != null && !reminderTimes.isEmpty()) {
-            // reminderTimes가 있으면 시간 기반으로 Timing 자동 계산
+            // reminderTimes 기반으로 Timing 자동 계산 및 리마인더 생성
             for (String timeStr : reminderTimes) {
                 LocalTime time = LocalTime.parse(timeStr, TIME_FORMATTER);
                 MedicationTiming timing = MedicationTiming.fromTime(time);
@@ -72,15 +72,6 @@ public class MedicationServiceImpl implements MedicationService {
 
                 if (timing != MedicationTiming.AS_NEEDED) {
                     Reminder reminder = ReminderConverter.toEntity(userMedication, timing, time);
-                    reminderRepository.save(reminder);
-                }
-            }
-        } else if (request.getTimings() != null && !request.getTimings().isEmpty()) {
-            // 기존 방식: timings만 있으면 기본 시간 사용 (하위 호환성)
-            timings = request.getTimings();
-            for (MedicationTiming timing : timings) {
-                if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder = ReminderConverter.toEntity(userMedication, timing);
                     reminderRepository.save(reminder);
                 }
             }

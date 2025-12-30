@@ -59,9 +59,13 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     // ============ 통합 쿼리 ============
 
+    /**
+     * 특정 시간의 활성화된 알림 조회 (User, DrugInfo, Supplement까지 Fetch Join)
+     * 스케줄러에서 사용 - LazyInitializationException 방지
+     */
     @Query("SELECT r FROM Reminder r " +
-           "LEFT JOIN r.userMedication um " +
-           "LEFT JOIN r.userSupplement us " +
+           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.user LEFT JOIN FETCH um.drugInfo " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.user LEFT JOIN FETCH us.supplement " +
            "WHERE r.time = :time AND r.enabled = true " +
            "AND ((um IS NOT NULL AND um.isActive = true) OR (us IS NOT NULL AND us.isActive = true))")
     List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time);
