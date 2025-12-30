@@ -57,6 +57,7 @@ public class IntakeResponseDTO {
         private Boolean taken;
         private LocalDateTime takenAt;
         private String imageUrl;         // 약 이미지
+        private Boolean isSupplement;    // 영양제 여부 (정렬용)
     }
 
     @Getter
