@@ -30,6 +30,22 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
             @Param("end") LocalDateTime end
     );
 
+    /**
+     * 약물 + 영양제 복용 기록 통합 조회 (오늘의 복약, 복용 달력에서 사용)
+     * UserMedication, UserSupplement 모두 Fetch Join
+     */
+    @Query("SELECT i FROM Intake i " +
+           "LEFT JOIN FETCH i.userMedication um " +
+           "LEFT JOIN FETCH i.userSupplement us " +
+           "WHERE i.takenAt BETWEEN :start AND :end " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId))")
+    List<Intake> findAllByUserIdAndDateRangeWithDetails(
+            @Param("userId") Long userId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
+
     @Query("SELECT i FROM Intake i WHERE i.userMedication.id = :userMedicationId AND i.takenAt BETWEEN :start AND :end")
     List<Intake> findByUserMedicationIdAndDateRange(
             @Param("userMedicationId") Long userMedicationId,

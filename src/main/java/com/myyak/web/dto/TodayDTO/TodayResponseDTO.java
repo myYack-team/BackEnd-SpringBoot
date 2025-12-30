@@ -2,6 +2,7 @@ package com.myyak.web.dto.TodayDTO;
 
 import com.myyak.domain.enums.DrugType;
 import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.domain.enums.SupplementTag;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,7 +23,9 @@ public class TodayResponseDTO {
         private Integer dosage;
         private Boolean taken;
         private Long reminderId;      // 알림 ID (스누즈용)
-        private DrugType drugType;    // 전문/일반/영양제 구분
+        private DrugType drugType;    // 전문/일반 구분 (약물인 경우)
+        private SupplementTag supplementTag;  // 영양제 태그 (영양제인 경우)
+        private Boolean isSupplement; // 영양제 여부
         private String imageUrl;      // 약 이미지
     }
 

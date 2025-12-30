@@ -6,6 +6,7 @@ import com.myyak.converter.IntakeConverter;
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.IntakeDayStatus;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
@@ -83,14 +84,23 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        // N+1 방지: Fetch Join으로 UserMedication 함께 조회
-        List<Reminder> reminders = reminderRepository.findEnabledByUserIdWithMedication(userId);
-        List<Intake> intakes = intakeRepository.findByUserIdAndDateRangeWithMedication(userId, startOfDay, endOfDay);
+        // 약물 + 영양제 리마인더 통합 조회
+        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
 
+        // 약물 + 영양제 복용 기록 통합 조회
+        List<Intake> intakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(userId, startOfDay, endOfDay);
+
+        // 약물 복용 기록: medicationId -> List<Intake>
         Map<Long, List<Intake>> intakesByMedicationId = intakes.stream()
+                .filter(Intake::isMedicationIntake)
                 .collect(Collectors.groupingBy(i -> i.getUserMedication().getId()));
 
-        return IntakeConverter.toDailyResult(date, reminders, intakesByMedicationId);
+        // 영양제 복용 기록: supplementId -> List<Intake>
+        Map<Long, List<Intake>> intakesBySupplementId = intakes.stream()
+                .filter(Intake::isSupplementIntake)
+                .collect(Collectors.groupingBy(i -> i.getUserSupplement().getId()));
+
+        return IntakeConverter.toDailyResult(date, reminders, intakesByMedicationId, intakesBySupplementId);
     }
 
     @Override
@@ -102,13 +112,13 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDate endDate = yearMonth.atEndOfMonth();
         LocalDate today = LocalDate.now();
 
-        // 해당 월의 모든 리마인더 가져오기 (N+1 방지)
-        List<Reminder> reminders = reminderRepository.findEnabledByUserIdWithMedication(userId);
+        // 약물 + 영양제 리마인더 통합 조회
+        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
 
-        // 해당 월의 모든 복약 기록 가져오기 (N+1 방지)
+        // 해당 월의 모든 복약 기록 가져오기 (약물 + 영양제)
         LocalDateTime monthStart = startDate.atStartOfDay();
         LocalDateTime monthEnd = endDate.atTime(LocalTime.MAX);
-        List<Intake> monthlyIntakes = intakeRepository.findByUserIdAndDateRangeWithMedication(userId, monthStart, monthEnd);
+        List<Intake> monthlyIntakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(userId, monthStart, monthEnd);
 
         // 날짜별로 복약 기록 그룹화
         Map<LocalDate, List<Intake>> intakesByDate = monthlyIntakes.stream()
@@ -118,7 +128,7 @@ public class IntakeServiceImpl implements IntakeService {
         List<IntakeResponseDTO.DaySummaryItem> days = new ArrayList<>();
 
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            // 해당 날짜에 활성화된 리마인더의 총 약품 수 계산
+            // 해당 날짜에 활성화된 리마인더의 총 약품 + 영양제 수 계산
             int totalScheduled = calculateTotalScheduledForDate(reminders, date);
 
             // 해당 날짜의 복약 기록 수
@@ -143,17 +153,34 @@ public class IntakeServiceImpl implements IntakeService {
                 .build();
     }
 
+    /**
+     * 해당 날짜에 예정된 복약 횟수 계산 (약물 + 영양제)
+     */
     private int calculateTotalScheduledForDate(List<Reminder> reminders, LocalDate date) {
-        // 각 리마인더별로 해당 날짜에 예정된 복약 횟수 합산
-        // 리마인더는 각 타이밍별로 하나씩 있으므로 활성화된 리마인더 수 = 스케줄 수
         return (int) reminders.stream()
-                .filter(r -> r.getEnabled() && r.getUserMedication().getIsActive())
-                .filter(r -> {
-                    LocalDate startDate = r.getUserMedication().getStartDate();
-                    LocalDate endDate = r.getUserMedication().getEndDate();
-                    return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
-                })
+                .filter(Reminder::getEnabled)
+                .filter(r -> isReminderActiveOnDate(r, date))
                 .count();
+    }
+
+    /**
+     * 리마인더가 해당 날짜에 활성화 상태인지 확인 (약물/영양제 모두 지원)
+     */
+    private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
+        if (reminder.isMedicationReminder()) {
+            UserMedication um = reminder.getUserMedication();
+            if (!um.getIsActive()) return false;
+            LocalDate startDate = um.getStartDate();
+            LocalDate endDate = um.getEndDate();
+            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
+        } else if (reminder.isSupplementReminder()) {
+            UserSupplement us = reminder.getUserSupplement();
+            if (!us.getIsActive()) return false;
+            LocalDate startDate = us.getStartDate();
+            LocalDate endDate = us.getEndDate();
+            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
+        }
+        return false;
     }
 
     private String determineStatus(int totalScheduled, int totalTaken, LocalDate date, LocalDate today) {
