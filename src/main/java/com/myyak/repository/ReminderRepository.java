@@ -34,6 +34,24 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
     @Query("SELECT r FROM Reminder r JOIN FETCH r.userMedication um WHERE um.user.id = :userId AND r.enabled = true AND um.isActive = true")
     List<Reminder> findEnabledByUserIdWithMedication(@Param("userId") Long userId);
 
+    // N+1 방지: UserSupplement를 함께 조회
+    @Query("SELECT r FROM Reminder r " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
+           "WHERE us.user.id = :userId AND r.enabled = true AND us.isActive = true")
+    List<Reminder> findEnabledByUserIdWithSupplement(@Param("userId") Long userId);
+
+    /**
+     * 약물 + 영양제 리마인더 통합 조회 (오늘의 복약, 복용 달력에서 사용)
+     * UserMedication, UserSupplement, DrugInfo, Supplement 모두 Fetch Join
+     */
+    @Query("SELECT r FROM Reminder r " +
+           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
+           "WHERE r.enabled = true " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
+    List<Reminder> findAllEnabledByUserIdWithDetails(@Param("userId") Long userId);
+
     @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE r.time = :time AND r.enabled = true AND um.isActive = true")
     List<Reminder> findByTimeAndEnabledTrue(@Param("time") LocalTime time);
 
