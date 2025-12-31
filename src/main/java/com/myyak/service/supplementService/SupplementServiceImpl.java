@@ -240,6 +240,44 @@ public class SupplementServiceImpl implements SupplementService {
         userSupplement.deactivate();
     }
 
+    @Override
+    @Transactional
+    public SupplementResponseDTO.BatchDeleteResult deleteUserSupplementsBatch(Long userId, List<Long> ids) {
+        User user = userService.findById(userId);
+        int requestedCount = ids.size();
+        int deletedCount = 0;
+
+        // 모든 UserSupplement 조회
+        List<UserSupplement> userSupplements = userSupplementRepository.findAllById(ids);
+
+        // 소유권 검증 (모든 항목이 현재 사용자의 것인지 확인)
+        for (UserSupplement us : userSupplements) {
+            if (!us.getUser().getId().equals(userId)) {
+                throw new GeneralException(ErrorStatus.SUPPLEMENT_ACCESS_DENIED);
+            }
+        }
+
+        // 삭제 처리
+        for (UserSupplement userSupplement : userSupplements) {
+            // selectionCount 감소
+            Supplement supplement = userSupplement.getSupplement();
+            supplement.decrementSelectionCount();
+
+            // 캐시 갱신
+            supplementSearchService.addOrUpdateCache(supplement);
+
+            // 소프트 삭제
+            userSupplement.deactivate();
+            deletedCount++;
+        }
+
+        return SupplementResponseDTO.BatchDeleteResult.builder()
+                .requestedCount(requestedCount)
+                .deletedCount(deletedCount)
+                .failedCount(requestedCount - deletedCount)
+                .build();
+    }
+
     // ============ Private Methods ============
 
     private void validateSupplementOwner(Supplement supplement, User user) {

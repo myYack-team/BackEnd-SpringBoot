@@ -198,4 +198,17 @@ public class SupplementResponseDTO {
         private Integer frequency;
         private List<MedicationTiming> timings;
     }
+
+    /**
+     * 사용자 영양제 일괄 삭제 결과
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class BatchDeleteResult {
+        private int requestedCount;
+        private int deletedCount;
+        private int failedCount;
+    }
 }
