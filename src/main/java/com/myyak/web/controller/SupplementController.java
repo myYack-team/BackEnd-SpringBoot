@@ -136,4 +136,16 @@ public class SupplementController {
         supplementService.deleteUserSupplement(userId, userSupplementId);
         return ApiResponse.of(SuccessStatus.USER_SUPPLEMENT_DELETED, null);
     }
+
+    @Operation(summary = "내 영양제 일괄 삭제", description = "여러 개의 내 영양제를 한 번에 삭제합니다.")
+    @DeleteMapping("/my/batch")
+    public ApiResponse<SupplementResponseDTO.BatchDeleteResult> deleteUserSupplementsBatch(
+            Authentication authentication,
+            @Valid @RequestBody SupplementRequestDTO.BatchDeleteRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.of(
+                SuccessStatus.USER_SUPPLEMENTS_BATCH_DELETED,
+                supplementService.deleteUserSupplementsBatch(userId, request.getIds())
+        );
+    }
 }

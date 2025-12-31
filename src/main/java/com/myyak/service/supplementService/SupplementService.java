@@ -37,4 +37,12 @@ public interface SupplementService {
     SupplementResponseDTO.UpdateUserSupplementResult updateUserSupplement(Long userId, Long userSupplementId, SupplementRequestDTO.UpdateUserSupplementRequest request);
 
     void deleteUserSupplement(Long userId, Long userSupplementId);
+
+    /**
+     * 내 영양제 일괄 삭제
+     * @param userId 사용자 ID
+     * @param ids 삭제할 UserSupplement ID 목록
+     * @return 삭제 결과 (요청 수, 성공 수, 실패 수)
+     */
+    SupplementResponseDTO.BatchDeleteResult deleteUserSupplementsBatch(Long userId, java.util.List<Long> ids);
 }

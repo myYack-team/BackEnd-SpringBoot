@@ -82,4 +82,14 @@ public class SupplementRequestDTO {
         private LocalDate endDate;
         private String memo;
     }
+
+    /**
+     * 사용자 영양제 일괄 삭제 요청
+     */
+    @Getter
+    @NoArgsConstructor
+    public static class BatchDeleteRequest {
+        @NotEmpty(message = "삭제할 ID 목록은 필수입니다")
+        private List<Long> ids;
+    }
 }

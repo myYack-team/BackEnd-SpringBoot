@@ -31,6 +31,7 @@ public enum SuccessStatus implements BaseCode {
     USER_SUPPLEMENT_CREATED(HttpStatus.CREATED, "USUPP201", "영양제가 내 목록에 추가되었습니다."),
     USER_SUPPLEMENT_UPDATED(HttpStatus.OK, "USUPP200", "영양제 복용 정보가 수정되었습니다."),
     USER_SUPPLEMENT_DELETED(HttpStatus.OK, "USUPP202", "영양제가 내 목록에서 삭제되었습니다."),
+    USER_SUPPLEMENTS_BATCH_DELETED(HttpStatus.OK, "USUPP203", "내 영양제 일괄 삭제 성공"),
 
     // 스캔 관련
     SCAN_SUCCESS(HttpStatus.OK, "SCAN200", "처방전 인식에 성공했습니다."),
