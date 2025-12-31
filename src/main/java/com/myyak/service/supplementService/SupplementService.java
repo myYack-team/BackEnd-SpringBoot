@@ -5,6 +5,7 @@ import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.SupplementTag;
 import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface SupplementService {
 
@@ -13,6 +14,8 @@ public interface SupplementService {
     Supplement findById(Long supplementId);
 
     SupplementResponseDTO.CreateSupplementResult createSupplement(Long userId, SupplementRequestDTO.CreateSupplementRequest request);
+
+    SupplementResponseDTO.CreateSupplementResult createSupplementWithImage(Long userId, String name, String description, String tag, MultipartFile image);
 
     SupplementResponseDTO.SupplementList searchSupplements(String keyword, SupplementTag tag, int page, int size);
 

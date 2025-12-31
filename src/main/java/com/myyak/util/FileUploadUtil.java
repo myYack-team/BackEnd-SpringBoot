@@ -72,6 +72,41 @@ public class FileUploadUtil {
     }
 
     /**
+     * 영양제 이미지 업로드
+     * @param file 업로드할 파일
+     * @return 저장된 파일의 접근 URL
+     */
+    public String uploadSupplementImage(MultipartFile file) {
+        validateFile(file);
+
+        String originalFilename = file.getOriginalFilename();
+        String extension = getFileExtension(originalFilename);
+        String newFilename = generateFilename(extension);
+
+        // 경로: uploads/supplements/{filename}
+        String subPath = "supplements";
+        Path targetDir = Paths.get(uploadPath, subPath);
+
+        try {
+            // 디렉토리 생성
+            Files.createDirectories(targetDir);
+
+            // 파일 저장
+            Path targetPath = targetDir.resolve(newFilename);
+            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+            log.info("Supplement image uploaded: {}", targetPath);
+
+            // URL 반환 (상대 경로)
+            return String.format("/uploads/%s/%s", subPath, newFilename);
+
+        } catch (IOException e) {
+            log.error("Failed to upload supplement image: {}", e.getMessage());
+            throw new GeneralException(ErrorStatus._INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
      * 파일 삭제 (동기)
      * @param fileUrl 파일 URL (상대 경로)
      */

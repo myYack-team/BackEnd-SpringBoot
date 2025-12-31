@@ -11,8 +11,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Supplement", description = "영양제 관리 API")
 @RestController
@@ -31,6 +33,23 @@ public class SupplementController {
             @Valid @RequestBody SupplementRequestDTO.CreateSupplementRequest request) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.of(SuccessStatus.SUPPLEMENT_CREATED, supplementService.createSupplement(userId, request));
+    }
+
+    @Operation(summary = "영양제 등록 (이미지 포함)", description = "이미지와 함께 새로운 영양제를 마스터 테이블에 등록합니다.")
+    @PostMapping(value = "/with-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<SupplementResponseDTO.CreateSupplementResult> createSupplementWithImage(
+            Authentication authentication,
+            @Parameter(description = "영양제 이미지")
+            @RequestPart(value = "image", required = false) MultipartFile image,
+            @Parameter(description = "영양제 이름")
+            @RequestPart("name") String name,
+            @Parameter(description = "영양제 설명")
+            @RequestPart(value = "description", required = false) String description,
+            @Parameter(description = "영양제 태그")
+            @RequestPart("tag") String tag) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.of(SuccessStatus.SUPPLEMENT_CREATED,
+                supplementService.createSupplementWithImage(userId, name, description, tag, image));
     }
 
     @Operation(summary = "영양제 검색", description = "영양제를 검색합니다. 키워드와 태그로 필터링할 수 있습니다.")

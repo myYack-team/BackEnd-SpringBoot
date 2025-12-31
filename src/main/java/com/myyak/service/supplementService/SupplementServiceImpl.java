@@ -14,11 +14,13 @@ import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserSupplementRepository;
 import com.myyak.service.supplementSearchService.SupplementSearchService;
 import com.myyak.service.userService.UserService;
+import com.myyak.util.FileUploadUtil;
 import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,7 @@ public class SupplementServiceImpl implements SupplementService {
     private final ReminderRepository reminderRepository;
     private final UserService userService;
     private final SupplementSearchService supplementSearchService;
+    private final FileUploadUtil fileUploadUtil;
 
     // ============ Supplement (마스터) ============
 
@@ -48,6 +51,39 @@ public class SupplementServiceImpl implements SupplementService {
     public SupplementResponseDTO.CreateSupplementResult createSupplement(Long userId, SupplementRequestDTO.CreateSupplementRequest request) {
         User user = userService.findById(userId);
         Supplement supplement = SupplementConverter.toEntity(request, user);
+        supplementRepository.save(supplement);
+
+        // 캐시에 추가
+        supplementSearchService.addOrUpdateCache(supplement);
+
+        return SupplementConverter.toCreateResult(supplement);
+    }
+
+    @Override
+    @Transactional
+    public SupplementResponseDTO.CreateSupplementResult createSupplementWithImage(
+            Long userId, String name, String description, String tagStr, MultipartFile image) {
+        User user = userService.findById(userId);
+
+        // 태그 문자열을 enum으로 변환
+        SupplementTag tag = SupplementTag.valueOf(tagStr);
+
+        // 이미지 업로드
+        String imageUrl = null;
+        if (image != null && !image.isEmpty()) {
+            imageUrl = fileUploadUtil.uploadSupplementImage(image);
+        }
+
+        // 영양제 엔티티 생성
+        Supplement supplement = Supplement.builder()
+                .name(name)
+                .description(description)
+                .tag(tag)
+                .imageUrl(imageUrl)
+                .createdBy(user)
+                .selectionCount(0)
+                .build();
+
         supplementRepository.save(supplement);
 
         // 캐시에 추가
