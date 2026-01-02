@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -27,15 +28,25 @@ public class ExcelReaderServiceImpl implements ExcelReaderService {
 
     @Override
     public List<DrugPdfData> readDrugPdfData(String filePath) {
+        try (FileInputStream fis = new FileInputStream(filePath)) {
+            return readDrugPdfData(fis, filePath);
+        } catch (Exception e) {
+            log.error("CSV 파일 읽기 실패: {}", e.getMessage());
+            throw new RuntimeException("CSV 파일 읽기 실패: " + filePath, e);
+        }
+    }
+
+    @Override
+    public List<DrugPdfData> readDrugPdfData(InputStream inputStream, String fileName) {
         List<DrugPdfData> result = new ArrayList<>();
 
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(filePath), StandardCharsets.UTF_8))) {
+                new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
 
             // 첫 번째 행은 헤더
             String headerLine = reader.readLine();
             if (headerLine == null) {
-                throw new RuntimeException("CSV 파일이 비어있습니다: " + filePath);
+                throw new RuntimeException("CSV 파일이 비어있습니다: " + fileName);
             }
 
             // BOM 제거
@@ -45,7 +56,7 @@ public class ExcelReaderServiceImpl implements ExcelReaderService {
 
             // 헤더 파싱하여 컬럼 인덱스 매핑
             Map<String, Integer> columnIndex = parseHeader(headerLine);
-            log.info("CSV 파일 읽기 시작: {} (컬럼 수: {})", filePath, columnIndex.size());
+            log.info("CSV 파일 읽기 시작: {} (컬럼 수: {})", fileName, columnIndex.size());
             log.info("컬럼 매핑: {}", columnIndex);
 
             // 필수 컬럼 확인
@@ -79,7 +90,7 @@ public class ExcelReaderServiceImpl implements ExcelReaderService {
 
         } catch (Exception e) {
             log.error("CSV 파일 읽기 실패: {}", e.getMessage());
-            throw new RuntimeException("CSV 파일 읽기 실패: " + filePath, e);
+            throw new RuntimeException("CSV 파일 읽기 실패: " + fileName, e);
         }
 
         return result;

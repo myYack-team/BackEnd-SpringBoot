@@ -11,6 +11,7 @@ import org.springframework.security.config.annotation.web.configurers.HeadersCon
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
@@ -27,6 +28,8 @@ public class SecurityConfig {
             "/api/auth/**",
             // 약 검색 (비로그인 사용자도 검색 가능)
             "/api/drugs/search/**",
+            // 데이터 배치 (관리자 전용 - 추후 관리자 인증 추가 필요)
+            "/api/drugs/batch/**",
             // Swagger
             "/swagger-ui/**",
             "/swagger-ui.html",
@@ -49,6 +52,7 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/drugs/batch/**").permitAll()
                         .requestMatchers(PUBLIC_URLS).permitAll()
                         .anyRequest().authenticated()
                 )
@@ -57,5 +61,11 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        // 배치 API는 Security 필터 체인을 완전히 우회
+        return (web) -> web.ignoring().requestMatchers("/api/drugs/batch/**");
     }
 }

@@ -5,8 +5,6 @@ import com.myyak.converter.DrugInfoConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
-import com.myyak.service.drugCrawlerService.DrugCrawlerService;
-import com.myyak.service.drugPdfBatchService.DrugPdfBatchService;
 import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
@@ -28,8 +26,6 @@ public class DrugApiController {
 
     private final DrugApiService drugApiService;
     private final DrugInfoRepository drugInfoRepository;
-    private final DrugCrawlerService drugCrawlerService;
-    private final DrugPdfBatchService drugPdfBatchService;
     private final DrugSearchService drugSearchService;
 
     @Operation(summary = "약 검색 (캐시, 페이징)", description = "메모리 캐시에서 약 이름으로 검색 (DB 쿼리 없음, 매우 빠름)")
@@ -93,24 +89,6 @@ public class DrugApiController {
         return ApiResponse.onSuccess(DrugInfoConverter.toDetail(drugInfo));
     }
 
-    @Operation(summary = "전체 데이터 배치 수집", description = "e약은요 API에서 전체 데이터를 수집합니다 (주의: 시간이 오래 걸림)")
-    @PostMapping("/batch/all")
-    public ApiResponse<BatchResult> fetchAllDrugs() {
-        int count = drugApiService.fetchAllDrugs();
-        return ApiResponse.onSuccess(new BatchResult(count, "전체 데이터 수집 완료"));
-    }
-
-    @Operation(summary = "페이지 범위 배치 수집", description = "특정 페이지 범위의 데이터만 수집")
-    @PostMapping("/batch/range")
-    public ApiResponse<BatchResult> fetchDrugsByRange(
-            @Parameter(description = "시작 페이지") @RequestParam(defaultValue = "1") int startPage,
-            @Parameter(description = "끝 페이지") @RequestParam(defaultValue = "10") int endPage,
-            @Parameter(description = "페이지당 건수") @RequestParam(defaultValue = "100") int numOfRows) {
-
-        int count = drugApiService.fetchDrugsByPageRange(startPage, endPage, numOfRows);
-        return ApiResponse.onSuccess(new BatchResult(count, "페이지 범위 수집 완료"));
-    }
-
     @Operation(summary = "DB 통계", description = "현재 DB에 저장된 약물 정보 통계")
     @GetMapping("/stats")
     public ApiResponse<StatsResult> getStats() {
@@ -129,83 +107,52 @@ public class DrugApiController {
         return ApiResponse.onSuccess(items);
     }
 
-    @Operation(summary = "허가정보 전체 배치 수집", description = "의약품 허가정보 API에서 전체 데이터를 수집합니다 (주의: 매우 오래 걸림)")
-    @PostMapping("/batch/permit/all")
-    public ApiResponse<BatchResult> fetchAllFromPermitApi() {
-        int count = drugApiService.fetchAllFromPermitApi();
-        return ApiResponse.onSuccess(new BatchResult(count, "허가정보 전체 수집 완료"));
-    }
+    /*
+     * ========================================================================
+     * 기존 분리된 배치 API들 (Deprecated)
+     * 통합 배치 API로 대체됨 - /api/drugs/batch/full-sync 사용
+     * ========================================================================
+     */
 
-    @Operation(summary = "허가정보 페이지 범위 배치 수집", description = "의약품 허가정보 API에서 특정 페이지 범위의 데이터만 수집")
-    @PostMapping("/batch/permit/range")
-    public ApiResponse<BatchResult> fetchFromPermitApiByRange(
-            @Parameter(description = "시작 페이지") @RequestParam(defaultValue = "1") int startPage,
-            @Parameter(description = "끝 페이지") @RequestParam(defaultValue = "10") int endPage,
-            @Parameter(description = "페이지당 건수") @RequestParam(defaultValue = "100") int numOfRows) {
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
+    // @Operation(summary = "전체 데이터 배치 수집", description = "e약은요 API에서 전체 데이터를 수집합니다")
+    // @PostMapping("/batch/all")
+    // public ApiResponse<BatchResult> fetchAllDrugs() { ... }
 
-        int count = drugApiService.fetchFromPermitApiByPageRange(startPage, endPage, numOfRows);
-        return ApiResponse.onSuccess(new BatchResult(count, "허가정보 페이지 범위 수집 완료"));
-    }
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
+    // @Operation(summary = "페이지 범위 배치 수집")
+    // @PostMapping("/batch/range")
+    // public ApiResponse<BatchResult> fetchDrugsByRange(...) { ... }
 
-    // === 크롤링 API ===
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
+    // @Operation(summary = "허가정보 전체 배치 수집")
+    // @PostMapping("/batch/permit/all")
+    // public ApiResponse<BatchResult> fetchAllFromPermitApi() { ... }
 
-    @Operation(summary = "효능 크롤링", description = "효능 정보가 없는 약물에 대해 의약품안전나라에서 크롤링 (주의: 시간이 오래 걸림)")
-    @PostMapping("/batch/crawl/efficacy")
-    public ApiResponse<BatchResult> crawlEfficacy() {
-        int count = drugCrawlerService.crawlEfficacyForMissingDrugs();
-        return ApiResponse.onSuccess(new BatchResult(count, "크롤링 완료"));
-    }
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
+    // @Operation(summary = "허가정보 페이지 범위 배치 수집")
+    // @PostMapping("/batch/permit/range")
+    // public ApiResponse<BatchResult> fetchFromPermitApiByRange(...) { ... }
 
-    @Operation(summary = "크롤링 대상 수 조회", description = "효능 정보가 없는 약물 수 조회")
-    @GetMapping("/stats/without-efficacy")
-    public ApiResponse<StatsResult> getCountWithoutEfficacy() {
-        long count = drugCrawlerService.countDrugsWithoutEfficacy();
-        return ApiResponse.onSuccess(new StatsResult(count));
-    }
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync?includeEfficacyCrawling=true
+    // @Operation(summary = "효능 크롤링")
+    // @PostMapping("/batch/crawl/efficacy")
+    // public ApiResponse<BatchResult> crawlEfficacy() { ... }
 
-    // === 통합 배치 API ===
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
+    // @Operation(summary = "통합 배치 수집")
+    // @PostMapping("/batch/all-sources")
+    // public ApiResponse<String> fetchFromAllSources() { ... }
 
-    @Operation(summary = "통합 배치 수집", description = "모든 데이터 소스에서 순차적으로 수집 (e약은요 → 허가정보 → 크롤링). 매우 오래 걸림!")
-    @PostMapping("/batch/all-sources")
-    public ApiResponse<String> fetchFromAllSources() {
-        drugApiService.fetchFromAllSources();
-        return ApiResponse.onSuccess("통합 배치 완료");
-    }
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync (Stage 3에서 자동 실행)
+    // @Operation(summary = "성분명 재파싱")
+    // @PostMapping("/batch/reparse/ingredient")
+    // public ApiResponse<BatchResult> reparseIngredientKr() { ... }
 
-    // === 배치 파싱 API ===
+    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/csv-upload
+    // @Operation(summary = "Excel PDF 파싱 배치")
+    // @PostMapping("/batch/pdf/import")
+    // public ApiResponse<PdfBatchResult> importPdfFromExcel(...) { ... }
 
-    @Operation(summary = "성분명 재파싱", description = "ingredientKr이 NULL인 약물의 itemName을 새로운 파싱 로직으로 다시 파싱")
-    @PostMapping("/batch/reparse/ingredient")
-    public ApiResponse<BatchResult> reparseIngredientKr() {
-        int count = drugApiService.reparseIngredientKr();
-        return ApiResponse.onSuccess(new BatchResult(count, "성분명 재파싱 완료"));
-    }
-
-    @Operation(summary = "성분명 미파싱 약물 수 조회", description = "ingredientKr이 NULL인 약물 수 조회")
-    @GetMapping("/stats/without-ingredient")
-    public ApiResponse<StatsResult> getCountWithoutIngredient() {
-        long count = drugApiService.countWithoutIngredientKr();
-        return ApiResponse.onSuccess(new StatsResult(count));
-    }
-
-    // === Excel PDF 파싱 배치 API ===
-
-    @Operation(summary = "Excel PDF 파싱 배치", description = "Excel 파일에서 PDF URL을 읽어 파싱 후 DB에 저장 (주의: 매우 오래 걸림)")
-    @PostMapping("/batch/pdf/import")
-    public ApiResponse<PdfBatchResult> importPdfFromExcel(
-            @Parameter(description = "Excel 파일 경로") @RequestParam String filePath) {
-
-        DrugPdfBatchService.BatchResult result = drugPdfBatchService.importFromExcel(filePath);
-        return ApiResponse.onSuccess(new PdfBatchResult(
-                result.totalCount(),
-                result.successCount(),
-                result.skipCount(),
-                result.failCount(),
-                result.toSummary()
-        ));
-    }
-
-    public record BatchResult(int savedCount, String message) {}
     public record StatsResult(long totalCount) {}
-    public record PdfBatchResult(int totalCount, int successCount, int skipCount, int failCount, String message) {}
 }
