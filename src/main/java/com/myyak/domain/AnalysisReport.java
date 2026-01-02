@@ -1,0 +1,55 @@
+package com.myyak.domain;
+
+import com.myyak.domain.common.BaseEntity;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+/**
+ * AI 약물 분석 레포트 엔티티
+ * 사용자별 분석 결과를 저장하여 이후 조회 가능
+ */
+@Entity
+@Table(name = "analysis_report")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
+public class AnalysisReport extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(nullable = false)
+    private LocalDateTime analysisDate;     // 분석 일시
+
+    @Column(nullable = false)
+    private Integer mechanismGroupCount;    // 기전 카드 개수 (약물 효과 종류)
+
+    @Column(nullable = false)
+    private Integer foodInteractionCount;   // 음식 상호작용 개수 (주의 음식)
+
+    @Column(columnDefinition = "JSON")
+    private String medicationSnapshot;      // 분석 당시 약물 목록 스냅샷
+    /*
+    [
+        {"itemSeq": "200001234", "displayName": "리피토정", "ingredientKr": "아토르바스타틴"},
+        {"itemSeq": "200005678", "displayName": "노바스크정", "ingredientKr": "암로디핀"}
+    ]
+    */
+
+    @Column(columnDefinition = "JSON", nullable = false)
+    private String llmResponse;             // LLM 원본 응답 (기전 카드 + 음식 병용 정보)
+    /*
+    {
+        "mechanismGroups": [...],
+        "foodInteractions": [...]
+    }
+    */
+}
