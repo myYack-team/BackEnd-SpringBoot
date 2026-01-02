@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>데이터 수집 관리 - 마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="마이약" class="logo-img">
+                <span>관리자</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">🏠 홈</a>
+                <a href="data-sync.html" class="nav-link active">📊 데이터 수집</a>
+                <a href="supplements.html" class="nav-link">💊 영양제</a>
+                <a href="users.html" class="nav-link">👥 가입자</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+        <h1 class="page-title">📊 데이터 수집 관리</h1>
+
+        <!-- 현재 데이터 현황 -->
+        <div class="card">
+            <div class="card-header">현재 데이터 현황</div>
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">전체 약물</div>
+                        <div class="stat-value primary" id="totalDrugs">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">효능 미수집</div>
+                        <div class="stat-value warning" id="withoutEfficacy">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">성분명 미파싱</div>
+                        <div class="stat-value" id="withoutIngredient">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 동기화 옵션 -->
+        <div class="card">
+            <div class="card-header">동기화 옵션</div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-checkbox">
+                            <input type="checkbox" id="testMode">
+                            테스트 모드 (별도 테이블에 저장)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-row mt-2">
+                    <div class="form-group" style="max-width: 200px;">
+                        <label class="form-label">수집 제한 (건수)</label>
+                        <input type="number" class="form-input" id="maxRecords" placeholder="전체 수집">
+                    </div>
+                </div>
+
+                <!-- 4단계 PDF 배치용 CSV 파일 선택 -->
+                <div class="form-row mt-2" id="csvFileSection">
+                    <div class="form-group">
+                        <label class="form-label">CSV 파일 선택 (.csv) - 4단계 PDF 배치용</label>
+                        <input type="file" class="form-input" id="syncCsvFile" accept=".csv">
+                        <div class="text-small text-muted mt-1">
+                            nedrug에서 다운로드한 CSV 파일을 선택하세요. (선택하지 않으면 4단계 생략)
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-2">
+                    <button class="btn btn-primary" id="startSyncBtn">
+                        🚀 전체 동기화 시작
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 진행 상황 (초기 숨김) -->
+        <div class="card hidden" id="progressSection">
+            <div class="card-header flex items-center justify-between">
+                <span>진행 상황</span>
+                <span class="badge badge-gray" id="jobStatus">-</span>
+            </div>
+            <div class="card-body">
+                <div class="text-small text-muted mb-1">
+                    Job ID: <span id="jobId">-</span>
+                </div>
+
+                <!-- 전체 진행률 -->
+                <div class="mb-2">
+                    <div class="flex items-center justify-between mb-1">
+                        <span>전체 진행률</span>
+                        <span id="overallProgressText">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar" id="overallProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- 단계별 진행 상황 -->
+                <div class="stage-list" id="stagesContainer">
+                    <!-- JavaScript로 렌더링 -->
+                </div>
+
+                <!-- 시간 정보 -->
+                <div class="mt-2 text-small text-muted">
+                    <div>시작: <span id="startedAt">-</span></div>
+                    <div>예상 완료: <span id="estimatedAt">-</span></div>
+                </div>
+
+                <!-- 에러 메시지 -->
+                <div class="alert alert-danger hidden mt-2" id="errorMessage"></div>
+
+                <!-- 액션 버튼 -->
+                <div class="flex gap-1 mt-2">
+                    <button class="btn btn-danger" id="cancelBtn" disabled>⏸️ 중단</button>
+                    <button class="btn btn-secondary" id="refreshBtn">🔄 새로고침</button>
+                    <button class="btn btn-primary" id="verifyBtn" disabled>✅ 검증</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 테스트 테이블 관리 -->
+        <div class="card">
+            <div class="card-header">테스트 테이블 관리</div>
+            <div class="card-body">
+                <div class="flex gap-1">
+                    <button class="btn btn-secondary" id="clearTestBtn">🗑️ 테스트 테이블 초기화</button>
+                    <button class="btn btn-primary" id="promoteBtn">📤 운영 이관</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 데이터 출처 -->
+        <div class="card">
+            <div class="card-header">데이터 출처</div>
+            <div class="card-body text-small text-muted">
+                <ul style="margin: 0; padding-left: 1.5rem;">
+                    <li><strong>e약은요 API</strong>: 공공데이터포털 (data.go.kr)</li>
+                    <li><strong>의약품 허가정보 API</strong>: 공공데이터포털 (data.go.kr)</li>
+                    <li><strong>의약품 제품허가 상세정보</strong>: <a href="https://nedrug.mfds.go.kr/pbp/CCBGA01/getItem?infoName=%EC%9D%98%EC%95%BD%ED%92%88&openDataInfoSeq=12" target="_blank">의약품안전나라 (nedrug.mfds.go.kr)</a></li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/data-sync.js"></script>
+</body>
+</html>

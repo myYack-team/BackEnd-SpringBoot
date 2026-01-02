@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        .dashboard-card {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            text-align: center;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-color: var(--primary);
+        }
+        .dashboard-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .dashboard-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
+        .dashboard-desc {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+        }
+        .welcome-section {
+            text-align: center;
+            padding: 3rem 0;
+        }
+        .welcome-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+        }
+        .welcome-subtitle {
+            font-size: 1rem;
+            color: var(--gray-500);
+        }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="마이약" class="logo-img">
+                <span>관리자</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link active">🏠 홈</a>
+                <a href="data-sync.html" class="nav-link">📊 데이터 수집</a>
+                <a href="supplements.html" class="nav-link">💊 영양제</a>
+                <a href="users.html" class="nav-link">👥 가입자</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+        <div class="welcome-section">
+            <h1 class="welcome-title">마이약 관리자 페이지</h1>
+            <p class="welcome-subtitle">복약 관리 앱 운영을 위한 관리 도구입니다.</p>
+        </div>
+
+        <div class="dashboard-grid">
+            <a href="data-sync.html" class="dashboard-card">
+                <div class="dashboard-icon">📊</div>
+                <div class="dashboard-title">데이터 수집 관리</div>
+                <div class="dashboard-desc">
+                    약물 데이터 동기화 실행<br>
+                    진행 상황 모니터링
+                </div>
+            </a>
+
+            <a href="supplements.html" class="dashboard-card">
+                <div class="dashboard-icon">💊</div>
+                <div class="dashboard-title">영양제 모니터링</div>
+                <div class="dashboard-desc">
+                    최근 등록 영양제 확인<br>
+                    영양제 삭제 관리
+                </div>
+            </a>
+
+            <a href="users.html" class="dashboard-card">
+                <div class="dashboard-icon">👥</div>
+                <div class="dashboard-title">가입자 통계</div>
+                <div class="dashboard-desc">
+                    가입자 수 현황<br>
+                    성별/연령대 분포
+                </div>
+            </a>
+        </div>
+    </main>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가입자 통계 - 마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="마이약" class="logo-img">
+                <span>관리자</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">🏠 홈</a>
+                <a href="data-sync.html" class="nav-link">📊 데이터 수집</a>
+                <a href="supplements.html" class="nav-link">💊 영양제</a>
+                <a href="users.html" class="nav-link active">👥 가입자</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+        <h1 class="page-title">👥 가입자 통계</h1>
+
+        <!-- 가입자 현황 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">전체 가입자</div>
+                <div class="stat-value primary" id="totalUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">이번 달</div>
+                <div class="stat-value" id="monthUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">최근 7일</div>
+                <div class="stat-value" id="weekUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">오늘</div>
+                <div class="stat-value success" id="todayUsers">-</div>
+            </div>
+        </div>
+
+        <!-- 성별/연령대 분포 -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+            <!-- 성별 분포 -->
+            <div class="card">
+                <div class="card-header">👫 성별 분포</div>
+                <div class="card-body">
+                    <div id="genderChart">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>로딩 중...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 연령대 분포 -->
+            <div class="card">
+                <div class="card-header">📈 연령대 분포</div>
+                <div class="card-body">
+                    <div id="ageChart">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>로딩 중...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 최근 7일 가입 추이 -->
+        <div class="card">
+            <div class="card-header">📅 최근 7일 가입 추이</div>
+            <div class="card-body">
+                <div id="dailyChart">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>로딩 중...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/users.js"></script>
+</body>
+</html>
