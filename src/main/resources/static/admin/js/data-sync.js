@@ -55,21 +55,22 @@ const DataSync = {
      */
     async startSync() {
         const testMode = document.getElementById('testMode').checked;
-        const includeEfficacyCrawling = document.getElementById('includeEfficacy').checked;
-        const includePdfImport = document.getElementById('includePdf').checked;
         const maxRecordsInput = document.getElementById('maxRecords').value;
         const maxRecords = maxRecordsInput ? parseInt(maxRecordsInput) : null;
+
+        // CSV 파일 확인 (4단계 PDF 배치용)
+        const csvFileInput = document.getElementById('syncCsvFile');
+        const csvFile = csvFileInput?.files[0];
 
         const startBtn = document.getElementById('startSyncBtn');
         startBtn.disabled = true;
         startBtn.textContent = '시작 중...';
 
         try {
-            const result = await API.startFullSync({
+            const result = await API.startFullSyncWithFile({
                 testMode,
-                includeEfficacyCrawling,
-                includePdfImport,
                 maxRecords,
+                csvFile,
             });
 
             this.currentJobId = result.jobId;
@@ -80,6 +81,9 @@ const DataSync = {
 
             // 폴링 시작
             this.startPolling();
+
+            // CSV 파일 입력 초기화
+            if (csvFileInput) csvFileInput.value = '';
 
         } catch (error) {
             Utils.toast(`시작 실패: ${error.message}`, 'danger');
@@ -335,6 +339,7 @@ const DataSync = {
             Utils.toast(`이관 실패: ${error.message}`, 'danger');
         }
     },
+
 };
 
 // 페이지 로드 시 초기화

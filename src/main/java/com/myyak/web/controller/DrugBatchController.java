@@ -38,22 +38,64 @@ public class DrugBatchController {
             description = """
                 모든 데이터 소스에서 순차적으로 데이터를 수집합니다.
 
-                **기본 단계 (1~3단계):**
+                **실행 단계 (1~4단계):**
                 1. e약은요 API 수집 (30분~1시간)
                 2. 허가정보 API 수집 (30분~1시간)
                 3. 성분명 재파싱 (5~10분)
-
-                **선택 단계:**
-                4. 효능 크롤링 (includeEfficacyCrawling=true)
-                5. PDF 배치 (includePdfImport=true, pdfFilePath 필요)
+                4. PDF 배치 (CSV 파일 필요, 효능효과/용법용량/주의사항 보강)
 
                 **테스트 모드:**
                 testMode=true로 설정하면 별도의 테스트 테이블에 저장하여
                 기존 데이터에 영향을 주지 않고 검증할 수 있습니다.
+
+                **CSV 파일:**
+                nedrug에서 다운로드한 CSV 파일을 업로드하면 4단계에서 사용됩니다.
+                CSV 파일이 없으면 4단계는 건너뜁니다.
                 """
     )
-    @PostMapping("/full-sync")
+    @PostMapping(value = "/full-sync", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<DrugBatchResponseDTO.StartResponse> startFullSync(
+            @Parameter(description = "테스트 모드 여부") @RequestParam(defaultValue = "false") boolean testMode,
+            @Parameter(description = "수집 제한 건수") @RequestParam(required = false) Integer maxRecords,
+            @Parameter(description = "CSV 파일 (PDF 배치용)") @RequestParam(required = false) MultipartFile csvFile) {
+
+        try {
+            java.io.InputStream csvInputStream = null;
+            String csvFileName = null;
+
+            if (csvFile != null && !csvFile.isEmpty()) {
+                csvFileName = csvFile.getOriginalFilename();
+                if (csvFileName == null || !csvFileName.toLowerCase().endsWith(".csv")) {
+                    return ApiResponse.onFailure("INVALID_FILE_TYPE", "CSV 파일만 업로드 가능합니다.", null);
+                }
+                csvInputStream = csvFile.getInputStream();
+                log.info("CSV 파일 업로드: {}, size={}bytes", csvFileName, csvFile.getSize());
+            }
+
+            BatchJobContext context = drugBatchOrchestrator.startFullSync(
+                    testMode,
+                    false, // includeEfficacyCrawling (비활성화)
+                    true,  // includePdfImport (항상 활성화, CSV 없으면 스킵)
+                    null,
+                    maxRecords,
+                    csvInputStream,
+                    csvFileName
+            );
+
+            return ApiResponse.onSuccess(DrugBatchResponseDTO.StartResponse.from(context));
+
+        } catch (IOException e) {
+            log.error("CSV 파일 읽기 실패: {}", e.getMessage());
+            return ApiResponse.onFailure("FILE_READ_ERROR", "파일 읽기 실패: " + e.getMessage(), null);
+        }
+    }
+
+    @Operation(
+            summary = "전체 동기화 시작 (JSON)",
+            description = "JSON 요청으로 전체 동기화를 시작합니다. CSV 파일 없이 1~3단계만 실행됩니다 (4단계 PDF 배치는 CSV 파일 필요)."
+    )
+    @PostMapping(value = "/full-sync", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ApiResponse<DrugBatchResponseDTO.StartResponse> startFullSyncJson(
             @RequestBody(required = false) DrugBatchRequestDTO.FullSyncRequest request) {
 
         if (request == null) {
@@ -62,9 +104,9 @@ public class DrugBatchController {
 
         BatchJobContext context = drugBatchOrchestrator.startFullSync(
                 request.isTestMode(),
-                request.isIncludeEfficacyCrawling(),
-                request.isIncludePdfImport(),
-                request.getPdfFilePath(),
+                false, // includeEfficacyCrawling (비활성화)
+                true,  // includePdfImport (항상 활성화, CSV 없으면 스킵)
+                null,
                 request.getMaxRecords()
         );
 

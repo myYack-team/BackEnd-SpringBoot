@@ -2,6 +2,7 @@ package com.myyak.service.drugBatchService;
 
 import lombok.Getter;
 
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,6 +26,10 @@ public class BatchJobContext {
     private final boolean includePdfImport;
     private final String pdfFilePath;
     private final Integer maxRecords;
+
+    // CSV 파일 업로드 관련
+    private InputStream csvInputStream;
+    private String csvFileName;
 
     private volatile boolean cancelRequested;
 
@@ -55,6 +60,15 @@ public class BatchJobContext {
         return new BatchJobContext(testMode, includeEfficacyCrawling, includePdfImport, pdfFilePath, maxRecords);
     }
 
+    public void setCsvFile(InputStream inputStream, String fileName) {
+        this.csvInputStream = inputStream;
+        this.csvFileName = fileName;
+    }
+
+    public boolean hasCsvFile() {
+        return csvInputStream != null && csvFileName != null;
+    }
+
     public boolean hasMaxRecordsLimit() {
         return maxRecords != null && maxRecords > 0;
     }
@@ -63,14 +77,7 @@ public class BatchJobContext {
         stages.add(BatchStageInfo.create(1, "e약은요 API 수집"));
         stages.add(BatchStageInfo.create(2, "허가정보 API 수집"));
         stages.add(BatchStageInfo.create(3, "성분명 재파싱"));
-
-        if (includeEfficacyCrawling) {
-            stages.add(BatchStageInfo.create(4, "효능 크롤링"));
-        }
-
-        if (includePdfImport) {
-            stages.add(BatchStageInfo.create(5, "PDF 배치"));
-        }
+        stages.add(BatchStageInfo.create(4, "PDF 배치"));
     }
 
     public void startStage(int stage) {

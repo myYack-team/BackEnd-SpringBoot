@@ -57,13 +57,27 @@ public class DrugBatchOrchestrator {
      */
     public BatchJobContext startFullSync(boolean testMode, boolean includeEfficacyCrawling,
                                           boolean includePdfImport, String pdfFilePath, Integer maxRecords) {
+        return startFullSync(testMode, includeEfficacyCrawling, includePdfImport, pdfFilePath, maxRecords, null, null);
+    }
+
+    /**
+     * 전체 동기화 작업 시작 (CSV 파일 업로드 포함)
+     */
+    public BatchJobContext startFullSync(boolean testMode, boolean includeEfficacyCrawling,
+                                          boolean includePdfImport, String pdfFilePath, Integer maxRecords,
+                                          java.io.InputStream csvInputStream, String csvFileName) {
         BatchJobContext context = BatchJobContext.create(
                 testMode, includeEfficacyCrawling, includePdfImport, pdfFilePath, maxRecords);
 
+        // CSV 파일이 있으면 context에 설정
+        if (csvInputStream != null && csvFileName != null) {
+            context.setCsvFile(csvInputStream, csvFileName);
+        }
+
         jobContexts.put(context.getJobId(), context);
 
-        log.info("전체 동기화 작업 시작: jobId={}, testMode={}, maxRecords={}",
-                context.getJobId(), testMode, maxRecords);
+        log.info("전체 동기화 작업 시작: jobId={}, testMode={}, maxRecords={}, hasCsvFile={}",
+                context.getJobId(), testMode, maxRecords, context.hasCsvFile());
 
         // 비동기로 실제 작업 실행
         executeFullSyncAsync(context);
@@ -121,14 +135,14 @@ public class DrugBatchOrchestrator {
                 executeStage3(context);
             }
 
-            // Stage 4: 효능 크롤링 (선택)
-            if (!context.isCancelRequested() && context.isIncludeEfficacyCrawling()) {
-                executeStage4(context);
-            }
+            // Stage 4: 효능 크롤링 (비활성화 - 웹 크롤링 방식)
+            // if (!context.isCancelRequested() && context.isIncludeEfficacyCrawling()) {
+            //     executeStage4(context);
+            // }
 
-            // Stage 5: PDF 배치 (선택)
-            if (!context.isCancelRequested() && context.isIncludePdfImport()) {
-                executeStage5(context);
+            // Stage 4: PDF 배치 (CSV 파일에서 약물 정보 보강)
+            if (!context.isCancelRequested()) {
+                executeStage4_PdfBatch(context);
             }
 
             // 완료 처리
@@ -367,38 +381,42 @@ public class DrugBatchOrchestrator {
     }
 
     /**
-     * Stage 4: 효능 크롤링 (선택)
+     * Stage 4: 효능 크롤링 (비활성화 - 웹 크롤링 방식)
+     * @deprecated PDF 배치 방식으로 대체됨
      */
-    protected void executeStage4(BatchJobContext context) {
-        context.startStage(4);
-        log.info("[Stage 4] 효능 크롤링 시작");
-
-        // 기존 크롤러 서비스 활용
-        int crawledCount = drugCrawlerService.crawlEfficacyForMissingDrugs();
-
-        context.updateStageProgress(4, crawledCount, crawledCount);
-        context.completeStage(4);
-        log.info("[Stage 4] 효능 크롤링 완료: {}건", crawledCount);
-    }
+    // protected void executeStage4(BatchJobContext context) {
+    //     context.startStage(4);
+    //     log.info("[Stage 4] 효능 크롤링 시작");
+    //
+    //     // 기존 크롤러 서비스 활용
+    //     int crawledCount = drugCrawlerService.crawlEfficacyForMissingDrugs();
+    //
+    //     context.updateStageProgress(4, crawledCount, crawledCount);
+    //     context.completeStage(4);
+    //     log.info("[Stage 4] 효능 크롤링 완료: {}건", crawledCount);
+    // }
 
     /**
-     * Stage 5: PDF 배치 (선택)
+     * Stage 4: PDF 배치 (CSV 파일에서 약물 정보 보강)
+     * - 효능효과, 용법용량, 주의사항, 저장방법, 유효기간 등
      */
-    protected void executeStage5(BatchJobContext context) {
-        context.startStage(5);
-        log.info("[Stage 5] PDF 배치 시작: path={}", context.getPdfFilePath());
+    protected void executeStage4_PdfBatch(BatchJobContext context) {
+        context.startStage(4);
 
-        if (context.getPdfFilePath() == null || context.getPdfFilePath().isBlank()) {
-            log.warn("[Stage 5] PDF 파일 경로가 지정되지 않았습니다");
-            context.completeStage(5);
+        // CSV 파일이 없으면 스킵
+        if (!context.hasCsvFile()) {
+            log.warn("[Stage 4] CSV 파일이 지정되지 않았습니다. PDF 배치를 건너뜁니다.");
+            context.completeStage(4);
             return;
         }
 
-        DrugPdfBatchService.BatchResult result = drugPdfBatchService.importFromExcel(context.getPdfFilePath());
+        log.info("[Stage 4] PDF 배치 시작: fileName={}", context.getCsvFileName());
+        DrugPdfBatchService.BatchResult result = drugPdfBatchService.importFromCsv(
+                context.getCsvInputStream(), context.getCsvFileName());
 
-        context.updateStageProgress(5, result.successCount(), result.totalCount());
-        context.completeStage(5);
-        log.info("[Stage 5] PDF 배치 완료: {}", result.toSummary());
+        context.updateStageProgress(4, result.successCount(), result.totalCount());
+        context.completeStage(4);
+        log.info("[Stage 4] PDF 배치 완료: {}", result.toSummary());
     }
 
     // === Helper Methods ===

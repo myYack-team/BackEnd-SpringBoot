@@ -103,10 +103,30 @@ const API = {
     // ===== Batch API =====
 
     /**
-     * 전체 동기화 시작
+     * 전체 동기화 시작 (JSON - CSV 파일 없이)
      */
     startFullSync(options = {}) {
         return this.post('/drugs/batch/full-sync', options);
+    },
+
+    /**
+     * 전체 동기화 시작 (FormData - CSV 파일 포함)
+     */
+    async startFullSyncWithFile(options = {}) {
+        const formData = new FormData();
+        formData.append('testMode', options.testMode || false);
+        if (options.maxRecords) {
+            formData.append('maxRecords', options.maxRecords);
+        }
+        if (options.csvFile) {
+            formData.append('csvFile', options.csvFile);
+        }
+
+        const response = await fetch(`${this.baseUrl}/drugs/batch/full-sync`, {
+            method: 'POST',
+            body: formData,
+        });
+        return this.handleResponse(response);
     },
 
     /**
@@ -142,6 +162,20 @@ const API = {
      */
     promoteTestData() {
         return this.post('/drugs/batch/test-table/promote');
+    },
+
+    /**
+     * CSV 파일 업로드
+     */
+    async uploadCsv(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${this.baseUrl}/drugs/batch/csv-upload`, {
+            method: 'POST',
+            body: formData,
+        });
+        return this.handleResponse(response);
     },
 };
 
