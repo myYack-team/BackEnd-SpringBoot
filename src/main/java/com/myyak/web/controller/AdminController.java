@@ -1,0 +1,88 @@
+package com.myyak.web.controller;
+
+import com.myyak.apiPayload.ApiResponse;
+import com.myyak.service.adminService.AdminService;
+import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * 관리자 전용 API 컨트롤러
+ */
+@Slf4j
+@Tag(name = "Admin", description = "관리자 전용 API")
+@RestController
+@RequestMapping("/api/admin")
+@RequiredArgsConstructor
+public class AdminController {
+
+    private final AdminService adminService;
+
+    @Operation(
+            summary = "약물 데이터 통계 조회",
+            description = "전체 약물 수, 효능 미수집 수, 성분명 미파싱 수를 조회합니다."
+    )
+    @GetMapping("/stats/drugs")
+    public ApiResponse<AdminResponseDTO.DrugStats> getDrugStats() {
+        return ApiResponse.onSuccess(adminService.getDrugStats());
+    }
+
+    @Operation(
+            summary = "최근 등록 영양제 목록 조회",
+            description = "최근 등록된 영양제 목록을 페이징하여 조회합니다."
+    )
+    @GetMapping("/supplements/recent")
+    public ApiResponse<AdminResponseDTO.SupplementList> getRecentSupplements(
+            @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "최근 N일 (null이면 전체)") @RequestParam(required = false) Integer days,
+            @Parameter(description = "검색어") @RequestParam(required = false) String search) {
+        return ApiResponse.onSuccess(adminService.getRecentSupplements(page, size, days, search));
+    }
+
+    @Operation(
+            summary = "태그별 영양제 통계 조회",
+            description = "영양제 태그별 개수를 조회합니다."
+    )
+    @GetMapping("/supplements/stats/tags")
+    public ApiResponse<AdminResponseDTO.SupplementTagStats> getSupplementTagStats() {
+        return ApiResponse.onSuccess(adminService.getSupplementTagStats());
+    }
+
+    @Operation(
+            summary = "가입자 통계 조회",
+            description = "전체 가입자 수, 기간별 가입자 수, 성별/연령대 분포를 조회합니다."
+    )
+    @GetMapping("/users/stats")
+    public ApiResponse<AdminResponseDTO.UserStats> getUserStats() {
+        return ApiResponse.onSuccess(adminService.getUserStats());
+    }
+
+    @Operation(
+            summary = "일별 가입 추이 조회",
+            description = "최근 N일간 일별 가입자 수를 조회합니다."
+    )
+    @GetMapping("/users/daily")
+    public ApiResponse<AdminResponseDTO.DailySignups> getDailySignups(
+            @Parameter(description = "조회 기간 (일)") @RequestParam(defaultValue = "7") int days) {
+        return ApiResponse.onSuccess(adminService.getDailySignups(days));
+    }
+
+    @Operation(
+            summary = "영양제 삭제 (관리자 전용)",
+            description = """
+                특정 영양제를 삭제합니다.
+                해당 영양제를 선택한 사용자들의 UserSupplement도 함께 삭제됩니다.
+                """
+    )
+    @DeleteMapping("/supplements/{id}")
+    public ApiResponse<AdminResponseDTO.SupplementDeleteResult> deleteSupplement(
+            @Parameter(description = "삭제할 영양제 ID") @PathVariable Long id) {
+        log.info("관리자 영양제 삭제 요청: id={}", id);
+        return ApiResponse.onSuccess(adminService.deleteSupplement(id));
+    }
+}
