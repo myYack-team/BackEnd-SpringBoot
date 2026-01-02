@@ -27,6 +27,10 @@ public class SecurityConfig {
             "/api/auth/**",
             // 약 검색 (비로그인 사용자도 검색 가능)
             "/api/drugs/search/**",
+            // 관리자 페이지 (정적 파일 + API)
+            "/admin/**",
+            "/api/admin/**",
+            "/api/drugs/batch/**",
             // Swagger
             "/swagger-ui/**",
             "/swagger-ui.html",
