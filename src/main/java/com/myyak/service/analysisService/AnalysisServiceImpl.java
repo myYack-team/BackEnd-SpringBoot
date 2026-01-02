@@ -86,21 +86,22 @@ public class AnalysisServiceImpl implements AnalysisService {
     public AnalysisResponseDTO.AnalysisResult requestAnalysis(Long userId) {
         User user = findUserById(userId);
 
-        // 1. 쿼터 확인 및 리셋 처리
-        UserAnalysisQuota quota = getOrCreateQuota(user);
-        checkAndResetQuotaIfNeeded(quota);
+        // TODO: 유료 결제 도입 후 쿼터 제한 활성화
+        // // 1. 쿼터 확인 및 리셋 처리
+        // UserAnalysisQuota quota = getOrCreateQuota(user);
+        // checkAndResetQuotaIfNeeded(quota);
+        //
+        // if (!quota.canAnalyze()) {
+        //     throw new GeneralException(ErrorStatus.ANALYSIS_QUOTA_EXCEEDED);
+        // }
 
-        if (!quota.canAnalyze()) {
-            throw new GeneralException(ErrorStatus.ANALYSIS_QUOTA_EXCEEDED);
-        }
-
-        // 2. 사용자 복용 약물 조회
+        // 1. 사용자 복용 약물 조회
         List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
         if (medications.isEmpty()) {
             throw new GeneralException(ErrorStatus.ANALYSIS_NO_MEDICATIONS);
         }
 
-        // 3. 약물 코드 및 성분명 추출
+        // 2. 약물 코드 및 성분명 추출
         List<String> itemSeqs = medications.stream()
                 .filter(m -> m.getDrugInfo() != null)
                 .map(m -> m.getDrugInfo().getItemSeq())
@@ -112,19 +113,19 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .distinct()
                 .toList();
 
-        // 4. 약-약 상호작용 조회
+        // 3. 약-약 상호작용 조회
         List<DrugInteraction> drugInteractions = itemSeqs.isEmpty() ?
                 List.of() : drugInteractionRepository.findByDrugItemSeqsIn(itemSeqs);
 
-        // 5. 약-음식 상호작용 조회
+        // 4. 약-음식 상호작용 조회
         List<DrugFoodInteraction> foodInteractions = (itemSeqs.isEmpty() && ingredientNames.isEmpty()) ?
                 List.of() : drugFoodInteractionRepository.findByDrugItemSeqsOrIngredientNames(itemSeqs, ingredientNames);
 
-        // 6. LLM 입력 JSON 생성
+        // 5. LLM 입력 JSON 생성
         String userPrompt = buildUserPrompt(medications, drugInteractions, foodInteractions);
         log.info("[Analysis] LLM 입력 프롬프트 길이: {}", userPrompt.length());
 
-        // 7. LLM 호출
+        // 6. LLM 호출
         String llmResponse;
         try {
             llmResponse = llmClient.generate(SYSTEM_PROMPT, userPrompt);
@@ -134,10 +135,10 @@ public class AnalysisServiceImpl implements AnalysisService {
             throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
         }
 
-        // 8. JSON 추출 및 검증
+        // 7. JSON 추출 및 검증
         String cleanedResponse = extractJsonFromResponse(llmResponse);
 
-        // 9. 레포트 저장
+        // 8. 레포트 저장
         String medicationSnapshot = buildMedicationSnapshot(medications);
         int mechanismGroupCount = countMechanismGroups(cleanedResponse);
         int foodInteractionCount = countFoodInteractions(cleanedResponse);
@@ -153,13 +154,13 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         analysisReportRepository.save(report);
 
-        // 10. 쿼터 사용량 증가
-        quota.incrementUsedCount();
+        // TODO: 유료 결제 도입 후 쿼터 사용량 증가 활성화
+        // quota.incrementUsedCount();
 
         log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
                 userId, report.getId(), mechanismGroupCount, foodInteractionCount);
 
-        return AnalysisConverter.toAnalysisResult(report, quota);
+        return AnalysisConverter.toAnalysisResult(report, null);
     }
 
     @Override
