@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -68,6 +69,58 @@ public class DrugPdfBatchServiceImpl implements DrugPdfBatchService {
 
         BatchResult result = new BatchResult(totalCount, successCount.get(), skipCount.get(), failCount.get());
         log.info("PDF 배치 처리 완료: {}", result.toSummary());
+
+        return result;
+    }
+
+    @Override
+    public BatchResult importFromCsv(InputStream inputStream, String fileName) {
+        log.info("CSV 업로드 배치 처리 시작: {}", fileName);
+
+        List<DrugPdfData> pdfDataList = excelReaderService.readDrugPdfData(inputStream, fileName);
+        return processPdfDataList(pdfDataList);
+    }
+
+    private BatchResult processPdfDataList(List<DrugPdfData> pdfDataList) {
+        int totalCount = pdfDataList.size();
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger skipCount = new AtomicInteger(0);
+        AtomicInteger failCount = new AtomicInteger(0);
+
+        for (int i = 0; i < pdfDataList.size(); i++) {
+            DrugPdfData pdfData = pdfDataList.get(i);
+
+            try {
+                boolean processed = processSingleDrug(pdfData);
+                if (processed) {
+                    successCount.incrementAndGet();
+                } else {
+                    skipCount.incrementAndGet();
+                }
+            } catch (Exception e) {
+                log.error("처리 실패 - itemSeq: {}, error: {}", pdfData.getItemSeq(), e.getMessage());
+                failCount.incrementAndGet();
+            }
+
+            // 진행 상황 로그 (1000건마다)
+            if ((i + 1) % 1000 == 0) {
+                log.info("진행 중: {}/{} (성공: {}, 스킵: {}, 실패: {})",
+                        i + 1, totalCount, successCount.get(), skipCount.get(), failCount.get());
+            }
+
+            // Rate limiting (100ms 대기)
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("배치 처리 중단됨");
+                break;
+            }
+        }
+
+        BatchResult result = new BatchResult(totalCount, successCount.get(), skipCount.get(), failCount.get());
+        log.info("배치 처리 완료: {}", result.toSummary());
 
         return result;
     }
