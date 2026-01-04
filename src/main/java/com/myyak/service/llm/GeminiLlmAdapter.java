@@ -29,12 +29,23 @@ public class GeminiLlmAdapter implements LlmClient {
     private String apiKey;
 
     @Value("${ai.gemini.model:gemini-2.0-flash}")
-    private String model;
+    private String defaultModel;
+
+    @Value("${ai.gemini.analysis-model:gemini-2.5-pro}")
+    private String analysisModel;
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
+        // AI 분석용 어댑터는 analysisModel 사용
+        return generateWithModel(systemPrompt, userPrompt, analysisModel);
+    }
+
+    /**
+     * 지정된 모델로 텍스트 생성
+     */
+    private String generateWithModel(String systemPrompt, String userPrompt, String model) {
         if (apiKey == null || apiKey.isEmpty()) {
             log.error("Gemini API key가 설정되지 않음");
             throw new RuntimeException("Gemini API key가 설정되지 않았습니다.");
@@ -42,7 +53,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
         try {
             String combinedPrompt = buildCombinedPrompt(systemPrompt, userPrompt);
-            Map<String, Object> requestBody = buildGeminiRequest(combinedPrompt);
+            Map<String, Object> requestBody = buildGeminiRequest(combinedPrompt, model);
             String geminiUrl = GEMINI_API_URL + model + ":generateContent?key=" + apiKey;
 
             log.info("[Gemini] 모델: {}, 프롬프트 길이: {}", model, combinedPrompt.length());
@@ -80,7 +91,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
     @Override
     public String getModelName() {
-        return model;
+        return analysisModel;
     }
 
     private String buildCombinedPrompt(String systemPrompt, String userPrompt) {
@@ -90,7 +101,7 @@ public class GeminiLlmAdapter implements LlmClient {
         return systemPrompt + "\n\n---\n\n" + userPrompt;
     }
 
-    private Map<String, Object> buildGeminiRequest(String prompt) {
+    private Map<String, Object> buildGeminiRequest(String prompt, String model) {
         Map<String, Object> textPart = new HashMap<>();
         textPart.put("text", prompt);
 
@@ -105,7 +116,7 @@ public class GeminiLlmAdapter implements LlmClient {
         generationConfig.put("maxOutputTokens", 8192);
         generationConfig.put("temperature", 0.1);  // 일관된 JSON 출력을 위해 낮은 온도
 
-        // Gemini 2.5 Flash thinking 설정
+        // Gemini 2.5 Flash thinking 설정 (lite 제외)
         if (model.contains("2.5-flash") && !model.contains("lite")) {
             Map<String, Object> thinkingConfig = new HashMap<>();
             thinkingConfig.put("thinkingBudget", -1);
