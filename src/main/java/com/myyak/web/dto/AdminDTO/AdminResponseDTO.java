@@ -72,6 +72,7 @@ public class AdminResponseDTO {
         private long month;
         private Map<String, Long> byGender;
         private Map<String, Long> byAgeGroup;
+        private Map<String, Long> bySignupPurpose;
     }
 
     /**

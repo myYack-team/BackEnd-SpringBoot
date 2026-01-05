@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -57,7 +56,8 @@ public class AuthResponseDTO {
         private String email;
         private String profileImage;
         private Gender gender;
-        private LocalDate birthDate;
+        private String ageRange;
+        private String signupPurposes;
         private FontSize fontSize;
         private LocalDateTime createdAt;
     }

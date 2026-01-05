@@ -58,4 +58,13 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.updateNotificationSettings(userId, request));
     }
+
+    @Operation(summary = "기본정보 설정", description = "신규 가입자의 기본정보(성별, 연령대, 가입목적)를 설정합니다.")
+    @PutMapping("/me/profile-setup")
+    public ApiResponse<UserResponseDTO.ProfileSetupResult> setupProfile(
+            Authentication authentication,
+            @Valid @RequestBody UserRequestDTO.ProfileSetupRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.setupProfile(userId, request));
+    }
 }

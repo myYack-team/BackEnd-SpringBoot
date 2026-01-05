@@ -21,6 +21,7 @@ const Users = {
             this.renderUserStats(stats);
             this.renderGenderChart(stats.byGender, stats.total);
             this.renderAgeChart(stats.byAgeGroup, stats.total);
+            this.renderPurposeChart(stats.bySignupPurpose, stats.total);
         } catch (error) {
             console.error('가입자 통계 로드 실패:', error);
         }
@@ -101,6 +102,48 @@ const Users = {
                             <div class="bar-label">${ageLabels[key]}</div>
                             <div class="bar-track">
                                 <div class="bar-fill primary" style="width: ${percent}%"></div>
+                            </div>
+                            <div class="bar-value">${Utils.formatNumber(count)}명 (${Math.round(percent)}%)</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    },
+
+    /**
+     * 가입목적 분포 차트 렌더링
+     */
+    renderPurposeChart(bySignupPurpose, total) {
+        const container = document.getElementById('purposeChart');
+        if (!container) return;
+
+        const purposeLabels = {
+            'SELF': '나의 약 관리',
+            'CHILD': '자녀 약 관리',
+            'PARENT': '부모님 약 관리',
+            'AI_REPORT': 'AI 복약 분석 레포트',
+        };
+
+        const purposeColors = {
+            'SELF': 'primary',
+            'CHILD': 'success',
+            'PARENT': 'warning',
+            'AI_REPORT': 'danger',
+        };
+
+        const orderedKeys = ['SELF', 'CHILD', 'PARENT', 'AI_REPORT'];
+
+        container.innerHTML = `
+            <div class="bar-chart">
+                ${orderedKeys.map(key => {
+                    const count = bySignupPurpose ? (bySignupPurpose[key] || 0) : 0;
+                    const percent = total > 0 ? (count / total) * 100 : 0;
+                    return `
+                        <div class="bar-item">
+                            <div class="bar-label">${purposeLabels[key]}</div>
+                            <div class="bar-track">
+                                <div class="bar-fill ${purposeColors[key]}" style="width: ${percent}%"></div>
                             </div>
                             <div class="bar-value">${Utils.formatNumber(count)}명 (${Math.round(percent)}%)</div>
                         </div>

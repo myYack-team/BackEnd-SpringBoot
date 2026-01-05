@@ -30,4 +30,9 @@ public interface UserService {
 
     // 테스트용 사용자 생성
     UserResponseDTO.UserInfo createTestUser(String name);
+
+    /**
+     * 신규 가입자 기본정보 설정
+     */
+    UserResponseDTO.ProfileSetupResult setupProfile(Long userId, UserRequestDTO.ProfileSetupRequest request);
 }
