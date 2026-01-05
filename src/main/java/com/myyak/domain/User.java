@@ -6,7 +6,6 @@ import com.myyak.domain.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDate;
 
 @Entity
 @Table(name = "users")
@@ -33,7 +32,9 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private Gender gender;
 
-    private LocalDate birthDate;
+    private String ageRange;
+
+    private String signupPurposes;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -51,18 +52,18 @@ public class User extends BaseEntity {
         this.profileImage = profileImage;
     }
 
-    public void updateKakaoInfo(String name, String email, String profileImage, Gender gender, LocalDate birthDate) {
+    public void updateKakaoInfo(String name, String email, String profileImage) {
         this.name = name;
         if (email != null) {
             this.email = email;
         }
         this.profileImage = profileImage;
-        if (gender != null) {
-            this.gender = gender;
-        }
-        if (birthDate != null) {
-            this.birthDate = birthDate;
-        }
+    }
+
+    public void updateProfileSetup(Gender gender, String ageRange, String signupPurposes) {
+        this.gender = gender;
+        this.ageRange = ageRange;
+        this.signupPurposes = signupPurposes;
     }
 
     public void updateFontSize(FontSize fontSize) {
