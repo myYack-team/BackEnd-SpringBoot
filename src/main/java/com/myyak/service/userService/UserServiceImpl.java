@@ -125,4 +125,28 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         return UserConverter.toUserInfo(user);
     }
+
+    @Override
+    @Transactional
+    public UserResponseDTO.ProfileSetupResult setupProfile(Long userId, UserRequestDTO.ProfileSetupRequest request) {
+        User user = findById(userId);
+
+        // List<SignupPurpose> -> 콤마 구분 문자열로 변환
+        String signupPurposesStr = request.getSignupPurposes().stream()
+                .map(Enum::name)
+                .reduce((a, b) -> a + "," + b)
+                .orElse("");
+
+        user.updateProfileSetup(request.getGender(), request.getAgeRange(), signupPurposesStr);
+
+        log.info("기본정보 설정 완료 - userId: {}, gender: {}, ageRange: {}, purposes: {}",
+                userId, request.getGender(), request.getAgeRange(), signupPurposesStr);
+
+        return UserResponseDTO.ProfileSetupResult.builder()
+                .id(user.getId())
+                .gender(user.getGender())
+                .ageRange(user.getAgeRange())
+                .signupPurposes(request.getSignupPurposes())
+                .build();
+    }
 }
