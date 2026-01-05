@@ -102,13 +102,28 @@ public class AnalysisConverter {
             }
 
             return groups.stream()
-                    .map(g -> AnalysisResponseDTO.MechanismGroup.builder()
-                            .categoryName((String) g.get("categoryName"))
-                            .description((String) g.get("description"))
-                            .analogy((String) g.get("analogy"))
-                            .medicationCount(g.get("medicationCount") != null ?
-                                    ((Number) g.get("medicationCount")).intValue() : 0)
-                            .build())
+                    .map(g -> {
+                        // medications 리스트 파싱
+                        List<Map<String, String>> medicationMaps = (List<Map<String, String>>) g.get("medications");
+                        List<AnalysisResponseDTO.MechanismMedication> medications = medicationMaps != null ?
+                                medicationMaps.stream()
+                                        .map(m -> AnalysisResponseDTO.MechanismMedication.builder()
+                                                .name(m.get("name"))
+                                                .ingredientName(m.get("ingredientName"))
+                                                .build())
+                                        .toList()
+                                : List.of();
+
+                        return AnalysisResponseDTO.MechanismGroup.builder()
+                                .categoryName((String) g.get("categoryName"))
+                                .categoryIcon((String) g.get("categoryIcon"))
+                                .description((String) g.get("description"))
+                                .analogy((String) g.get("analogy"))
+                                .medicationCount(g.get("medicationCount") != null ?
+                                        ((Number) g.get("medicationCount")).intValue() : 0)
+                                .medications(medications)
+                                .build();
+                    })
                     .toList();
 
         } catch (JsonProcessingException e) {
