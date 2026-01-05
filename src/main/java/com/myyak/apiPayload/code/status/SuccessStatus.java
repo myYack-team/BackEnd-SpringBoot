@@ -43,7 +43,11 @@ public enum SuccessStatus implements BaseCode {
     // 알림 관련
     REMINDER_UPDATED(HttpStatus.OK, "REMINDER200", "알림이 수정되었습니다."),
     REMINDER_SNOOZED(HttpStatus.OK, "REMINDER201", "다시 알림이 설정되었습니다."),
-    REMINDER_SNOOZE_CLEARED(HttpStatus.OK, "REMINDER202", "다시 알림이 해제되었습니다.");
+    REMINDER_SNOOZE_CLEARED(HttpStatus.OK, "REMINDER202", "다시 알림이 해제되었습니다."),
+
+    // AI 분석 관련
+    ANALYSIS_COMPLETED(HttpStatus.OK, "ANALYSIS200", "AI 약물 분석이 완료되었습니다."),
+    ANALYSIS_REPORT_DELETED(HttpStatus.OK, "ANALYSIS201", "분석 레포트가 삭제되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;
