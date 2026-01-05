@@ -32,7 +32,7 @@ public class Reminder extends BaseEntity {
     private UserSupplement userSupplement;  // 영양제 알림 (nullable)
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private MedicationTiming timing;  // 아침 식전, 아침 식후, 점심 식전 등
 
     @Column(nullable = false)
