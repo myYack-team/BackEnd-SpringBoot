@@ -4,7 +4,6 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.domain.RefreshToken;
 import com.myyak.domain.User;
-import com.myyak.domain.enums.Gender;
 import com.myyak.repository.RefreshTokenRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
@@ -17,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -160,16 +158,12 @@ public class AuthServiceImpl implements AuthService {
         String name = profile != null ? profile.getNickname() : "사용자";
         String email = account != null ? account.getEmail() : null;
         String profileImage = profile != null ? profile.getProfileImageUrl() : null;
-        Gender gender = account != null ? Gender.fromKakaoValue(account.getGender()) : null;
-        LocalDate birthDate = parseBirthDate(account);
 
         User user = User.builder()
                 .kakaoId(kakaoId)
                 .name(name)
                 .email(email)
                 .profileImage(profileImage)
-                .gender(gender)
-                .birthDate(birthDate)
                 .build();
 
         return userRepository.save(user);
@@ -182,31 +176,8 @@ public class AuthServiceImpl implements AuthService {
         String name = profile != null ? profile.getNickname() : user.getName();
         String email = account != null ? account.getEmail() : null;
         String profileImage = profile != null ? profile.getProfileImageUrl() : null;
-        Gender gender = account != null ? Gender.fromKakaoValue(account.getGender()) : null;
-        LocalDate birthDate = parseBirthDate(account);
 
-        user.updateKakaoInfo(name, email, profileImage, gender, birthDate);
-    }
-
-    private LocalDate parseBirthDate(KakaoUserInfo.KakaoAccount account) {
-        if (account == null) {
-            return null;
-        }
-
-        String birthyear = account.getBirthyear();
-        String birthday = account.getBirthday();
-
-        if (birthyear != null && birthday != null && birthday.length() == 4) {
-            try {
-                int year = Integer.parseInt(birthyear);
-                int month = Integer.parseInt(birthday.substring(0, 2));
-                int day = Integer.parseInt(birthday.substring(2, 4));
-                return LocalDate.of(year, month, day);
-            } catch (Exception e) {
-                log.warn("생년월일 파싱 실패: birthyear={}, birthday={}", birthyear, birthday);
-            }
-        }
-        return null;
+        user.updateKakaoInfo(name, email, profileImage);
     }
 
     private void saveRefreshToken(User user, String refreshToken) {
@@ -235,7 +206,8 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .profileImage(user.getProfileImage())
                 .gender(user.getGender())
-                .birthDate(user.getBirthDate())
+                .ageRange(user.getAgeRange())
+                .signupPurposes(user.getSignupPurposes())
                 .fontSize(user.getFontSize())
                 .createdAt(user.getCreatedAt())
                 .build();
