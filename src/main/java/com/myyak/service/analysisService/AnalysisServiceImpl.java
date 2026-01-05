@@ -49,8 +49,7 @@ public class AnalysisServiceImpl implements AnalysisService {
             2. "위험합니다", "피하세요", "금지" 같은 표현을 사용하지 않습니다
             3. 복용 지시나 권고를 하지 않습니다
             4. 일반인이 이해할 수 있는 쉬운 표현을 사용합니다
-            5. 약물명을 나열하지 않고 개수만 표시합니다
-            6. 비유를 활용하여 이해를 돕습니다
+            5. 비유를 활용하여 이해를 돕습니다
 
             출력 형식:
             반드시 아래 JSON 스키마에 맞춰 응답합니다. JSON만 출력하고 다른 텍스트는 포함하지 않습니다.
@@ -59,9 +58,16 @@ public class AnalysisServiceImpl implements AnalysisService {
               "mechanismGroups": [
                 {
                   "categoryName": "카테고리명 (예: 고혈압 조절)",
+                  "categoryIcon": "관련 이모지 1개 (예: ❤️, 💊, 🩸, 🧠, 🦴 등)",
                   "description": "2~3문장 설명",
                   "analogy": "비유 1줄",
-                  "medicationCount": 숫자
+                  "medicationCount": 숫자,
+                  "medications": [
+                    {
+                      "name": "약물명",
+                      "ingredientName": "성분명"
+                    }
+                  ]
                 }
               ],
               "foodInteractions": [
