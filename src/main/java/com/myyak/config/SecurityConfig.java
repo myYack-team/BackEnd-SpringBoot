@@ -33,6 +33,8 @@ public class SecurityConfig {
             "/api/admin/**",
             // 데이터 배치 (관리자 전용)
             "/api/drugs/batch/**",
+            // 정적 파일 (업로드된 이미지)
+            "/uploads/**",
             // Swagger
             "/swagger-ui/**",
             "/swagger-ui.html",
