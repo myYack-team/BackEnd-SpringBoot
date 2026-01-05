@@ -34,9 +34,23 @@ public class AnalysisResponseDTO {
     @AllArgsConstructor
     public static class MechanismGroup {
         private String categoryName;       // "혈압 조절", "당뇨 조절" 등
+        private String categoryIcon;       // 이모지 아이콘 (❤️, 💊 등)
         private String description;        // 2~3문장 설명
         private String analogy;            // 비유 1줄
-        private Integer medicationCount;   // 관련 약물 개수 (이름 나열 X)
+        private Integer medicationCount;   // 관련 약물 개수
+        private List<MechanismMedication> medications;  // 관련 약물 목록
+    }
+
+    /**
+     * 기전 그룹 내 약물 정보
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MechanismMedication {
+        private String name;               // 약물명
+        private String ingredientName;     // 성분명
     }
 
     /**
@@ -63,6 +77,7 @@ public class AnalysisResponseDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FoodInteractionDetail {
+        private Long medicationId;         // 약물 ID
         private String medicationName;     // 약물명
         private String reason;             // 상세 이유
     }
