@@ -3,7 +3,9 @@ package com.myyak.service.adminService;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.domain.Supplement;
+import com.myyak.domain.User;
 import com.myyak.domain.enums.Gender;
+import com.myyak.domain.enums.SignupPurpose;
 import com.myyak.domain.enums.SupplementTag;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.SupplementRepository;
@@ -20,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -118,15 +119,24 @@ public class AdminServiceImpl implements AdminService {
         byGender.put("FEMALE", allUsers.stream().filter(u -> u.getGender() == Gender.FEMALE).count());
         byGender.put("UNKNOWN", allUsers.stream().filter(u -> u.getGender() == null).count());
 
-        // 연령대 분포
+        // 연령대 분포 (ageRange 문자열 기반)
         Map<String, Long> byAgeGroup = new LinkedHashMap<>();
-        byAgeGroup.put("10s", countByAgeGroup(allUsers, 10, 19));
-        byAgeGroup.put("20s", countByAgeGroup(allUsers, 20, 29));
-        byAgeGroup.put("30s", countByAgeGroup(allUsers, 30, 39));
-        byAgeGroup.put("40s", countByAgeGroup(allUsers, 40, 49));
-        byAgeGroup.put("50s", countByAgeGroup(allUsers, 50, 59));
-        byAgeGroup.put("60+", countByAgeGroup(allUsers, 60, 200));
-        byAgeGroup.put("UNKNOWN", allUsers.stream().filter(u -> u.getBirthDate() == null).count());
+        byAgeGroup.put("10s", countByAgeRange(allUsers, "10대"));
+        byAgeGroup.put("20s", countByAgeRange(allUsers, "20대"));
+        byAgeGroup.put("30s", countByAgeRange(allUsers, "30대"));
+        byAgeGroup.put("40s", countByAgeRange(allUsers, "40대"));
+        byAgeGroup.put("50s", countByAgeRange(allUsers, "50대"));
+        byAgeGroup.put("60+", countByAgeRange(allUsers, "60대 이상"));
+        byAgeGroup.put("UNKNOWN", allUsers.stream().filter(u -> u.getAgeRange() == null).count());
+
+        // 가입목적 분포
+        Map<String, Long> bySignupPurpose = new LinkedHashMap<>();
+        for (SignupPurpose purpose : SignupPurpose.values()) {
+            long count = allUsers.stream()
+                    .filter(u -> u.getSignupPurposes() != null && u.getSignupPurposes().contains(purpose.name()))
+                    .count();
+            bySignupPurpose.put(purpose.name(), count);
+        }
 
         return AdminResponseDTO.UserStats.builder()
                 .total(total)
@@ -135,6 +145,7 @@ public class AdminServiceImpl implements AdminService {
                 .month(month)
                 .byGender(byGender)
                 .byAgeGroup(byAgeGroup)
+                .bySignupPurpose(bySignupPurpose)
                 .build();
     }
 
@@ -206,14 +217,9 @@ public class AdminServiceImpl implements AdminService {
                 .build();
     }
 
-    private long countByAgeGroup(List<com.myyak.domain.User> users, int minAge, int maxAge) {
-        LocalDate today = LocalDate.now();
+    private long countByAgeRange(List<User> users, String ageRange) {
         return users.stream()
-                .filter(u -> u.getBirthDate() != null)
-                .filter(u -> {
-                    int age = Period.between(u.getBirthDate(), today).getYears();
-                    return age >= minAge && age <= maxAge;
-                })
+                .filter(u -> ageRange.equals(u.getAgeRange()))
                 .count();
     }
 }
