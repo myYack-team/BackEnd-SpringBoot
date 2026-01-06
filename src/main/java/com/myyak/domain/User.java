@@ -1,5 +1,6 @@
 package com.myyak.domain;
 
+import com.myyak.converter.EncryptedStringConverter;
 import com.myyak.domain.common.BaseEntity;
 import com.myyak.domain.enums.FontSize;
 import com.myyak.domain.enums.Gender;
@@ -19,12 +20,14 @@ public class User extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(nullable = false, unique = true)
     private String kakaoId;
 
     @Column(nullable = false)
     private String name;
 
+    @Convert(converter = EncryptedStringConverter.class)
     private String email;
 
     private String profileImage;
@@ -41,6 +44,7 @@ public class User extends BaseEntity {
     @Builder.Default
     private FontSize fontSize = FontSize.LARGE;
 
+    @Convert(converter = EncryptedStringConverter.class)
     private String fcmToken;
 
     @Column(nullable = false)
