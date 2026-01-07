@@ -1,0 +1,206 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # 수동 실행 허용
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. JDK 21 설정
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # 3. Gradle 캐시
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 4. application.yaml 생성 (GitHub Secrets에서)
+      - name: Create application.yaml
+        run: |
+          mkdir -p src/main/resources
+          cat > src/main/resources/application.yaml << 'EOF'
+          spring:
+            application:
+              name: myyak-server
+            servlet:
+              multipart:
+                max-file-size: 50MB
+                max-request-size: 50MB
+            datasource:
+              url: jdbc:mysql://${{ secrets.DB_HOST }}:3306/${{ secrets.DB_NAME }}?useSSL=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+              username: ${{ secrets.DB_USERNAME }}
+              password: ${{ secrets.DB_PASSWORD }}
+              driver-class-name: com.mysql.cj.jdbc.Driver
+            jpa:
+              hibernate:
+                ddl-auto: validate
+              show-sql: false
+              properties:
+                hibernate:
+                  format_sql: false
+              open-in-view: false
+            security:
+              user:
+                name: disabled
+                password: disabled
+
+          server:
+            port: 8080
+
+          # Storage 설정 (S3)
+          storage:
+            provider: s3
+            s3:
+              bucket-name: ${{ secrets.AWS_S3_BUCKET }}
+              region: ${{ secrets.AWS_REGION }}
+              access-key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+              secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+          jwt:
+            secret: ${{ secrets.JWT_SECRET }}
+            access-token-expiry: 3600000
+            refresh-token-expiry: 2592000000
+
+          oauth:
+            kakao:
+              client-id: ${{ secrets.KAKAO_CLIENT_ID }}
+              client-secret: ${{ secrets.KAKAO_CLIENT_SECRET }}
+              redirect-uri: ${{ secrets.KAKAO_REDIRECT_URI }}
+
+          ai:
+            vision-provider: gemini
+            analysis-provider: gemini
+            gemini:
+              api-key: ${{ secrets.GEMINI_API_KEY }}
+              model: gemini-2.5-flash-lite
+              analysis-model: gemini-3-pro-preview
+            openai:
+              api-key: ${{ secrets.OPENAI_API_KEY }}
+              model: gpt-4o-mini
+              analysis-model: gpt-4o
+
+          api:
+            data:
+              go:
+                kr:
+                  key: ${{ secrets.EASY_DRUG_API_KEY }}
+
+          firebase:
+            credentials-path: firebase-service-account.json
+
+          cors:
+            allowed-origins: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+
+          springdoc:
+            default-consumes-media-type: application/json
+            default-produces-media-type: application/json
+            swagger-ui:
+              path: /swagger-ui.html
+              tags-sorter: alpha
+              operations-sorter: alpha
+            api-docs:
+              path: /v3/api-docs
+
+          app:
+            debug:
+              save-scan-images: false
+              image-dir: /tmp/myyak/scan_debug
+            test-login:
+              enabled: ${{ secrets.TEST_LOGIN_ENABLED }}
+              username: ${{ secrets.TEST_LOGIN_USERNAME }}
+              password: ${{ secrets.TEST_LOGIN_PASSWORD }}
+
+          ocr:
+            provider: google-vision
+            google-vision:
+              credentials-path: google-cloud-credentials.json
+
+          scan:
+            strategy: ocr-llm
+            llm-provider: gemini
+            llm-fallback:
+              enabled: true
+              confidence-threshold: 0.5
+
+          encryption:
+            secret-key: ${{ secrets.ENCRYPTION_SECRET_KEY }}
+
+          logging:
+            level:
+              root: INFO
+              com.myyak: INFO
+          EOF
+
+      # 5. Firebase 서비스 계정 파일 생성
+      - name: Create Firebase credentials
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > firebase-service-account.json
+
+      # 6. Google Cloud 인증 파일 생성
+      - name: Create Google Cloud credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS_JSON }}' > google-cloud-credentials.json
+
+      # 7. Gradle 빌드
+      - name: Build with Gradle
+        run: ./gradlew bootJar --no-daemon
+
+      # 8. SSH 키 설정
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      # 9. JAR 파일 및 설정 파일 전송
+      - name: Deploy to server
+        run: |
+          # JAR 파일 전송
+          scp build/libs/myyak-server-*.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
+
+          # Firebase 인증 파일 전송
+          scp firebase-service-account.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/firebase-service-account.json
+
+          # Google Cloud 인증 파일 전송
+          scp google-cloud-credentials.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/google-cloud-credentials.json
+
+      # 10. 서버 재시작
+      - name: Restart application
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            # 기존 프로세스 종료
+            sudo systemctl stop myyak || true
+
+            # 애플리케이션 시작
+            sudo systemctl start myyak
+
+            # 상태 확인
+            sleep 5
+            sudo systemctl status myyak
+          ENDSSH
+
+      # 11. 헬스체크
+      - name: Health check
+        run: |
+          sleep 15
+          curl -f https://api.myyak.xyz/actuator/health || echo "Health check failed, but deployment completed"
