@@ -1,0 +1,147 @@
+spring:
+  application:
+    name: myyak-server
+
+  # 파일 업로드 크기 제한
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  # Database 설정 (MySQL)
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:myYack}?useSSL=${DB_USE_SSL:false}&serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:YOUR_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Security - 기본 user 비활성화
+  security:
+    user:
+      name: disabled
+      password: disabled
+
+# 서버 설정
+server:
+  port: 8080
+
+# JWT 설정
+jwt:
+  secret: ${JWT_SECRET:YOUR_JWT_SECRET_KEY_MINIMUM_32_CHARACTERS}
+  access-token-expiry: 3600000       # 1시간 (밀리초)
+  refresh-token-expiry: 2592000000   # 30일 (밀리초)
+
+# OAuth 설정 (카카오)
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID:YOUR_KAKAO_CLIENT_ID}
+    client-secret: ${KAKAO_CLIENT_SECRET:YOUR_KAKAO_CLIENT_SECRET}
+    redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:8080/api/auth/kakao/callback}
+
+# AI API 설정
+ai:
+  # === 처방전 스캔용 Vision 프로바이더 ===
+  vision-provider: gemini            # gemini | openai
+  # === AI 약물 분석용 프로바이더 ===
+  analysis-provider: gemini          # gemini | openai
+  gemini:
+    api-key: ${GEMINI_API_KEY:YOUR_GEMINI_API_KEY}
+    # === 용도별 모델 설정 ===
+    model: gemini-2.5-flash-lite     # 기본 모델 (처방전 스캔)
+    analysis-model: gemini-3-pro-preview  # AI 약물 분석용 모델 (Gemini 3 Pro)
+    # === Gemini 모델 옵션 ===
+    # gemini-2.5-flash-lite  : 최고속, 최저가 (thinking 비활성화)
+    # gemini-2.0-flash       : 빠름, thinking 토큰 없음
+    # gemini-2.5-flash       : thinking 모델 - maxOutputTokens에 thinking 토큰 포함
+    # gemini-2.5-pro         : 복잡한 추론, thinking 모델
+    # gemini-3-pro-preview   : Gemini 3 Pro (최신, 고성능)
+  openai:
+    api-key: ${OPENAI_API_KEY:YOUR_OPENAI_API_KEY}
+    # === 용도별 모델 설정 ===
+    model: gpt-4o-mini               # 기본 모델 (처방전 스캔)
+    analysis-model: gpt-4o           # AI 약물 분석용 모델
+    # === OpenAI 모델 옵션 ===
+    # gpt-4o-mini  : 빠름, 저비용
+    # gpt-4o       : 고성능
+
+# 공공데이터포털 API (e약은요)
+api:
+  data:
+    go:
+      kr:
+        key: ${EASY_DRUG_API_KEY:YOUR_EASY_DRUG_API_KEY}
+
+# Firebase (FCM)
+firebase:
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:firebase-service-account.json}
+
+# Swagger 설정
+springdoc:
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+# 디버그 설정
+app:
+  debug:
+    save-scan-images: ${SAVE_SCAN_IMAGES:true}
+    image-dir: ${java.io.tmpdir}/myyak/scan_debug
+  # 테스트 로그인 설정 (Google Play 심사용)
+  test-login:
+    enabled: ${TEST_LOGIN_ENABLED:true}  # 심사 후 false로 변경
+    username: ${TEST_LOGIN_USERNAME:google_review}
+    password: ${TEST_LOGIN_PASSWORD:YOUR_TEST_PASSWORD}
+
+# OCR 설정
+ocr:
+  provider: ${OCR_PROVIDER:google-vision}
+  google-vision:
+    credentials-path: ${GOOGLE_VISION_CREDENTIALS_PATH:google-cloud-credentials.json}
+
+# 스캔 최적화 설정
+scan:
+  strategy: ocr-llm  # ocr-llm | hybrid | vision-only
+  llm-provider: gemini  # gemini | openai (OCR 후 텍스트 구조화에 사용할 LLM)
+  llm-fallback:
+    enabled: true
+    confidence-threshold: 0.5
+
+# 개인정보 암호화 설정 (AES-256-GCM)
+encryption:
+  secret-key: ${ENCRYPTION_SECRET_KEY:YOUR_ENCRYPTION_SECRET_KEY_BASE64}
+
+# 파일 저장소 설정
+storage:
+  provider: ${STORAGE_PROVIDER:local}  # local | s3
+  s3:
+    bucket-name: ${AWS_S3_BUCKET:myyak-uploads}
+    region: ${AWS_REGION:ap-northeast-2}
+    access-key: ${AWS_ACCESS_KEY_ID:YOUR_AWS_ACCESS_KEY}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:YOUR_AWS_SECRET_KEY}
+
+# 로컬 파일 업로드 경로 (storage.provider=local일 때 사용)
+file:
+  upload:
+    path: ${FILE_UPLOAD_PATH:uploads}
+
+# 로깅 설정
+logging:
+  level:
+    root: INFO
+    com.myyak: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
