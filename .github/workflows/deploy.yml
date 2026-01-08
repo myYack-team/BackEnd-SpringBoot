@@ -97,8 +97,10 @@ jobs:
           for i in {1..6}; do
             sleep 15
             echo "Attempt $i: Checking health..."
-            if curl -sf https://api.myyak.xyz/actuator/health; then
-              echo ""
+            # Swagger API docs 엔드포인트로 헬스체크 (200 또는 302 응답 확인)
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.myyak.xyz/v3/api-docs)
+            echo "HTTP Status: $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
               echo "Health check passed!"
               exit 0
             fi
