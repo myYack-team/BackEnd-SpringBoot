@@ -11,15 +11,21 @@ import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.repository.UserSupplementRepository;
+import com.myyak.service.storage.StorageClient;
 import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
+import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,6 +41,14 @@ public class AdminServiceImpl implements AdminService {
     private final SupplementRepository supplementRepository;
     private final UserRepository userRepository;
     private final UserSupplementRepository userSupplementRepository;
+    private final DataSource dataSource;
+    private final StorageClient storageClient;
+
+    @Value("${app.version:0.0.1-SNAPSHOT}")
+    private String appVersion;
+
+    @Value("${app.build-time:unknown}")
+    private String buildTime;
 
     @Override
     public AdminResponseDTO.DrugStats getDrugStats() {
@@ -221,5 +235,61 @@ public class AdminServiceImpl implements AdminService {
         return users.stream()
                 .filter(u -> ageRange.equals(u.getAgeRange()))
                 .count();
+    }
+
+    @Override
+    public AdminResponseDTO.HealthStatus checkHealth() {
+        long startTime = System.currentTimeMillis();
+
+        // DB 연결 확인
+        boolean databaseUp = checkDatabaseHealth();
+
+        // 스토리지 연결 확인
+        boolean storageUp = storageClient.isHealthy();
+
+        // JVM 메모리 정보
+        Runtime runtime = Runtime.getRuntime();
+        long heapUsedMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024);
+        long heapMaxMb = runtime.maxMemory() / (1024 * 1024);
+
+        // CPU 사용량
+        double cpuUsage = getCpuUsage();
+
+        long responseTimeMs = System.currentTimeMillis() - startTime;
+
+        return AdminResponseDTO.HealthStatus.builder()
+                .serverUp(true)
+                .databaseUp(databaseUp)
+                .storageUp(storageUp)
+                .responseTimeMs(responseTimeMs)
+                .storageProvider(storageClient.getProviderName())
+                .heapUsedMb(heapUsedMb)
+                .heapMaxMb(heapMaxMb)
+                .cpuUsage(cpuUsage)
+                .appVersion(appVersion)
+                .buildTime(buildTime)
+                .checkedAt(LocalDateTime.now())
+                .build();
+    }
+
+    private boolean checkDatabaseHealth() {
+        try (Connection conn = dataSource.getConnection()) {
+            return conn.isValid(3);
+        } catch (Exception e) {
+            log.warn("DB 헬스체크 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private double getCpuUsage() {
+        try {
+            OperatingSystemMXBean osBean = ManagementFactory.getOperatingSystemMXBean();
+            if (osBean instanceof com.sun.management.OperatingSystemMXBean sunOsBean) {
+                return Math.round(sunOsBean.getCpuLoad() * 1000.0) / 10.0;
+            }
+        } catch (Exception e) {
+            log.warn("CPU 사용량 조회 실패: {}", e.getMessage());
+        }
+        return -1;
     }
 }

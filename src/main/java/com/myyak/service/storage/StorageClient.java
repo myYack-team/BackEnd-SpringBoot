@@ -35,4 +35,10 @@ public interface StorageClient {
      * 저장소 제공자 이름
      */
     String getProviderName();
+
+    /**
+     * 저장소 연결 상태 확인
+     * @return 정상 연결 시 true
+     */
+    boolean isHealthy();
 }

@@ -34,4 +34,9 @@ public interface AdminService {
      * - 해당 영양제를 선택한 UserSupplement도 함께 삭제
      */
     AdminResponseDTO.SupplementDeleteResult deleteSupplement(Long supplementId);
+
+    /**
+     * 서버 헬스 상태 확인
+     */
+    AdminResponseDTO.HealthStatus checkHealth();
 }

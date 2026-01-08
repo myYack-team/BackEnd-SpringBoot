@@ -119,6 +119,20 @@ public class S3StorageAdapter implements StorageClient {
         return "AWS S3";
     }
 
+    @Override
+    public boolean isHealthy() {
+        try {
+            HeadBucketRequest request = HeadBucketRequest.builder()
+                    .bucket(bucketName)
+                    .build();
+            s3Client.headBucket(request);
+            return true;
+        } catch (Exception e) {
+            log.warn("[S3] 헬스체크 실패: {}", e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * S3 URL에서 key 추출
      * https://bucket.s3.region.amazonaws.com/path/file.png -> path/file.png

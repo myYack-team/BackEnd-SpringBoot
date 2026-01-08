@@ -177,6 +177,13 @@ const API = {
         });
         return this.handleResponse(response);
     },
+
+    /**
+     * 서버 헬스 상태 조회
+     */
+    getServerHealth() {
+        return this.get('/admin/health');
+    },
 };
 
 // 전역에서 사용 가능하도록

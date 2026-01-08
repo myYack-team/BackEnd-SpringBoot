@@ -82,4 +82,15 @@ public class LocalStorageAdapter implements StorageClient {
     public String getProviderName() {
         return "Local FileSystem";
     }
+
+    @Override
+    public boolean isHealthy() {
+        try {
+            Path path = Paths.get(uploadPath);
+            return Files.isWritable(path);
+        } catch (Exception e) {
+            log.warn("[Local] 헬스체크 실패: {}", e.getMessage());
+            return false;
+        }
+    }
 }

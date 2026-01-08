@@ -100,4 +100,26 @@ public class AdminResponseDTO {
         private Long deletedSupplementId;
         private int deletedUserSupplementCount;
     }
+
+    /**
+     * 서버 헬스 상태 응답
+     */
+    @Getter
+    @Builder
+    public static class HealthStatus {
+        private boolean serverUp;
+        private boolean databaseUp;
+        private boolean storageUp;
+        private long responseTimeMs;
+        private String storageProvider;
+
+        private long heapUsedMb;
+        private long heapMaxMb;
+        private double cpuUsage;
+
+        private String appVersion;
+        private String buildTime;
+
+        private LocalDateTime checkedAt;
+    }
 }

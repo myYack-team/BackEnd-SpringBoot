@@ -85,4 +85,13 @@ public class AdminController {
         log.info("관리자 영양제 삭제 요청: id={}", id);
         return ApiResponse.onSuccess(adminService.deleteSupplement(id));
     }
+
+    @Operation(
+            summary = "서버 헬스 상태 확인",
+            description = "서버, DB, 스토리지 연결 상태 및 시스템 리소스 사용량을 조회합니다."
+    )
+    @GetMapping("/health")
+    public ApiResponse<AdminResponseDTO.HealthStatus> getServerHealth() {
+        return ApiResponse.onSuccess(adminService.checkHealth());
+    }
 }
