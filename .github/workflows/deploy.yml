@@ -162,7 +162,9 @@ jobs:
 
       # 7. Gradle 빌드
       - name: Build with Gradle
-        run: ./gradlew bootJar --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bootJar --no-daemon
 
       # 8. SSH 키 설정
       - name: Setup SSH key
