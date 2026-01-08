@@ -73,6 +73,10 @@ dependencies {
 	// Caffeine Cache (검색 결과 캐싱)
 	implementation 'com.github.ben-manes.caffeine:caffeine:3.1.8'
 
+	// AWS SDK for S3 (이미지 저장)
+	implementation platform('software.amazon.awssdk:bom:2.21.0')
+	implementation 'software.amazon.awssdk:s3'
+
 	// DevTools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 

@@ -1,29 +1,47 @@
 package com.myyak.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
 public class CorsConfig {
 
+    @Value("${cors.allowed-origins:}")
+    private String allowedOrigins;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // 허용할 Origin (개발 환경)
-        configuration.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "http://localhost:8081",
-                "http://localhost:19006",
-                "exp://localhost:8081"
-        ));
+        // 허용할 Origin 설정
+        List<String> origins = new ArrayList<>();
 
-        // 모든 Origin 허용 (개발 중에만 사용)
+        // 기본 개발 환경 Origin
+        origins.add("http://localhost:3000");
+        origins.add("http://localhost:8081");
+        origins.add("http://localhost:19006");
+        origins.add("exp://localhost:8081");
+
+        // 환경변수로 추가된 Origin (쉼표로 구분)
+        if (allowedOrigins != null && !allowedOrigins.isEmpty()) {
+            for (String origin : allowedOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty()) {
+                    origins.add(trimmed);
+                }
+            }
+        }
+
+        configuration.setAllowedOrigins(origins);
+
+        // 개발 환경에서 모든 Origin 패턴 허용
         configuration.setAllowedOriginPatterns(List.of("*"));
 
         // 허용할 HTTP 메서드

@@ -2,17 +2,13 @@ package com.myyak.util;
 
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.service.storage.StorageClient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -20,17 +16,14 @@ import java.util.UUID;
 
 /**
  * 파일 업로드 유틸리티
- * 로컬 파일 시스템에 이미지를 저장하고 URL을 반환
+ * StorageClient를 통해 로컬 또는 S3에 이미지를 저장합니다.
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class FileUploadUtil {
 
-    @Value("${file.upload.path:uploads}")
-    private String uploadPath;
-
-    @Value("${file.upload.base-url:http://localhost:8080}")
-    private String baseUrl;
+    private final StorageClient storageClient;
 
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private static final String[] ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"};
@@ -44,31 +37,11 @@ public class FileUploadUtil {
     public String uploadPrescriptionImage(MultipartFile file, Long userId) {
         validateFile(file);
 
-        String originalFilename = file.getOriginalFilename();
-        String extension = getFileExtension(originalFilename);
-        String newFilename = generateFilename(extension);
+        String filename = generateFilename(getFileExtension(file.getOriginalFilename()));
+        String path = String.format("prescriptions/%d", userId);
 
-        // 경로: uploads/prescriptions/{userId}/{filename}
-        String subPath = String.format("prescriptions/%d", userId);
-        Path targetDir = Paths.get(uploadPath, subPath);
-
-        try {
-            // 디렉토리 생성
-            Files.createDirectories(targetDir);
-
-            // 파일 저장
-            Path targetPath = targetDir.resolve(newFilename);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-
-            log.info("File uploaded: {}", targetPath);
-
-            // URL 반환 (상대 경로)
-            return String.format("/uploads/%s/%s", subPath, newFilename);
-
-        } catch (IOException e) {
-            log.error("Failed to upload file: {}", e.getMessage());
-            throw new GeneralException(ErrorStatus._INTERNAL_SERVER_ERROR);
-        }
+        log.info("[FileUpload] Provider: {}, Path: {}", storageClient.getProviderName(), path);
+        return storageClient.upload(file, path, filename);
     }
 
     /**
@@ -79,64 +52,25 @@ public class FileUploadUtil {
     public String uploadSupplementImage(MultipartFile file) {
         validateFile(file);
 
-        String originalFilename = file.getOriginalFilename();
-        String extension = getFileExtension(originalFilename);
-        String newFilename = generateFilename(extension);
+        String filename = generateFilename(getFileExtension(file.getOriginalFilename()));
+        String path = "supplements";
 
-        // 경로: uploads/supplements/{filename}
-        String subPath = "supplements";
-        Path targetDir = Paths.get(uploadPath, subPath);
-
-        try {
-            // 디렉토리 생성
-            Files.createDirectories(targetDir);
-
-            // 파일 저장
-            Path targetPath = targetDir.resolve(newFilename);
-            Files.copy(file.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
-
-            log.info("Supplement image uploaded: {}", targetPath);
-
-            // URL 반환 (상대 경로)
-            return String.format("/uploads/%s/%s", subPath, newFilename);
-
-        } catch (IOException e) {
-            log.error("Failed to upload supplement image: {}", e.getMessage());
-            throw new GeneralException(ErrorStatus._INTERNAL_SERVER_ERROR);
-        }
+        log.info("[FileUpload] Provider: {}, Path: {}", storageClient.getProviderName(), path);
+        return storageClient.upload(file, path, filename);
     }
 
     /**
      * 파일 삭제 (동기)
-     * @param fileUrl 파일 URL (상대 경로)
+     * @param fileUrl 파일 URL
      */
     public void deleteFile(String fileUrl) {
-        if (fileUrl == null || fileUrl.isBlank()) {
-            return;
-        }
-
-        try {
-            // URL에서 경로 추출 (/uploads/prescriptions/1/xxx.png -> uploads/prescriptions/1/xxx.png)
-            String relativePath = fileUrl.startsWith("/uploads/")
-                    ? fileUrl.substring("/uploads/".length())
-                    : fileUrl;
-
-            Path filePath = Paths.get(uploadPath).resolve(relativePath.replace("/uploads/", ""));
-
-            if (Files.exists(filePath)) {
-                Files.delete(filePath);
-                log.info("File deleted: {}", filePath);
-            }
-
-        } catch (IOException e) {
-            log.warn("Failed to delete file: {}", e.getMessage());
-        }
+        storageClient.delete(fileUrl);
     }
 
     /**
      * 파일 삭제 (비동기)
      * DB 삭제 후 파일 삭제를 백그라운드에서 처리하여 응답 속도 개선
-     * @param fileUrl 파일 URL (상대 경로)
+     * @param fileUrl 파일 URL
      */
     @Async
     public void deleteFileAsync(String fileUrl) {
@@ -149,14 +83,8 @@ public class FileUploadUtil {
      */
     @Async
     public void deleteFilesAsync(List<String> fileUrls) {
-        if (fileUrls == null || fileUrls.isEmpty()) {
-            return;
-        }
-
-        for (String fileUrl : fileUrls) {
-            deleteFile(fileUrl);
-        }
-        log.info("Async file deletion completed: {} files", fileUrls.size());
+        storageClient.deleteMultiple(fileUrls);
+        log.info("Async file deletion completed: {} files", fileUrls != null ? fileUrls.size() : 0);
     }
 
     /**

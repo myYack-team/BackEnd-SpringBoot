@@ -1,0 +1,39 @@
+# MyYak Spring Boot 서비스 설정 (AWS Free Tier용)
+# 위치: /etc/systemd/system/myyak.service
+#
+# 설치 방법:
+# 1. sudo cp myyak.service /etc/systemd/system/
+# 2. sudo systemctl daemon-reload
+# 3. sudo systemctl enable myyak
+# 4. sudo systemctl start myyak
+
+[Unit]
+Description=MyYak Spring Boot Application
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu
+
+# JVM 메모리 최적화 (t2.micro 1GB RAM 기준)
+# 힙: 최소 256MB, 최대 512MB
+Environment="JAVA_OPTS=-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+UseStringDeduplication"
+
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /home/ubuntu/myyak-server.jar
+
+# 재시작 설정
+Restart=always
+RestartSec=10
+
+# 로그 설정
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=myyak
+
+# 보안 설정
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
