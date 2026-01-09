@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: Build and Deploy to AWS
 
 on:
   push:
@@ -7,7 +7,9 @@ on:
   workflow_dispatch:  # 수동 실행 허용
 
 jobs:
-  build-and-deploy:
+  # ===== 빌드 단계 =====
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -33,7 +35,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      # 4. application.yaml 생성 (GitHub Secrets에서 통째로)
+      # 4. application.yaml 생성
       - name: Create application.yaml
         run: |
           mkdir -p src/main/resources
@@ -55,7 +57,39 @@ jobs:
           chmod +x ./gradlew
           ./gradlew bootJar --no-daemon
 
-      # 8. SSH 키 설정
+      # 8. 빌드 결과물 업로드 (artifact)
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            build/libs/myyak-server-*.jar
+            firebase-service-account.json
+            google-cloud-credentials.json
+          retention-days: 7
+
+  # ===== 배포 단계 =====
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build  # build job 성공 후 실행
+
+    steps:
+      # 1. 빌드 결과물 다운로드
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: ./artifacts
+
+      # 2. 다운로드 확인
+      - name: List artifacts
+        run: |
+          echo "=== Downloaded artifacts ==="
+          find ./artifacts -type f
+          ls -la ./artifacts/
+
+      # 3. SSH 키 설정
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -63,27 +97,33 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # 9. 기존 JAR 백업 및 새 JAR 전송
-      - name: Backup and deploy JAR
+      # 4. 기존 JAR 백업
+      - name: Backup existing JAR
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
-            # 기존 JAR 백업 (롤백용)
             if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar ]; then
               cp /home/${{ secrets.EC2_USER }}/myyak-server.jar /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup
               echo "기존 JAR 백업 완료: myyak-server.jar.backup"
+            else
+              echo "기존 JAR 파일 없음 (첫 배포)"
             fi
           ENDSSH
 
-          # JAR 파일 전송
-          scp build/libs/myyak-server-*.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
+      # 5. 파일 전송
+      - name: Transfer files to server
+        run: |
+          # JAR 파일 찾기 및 전송
+          JAR_FILE=$(find ./artifacts -name "myyak-server-*.jar" | head -1)
+          echo "Deploying: $JAR_FILE"
+          scp "$JAR_FILE" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
 
           # Firebase 인증 파일 전송
-          scp firebase-service-account.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/firebase-service-account.json
+          scp ./artifacts/firebase-service-account.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/firebase-service-account.json
 
           # Google Cloud 인증 파일 전송
-          scp google-cloud-credentials.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/google-cloud-credentials.json
+          scp ./artifacts/google-cloud-credentials.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/google-cloud-credentials.json
 
-      # 10. 서버 재시작
+      # 6. 서버 재시작
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -98,7 +138,7 @@ jobs:
             sudo systemctl status myyak
           ENDSSH
 
-      # 11. 헬스체크 (최대 90초 대기)
+      # 7. 헬스체크 (최대 90초 대기)
       - name: Health check
         id: healthcheck
         run: |
@@ -106,7 +146,6 @@ jobs:
           for i in {1..6}; do
             sleep 15
             echo "Attempt $i: Checking health..."
-            # Swagger API docs 엔드포인트로 헬스체크 (200 또는 302 응답 확인)
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.myyak.xyz/v3/api-docs)
             echo "HTTP Status: $HTTP_CODE"
             if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
@@ -117,13 +156,12 @@ jobs:
           echo "Health check failed after 90 seconds"
           exit 1
 
-      # 12. 헬스체크 실패 시 롤백
+      # 8. 헬스체크 실패 시 롤백
       - name: Rollback on failure
         if: failure() && steps.healthcheck.outcome == 'failure'
         run: |
           echo "헬스체크 실패! 롤백을 시작합니다..."
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
-            # 백업 파일 존재 확인
             if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup ]; then
               echo "백업 파일로 롤백 중..."
 
@@ -149,7 +187,7 @@ jobs:
             fi
           ENDSSH
 
-      # 13. 실패 시 로그 확인
+      # 9. 실패 시 로그 확인
       - name: Check logs on failure
         if: failure()
         run: |
