@@ -313,7 +313,7 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public AdminResponseDTO.ErrorLogList getErrorLogs(int page, int size, String level, Integer hours) {
-        List<AdminResponseDTO.ErrorLogItem> allLogs = new ArrayList<>();
+        List<RawLogEntry> rawLogs = new ArrayList<>();
 
         try {
             String sinceTime = hours != null ? hours + "h ago" : "24h ago";
@@ -330,17 +330,17 @@ public class AdminServiceImpl implements AdminService {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String line;
                 StringBuilder currentStackTrace = new StringBuilder();
-                AdminResponseDTO.ErrorLogItem.ErrorLogItemBuilder currentBuilder = null;
+                RawLogEntry currentEntry = null;
 
                 while ((line = reader.readLine()) != null) {
                     Matcher matcher = LOG_PATTERN.matcher(line);
 
                     if (matcher.matches()) {
-                        if (currentBuilder != null) {
+                        if (currentEntry != null) {
                             if (currentStackTrace.length() > 0) {
-                                currentBuilder.stackTrace(currentStackTrace.toString());
+                                currentEntry.stackTrace = currentStackTrace.toString();
                             }
-                            allLogs.add(currentBuilder.build());
+                            rawLogs.add(currentEntry);
                         }
 
                         String timestamp = matcher.group(1);
@@ -356,16 +356,15 @@ public class AdminServiceImpl implements AdminService {
                             parsedTime = LocalDateTime.now();
                         }
 
-                        currentBuilder = AdminResponseDTO.ErrorLogItem.builder()
-                                .id(UUID.randomUUID().toString())
-                                .timestamp(parsedTime)
-                                .level(logLevel)
-                                .logger(logger)
-                                .message(message)
-                                .threadName(threadName);
+                        currentEntry = new RawLogEntry();
+                        currentEntry.timestamp = parsedTime;
+                        currentEntry.level = logLevel;
+                        currentEntry.logger = logger;
+                        currentEntry.message = message;
+                        currentEntry.threadName = threadName;
                         currentStackTrace = new StringBuilder();
 
-                    } else if (currentBuilder != null && (line.startsWith("\t") || line.startsWith("    ") || line.contains("at "))) {
+                    } else if (currentEntry != null && (line.startsWith("\t") || line.startsWith("    ") || line.contains("at "))) {
                         if (currentStackTrace.length() > 0) {
                             currentStackTrace.append("\n");
                         }
@@ -373,11 +372,11 @@ public class AdminServiceImpl implements AdminService {
                     }
                 }
 
-                if (currentBuilder != null) {
+                if (currentEntry != null) {
                     if (currentStackTrace.length() > 0) {
-                        currentBuilder.stackTrace(currentStackTrace.toString());
+                        currentEntry.stackTrace = currentStackTrace.toString();
                     }
-                    allLogs.add(currentBuilder.build());
+                    rawLogs.add(currentEntry);
                 }
             }
 
@@ -387,22 +386,26 @@ public class AdminServiceImpl implements AdminService {
             log.error("에러 로그 조회 실패: {}", e.getMessage(), e);
         }
 
-        List<AdminResponseDTO.ErrorLogItem> filteredLogs = allLogs;
+        // 레벨 필터링
         if (level != null && !level.isBlank()) {
-            filteredLogs = allLogs.stream()
-                    .filter(l -> level.equalsIgnoreCase(l.getLevel()))
+            rawLogs = rawLogs.stream()
+                    .filter(l -> level.equalsIgnoreCase(l.level))
                     .collect(Collectors.toList());
         }
 
-        Collections.reverse(filteredLogs);
+        // 중복 제거 로직: 3번까지는 개별 표시, 그 이상은 카운트
+        List<AdminResponseDTO.ErrorLogItem> deduplicatedLogs = deduplicateLogs(rawLogs);
 
-        long totalElements = filteredLogs.size();
+        // 최신순 정렬
+        Collections.reverse(deduplicatedLogs);
+
+        long totalElements = deduplicatedLogs.size();
         int totalPages = (int) Math.ceil((double) totalElements / size);
         int fromIndex = page * size;
-        int toIndex = Math.min(fromIndex + size, filteredLogs.size());
+        int toIndex = Math.min(fromIndex + size, deduplicatedLogs.size());
 
-        List<AdminResponseDTO.ErrorLogItem> pagedLogs = fromIndex < filteredLogs.size()
-                ? filteredLogs.subList(fromIndex, toIndex)
+        List<AdminResponseDTO.ErrorLogItem> pagedLogs = fromIndex < deduplicatedLogs.size()
+                ? deduplicatedLogs.subList(fromIndex, toIndex)
                 : Collections.emptyList();
 
         return AdminResponseDTO.ErrorLogList.builder()
@@ -412,6 +415,66 @@ public class AdminServiceImpl implements AdminService {
                 .totalElements(totalElements)
                 .totalPages(totalPages)
                 .build();
+    }
+
+    /**
+     * 중복 로그 제거: 동일한 로그는 3번까지 개별 표시, 그 이상은 카운트로 표시
+     */
+    private List<AdminResponseDTO.ErrorLogItem> deduplicateLogs(List<RawLogEntry> rawLogs) {
+        List<AdminResponseDTO.ErrorLogItem> result = new ArrayList<>();
+        Map<String, Integer> signatureCount = new LinkedHashMap<>();
+        Map<String, List<RawLogEntry>> signatureToEntries = new LinkedHashMap<>();
+
+        // 동일 로그 시그니처로 그룹화 (level + logger + message)
+        for (RawLogEntry entry : rawLogs) {
+            String signature = entry.level + "|" + entry.logger + "|" + entry.message;
+            signatureCount.merge(signature, 1, Integer::sum);
+            signatureToEntries.computeIfAbsent(signature, k -> new ArrayList<>()).add(entry);
+        }
+
+        // 각 시그니처별로 처리
+        for (Map.Entry<String, List<RawLogEntry>> entry : signatureToEntries.entrySet()) {
+            List<RawLogEntry> entries = entry.getValue();
+            int totalCount = entries.size();
+
+            if (totalCount <= 3) {
+                // 3번 이하면 개별 표시 (occurrenceCount = 1)
+                for (RawLogEntry logEntry : entries) {
+                    result.add(toErrorLogItem(logEntry, 1));
+                }
+            } else {
+                // 3번 초과면 최신 1개만 표시하고 총 카운트 표기
+                RawLogEntry latestEntry = entries.get(entries.size() - 1);
+                result.add(toErrorLogItem(latestEntry, totalCount));
+            }
+        }
+
+        return result;
+    }
+
+    private AdminResponseDTO.ErrorLogItem toErrorLogItem(RawLogEntry entry, int occurrenceCount) {
+        return AdminResponseDTO.ErrorLogItem.builder()
+                .id(UUID.randomUUID().toString())
+                .timestamp(entry.timestamp)
+                .level(entry.level)
+                .logger(entry.logger)
+                .message(entry.message)
+                .stackTrace(entry.stackTrace)
+                .threadName(entry.threadName)
+                .occurrenceCount(occurrenceCount)
+                .build();
+    }
+
+    /**
+     * 로그 파싱용 내부 클래스
+     */
+    private static class RawLogEntry {
+        LocalDateTime timestamp;
+        String level;
+        String logger;
+        String message;
+        String stackTrace;
+        String threadName;
     }
 
     @Override

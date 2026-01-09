@@ -149,6 +149,7 @@ public class AdminResponseDTO {
         private String message;
         private String stackTrace;
         private String threadName;
+        private int occurrenceCount;  // 동일 로그 발생 횟수 (3 이하면 개별 표시, 초과시 카운트)
     }
 
     /**

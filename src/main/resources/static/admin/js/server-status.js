@@ -161,12 +161,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const tr = document.createElement('tr');
             tr.className = `log-row log-${log.level.toLowerCase()}`;
 
+            // 발생 횟수 배지 (4회 이상일 때만 표시)
+            const occurrenceBadge = log.occurrenceCount > 1
+                ? `<span class="log-occurrence-badge">${log.occurrenceCount}회 발생</span>`
+                : '';
+
             tr.innerHTML = `
                 <td class="log-time">${formatDateTime(log.timestamp)}</td>
                 <td><span class="log-level-badge ${log.level.toLowerCase()}">${log.level}</span></td>
                 <td class="log-logger" title="${log.logger}">${truncateLogger(log.logger)}</td>
                 <td class="log-message">
                     <div class="log-message-text" title="${escapeHtml(log.message)}">${escapeHtml(log.message)}</div>
+                    ${occurrenceBadge}
                     ${log.stackTrace ? '<div class="log-has-stack">+ 스택트레이스</div>' : ''}
                 </td>
                 <td>
