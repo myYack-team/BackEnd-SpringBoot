@@ -11,7 +11,9 @@ import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.repository.UserSupplementRepository;
+import com.myyak.service.llm.LlmClient;
 import com.myyak.service.storage.StorageClient;
+import com.myyak.web.dto.AdminDTO.AdminRequestDTO;
 import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,12 +25,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -43,6 +50,17 @@ public class AdminServiceImpl implements AdminService {
     private final UserSupplementRepository userSupplementRepository;
     private final DataSource dataSource;
     private final StorageClient storageClient;
+    private final LlmClient llmClient;
+
+    private static final Pattern LOG_PATTERN = Pattern.compile(
+            "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+\\+\\d{2}:\\d{2})\\s+" +
+            "(\\w+)\\s+" +
+            "\\d+\\s+---\\s+" +
+            "\\[([^\\]]+)\\]\\s+" +
+            "([^:]+)\\s*:\\s*(.*)");
+
+    private static final DateTimeFormatter LOG_DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSSXXX");
 
     @Value("${app.version:0.0.1-SNAPSHOT}")
     private String appVersion;
@@ -291,5 +309,155 @@ public class AdminServiceImpl implements AdminService {
             log.warn("CPU 사용량 조회 실패: {}", e.getMessage());
         }
         return -1;
+    }
+
+    @Override
+    public AdminResponseDTO.ErrorLogList getErrorLogs(int page, int size, String level, Integer hours) {
+        List<AdminResponseDTO.ErrorLogItem> allLogs = new ArrayList<>();
+
+        try {
+            String sinceTime = hours != null ? hours + "h ago" : "24h ago";
+            ProcessBuilder pb = new ProcessBuilder(
+                    "journalctl",
+                    "-u", "myyak",
+                    "--since", sinceTime,
+                    "--no-pager",
+                    "-o", "cat"
+            );
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                StringBuilder currentStackTrace = new StringBuilder();
+                AdminResponseDTO.ErrorLogItem.ErrorLogItemBuilder currentBuilder = null;
+
+                while ((line = reader.readLine()) != null) {
+                    Matcher matcher = LOG_PATTERN.matcher(line);
+
+                    if (matcher.matches()) {
+                        if (currentBuilder != null) {
+                            if (currentStackTrace.length() > 0) {
+                                currentBuilder.stackTrace(currentStackTrace.toString());
+                            }
+                            allLogs.add(currentBuilder.build());
+                        }
+
+                        String timestamp = matcher.group(1);
+                        String logLevel = matcher.group(2);
+                        String threadName = matcher.group(3).trim();
+                        String logger = matcher.group(4).trim();
+                        String message = matcher.group(5);
+
+                        LocalDateTime parsedTime;
+                        try {
+                            parsedTime = LocalDateTime.parse(timestamp, LOG_DATE_FORMATTER);
+                        } catch (Exception e) {
+                            parsedTime = LocalDateTime.now();
+                        }
+
+                        currentBuilder = AdminResponseDTO.ErrorLogItem.builder()
+                                .id(UUID.randomUUID().toString())
+                                .timestamp(parsedTime)
+                                .level(logLevel)
+                                .logger(logger)
+                                .message(message)
+                                .threadName(threadName);
+                        currentStackTrace = new StringBuilder();
+
+                    } else if (currentBuilder != null && (line.startsWith("\t") || line.startsWith("    ") || line.contains("at "))) {
+                        if (currentStackTrace.length() > 0) {
+                            currentStackTrace.append("\n");
+                        }
+                        currentStackTrace.append(line);
+                    }
+                }
+
+                if (currentBuilder != null) {
+                    if (currentStackTrace.length() > 0) {
+                        currentBuilder.stackTrace(currentStackTrace.toString());
+                    }
+                    allLogs.add(currentBuilder.build());
+                }
+            }
+
+            process.waitFor();
+
+        } catch (Exception e) {
+            log.error("에러 로그 조회 실패: {}", e.getMessage(), e);
+        }
+
+        List<AdminResponseDTO.ErrorLogItem> filteredLogs = allLogs;
+        if (level != null && !level.isBlank()) {
+            filteredLogs = allLogs.stream()
+                    .filter(l -> level.equalsIgnoreCase(l.getLevel()))
+                    .collect(Collectors.toList());
+        }
+
+        Collections.reverse(filteredLogs);
+
+        long totalElements = filteredLogs.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, filteredLogs.size());
+
+        List<AdminResponseDTO.ErrorLogItem> pagedLogs = fromIndex < filteredLogs.size()
+                ? filteredLogs.subList(fromIndex, toIndex)
+                : Collections.emptyList();
+
+        return AdminResponseDTO.ErrorLogList.builder()
+                .logs(pagedLogs)
+                .page(page)
+                .size(size)
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .build();
+    }
+
+    @Override
+    public AdminResponseDTO.ChatResponse chat(AdminRequestDTO.ChatRequest request) {
+        StringBuilder systemPrompt = new StringBuilder();
+        systemPrompt.append("You are an expert Java/Spring Boot developer helping to analyze server error logs. ");
+        systemPrompt.append("Analyze the error and provide practical solutions in Korean. ");
+        systemPrompt.append("Be concise but thorough.\n\n");
+        systemPrompt.append("Error Log Context:\n");
+
+        AdminRequestDTO.ErrorLogContext errorLog = request.getErrorLog();
+        if (errorLog != null) {
+            systemPrompt.append("- Timestamp: ").append(errorLog.getTimestamp()).append("\n");
+            systemPrompt.append("- Level: ").append(errorLog.getLevel()).append("\n");
+            systemPrompt.append("- Logger: ").append(errorLog.getLogger()).append("\n");
+            systemPrompt.append("- Message: ").append(errorLog.getMessage()).append("\n");
+            if (errorLog.getStackTrace() != null) {
+                systemPrompt.append("- Stack Trace:\n").append(errorLog.getStackTrace()).append("\n");
+            }
+        }
+
+        StringBuilder conversationContext = new StringBuilder();
+        if (request.getMessages() != null && !request.getMessages().isEmpty()) {
+            conversationContext.append("\n\nPrevious conversation:\n");
+            for (AdminRequestDTO.ChatMessage msg : request.getMessages()) {
+                conversationContext.append(msg.getRole().toUpperCase()).append(": ");
+                conversationContext.append(msg.getContent()).append("\n\n");
+            }
+        }
+
+        String userPrompt = conversationContext.toString() + "\nUSER: " + request.getUserMessage();
+
+        try {
+            String response = llmClient.generateMessage(systemPrompt.toString(), userPrompt);
+
+            return AdminResponseDTO.ChatResponse.builder()
+                    .response(response)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+        } catch (Exception e) {
+            log.error("AI 채팅 오류: {}", e.getMessage(), e);
+            return AdminResponseDTO.ChatResponse.builder()
+                    .response("AI 응답 생성 중 오류가 발생했습니다: " + e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .build();
+        }
     }
 }

@@ -186,5 +186,40 @@ const API = {
     },
 };
 
+/**
+ * Admin 전용 API
+ */
+const AdminAPI = {
+    /**
+     * 서버 헬스 상태 조회
+     */
+    getHealth() {
+        return API.get('/admin/health');
+    },
+
+    /**
+     * 에러 로그 목록 조회
+     */
+    getLogs(page = 0, size = 20, level = null, hours = 24) {
+        const params = new URLSearchParams({
+            page: page,
+            size: size,
+            hours: hours,
+        });
+        if (level) {
+            params.append('level', level);
+        }
+        return API.get(`/admin/logs?${params}`);
+    },
+
+    /**
+     * AI 채팅 (에러 분석)
+     */
+    chat(request) {
+        return API.post('/admin/logs/chat', request);
+    },
+};
+
 // 전역에서 사용 가능하도록
 window.API = API;
+window.AdminAPI = AdminAPI;

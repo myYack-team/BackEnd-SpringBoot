@@ -67,91 +67,17 @@
                 <span>관리자</span>
             </a>
             <nav class="nav">
-                <a href="index.html" class="nav-link active">🏠 홈</a>
-                <a href="data-sync.html" class="nav-link">📊 데이터 수집</a>
-                <a href="supplements.html" class="nav-link">💊 영양제</a>
-                <a href="users.html" class="nav-link">👥 가입자</a>
+                <a href="index.html" class="nav-link active">홈</a>
+                <a href="data-sync.html" class="nav-link">데이터 수집</a>
+                <a href="supplements.html" class="nav-link">영양제</a>
+                <a href="users.html" class="nav-link">가입자</a>
+                <a href="server-status.html" class="nav-link">서버 상태</a>
             </nav>
         </div>
     </header>
 
     <!-- 메인 컨텐츠 -->
     <main class="main">
-        <!-- 서버 상태 카드 -->
-        <div class="health-card">
-            <div class="health-header">
-                <div class="health-title">
-                    <span>서버 상태</span>
-                </div>
-                <button id="healthRefreshBtn" class="btn-refresh">
-                    <span class="refresh-icon">&#8635;</span>
-                    상태 확인
-                </button>
-            </div>
-            <div class="health-body">
-                <!-- 연결 상태 -->
-                <div class="health-status-grid">
-                    <div class="status-item">
-                        <div id="serverStatus" class="status-indicator"></div>
-                        <div class="status-label">서버</div>
-                        <div class="status-value">-</div>
-                    </div>
-                    <div class="status-item">
-                        <div id="dbStatus" class="status-indicator"></div>
-                        <div class="status-label">DB</div>
-                        <div class="status-value">-</div>
-                    </div>
-                    <div class="status-item">
-                        <div id="storageStatus" class="status-indicator"></div>
-                        <div class="status-label">스토리지</div>
-                        <div class="status-value">-</div>
-                    </div>
-                    <div class="status-item">
-                        <div class="status-label">응답 시간</div>
-                        <div id="responseTime" class="status-value">-</div>
-                    </div>
-                </div>
-
-                <!-- 리소스 사용량 -->
-                <div class="health-resources">
-                    <div class="resource-item">
-                        <div class="resource-header">
-                            <span class="resource-label">메모리 (JVM Heap)</span>
-                            <span id="memoryValue" class="resource-value">-</span>
-                        </div>
-                        <div class="resource-bar">
-                            <div id="memoryFill" class="resource-fill" style="width: 0%"></div>
-                        </div>
-                    </div>
-                    <div class="resource-item">
-                        <div class="resource-header">
-                            <span class="resource-label">CPU</span>
-                            <span id="cpuValue" class="resource-value">-</span>
-                        </div>
-                        <div class="resource-bar">
-                            <div id="cpuFill" class="resource-fill" style="width: 0%"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 배포 정보 -->
-                <div class="health-info">
-                    <div class="health-info-row">
-                        <span>버전</span>
-                        <span id="appVersion">-</span>
-                    </div>
-                    <div class="health-info-row">
-                        <span>빌드 시간</span>
-                        <span id="buildTime">-</span>
-                    </div>
-                    <div class="health-info-row">
-                        <span>마지막 확인</span>
-                        <span id="lastChecked">-</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="welcome-section">
             <h1 class="welcome-title">마이약 관리자 페이지</h1>
             <p class="welcome-subtitle">복약 관리 앱 운영을 위한 관리 도구입니다.</p>
@@ -182,6 +108,15 @@
                 <div class="dashboard-desc">
                     가입자 수 현황<br>
                     성별/연령대 분포
+                </div>
+            </a>
+
+            <a href="server-status.html" class="dashboard-card">
+                <div class="dashboard-icon">🖥️</div>
+                <div class="dashboard-title">서버 상태</div>
+                <div class="dashboard-desc">
+                    헬스 체크 및 리소스 모니터링<br>
+                    에러 로그 확인 및 AI 분석
                 </div>
             </a>
         </div>

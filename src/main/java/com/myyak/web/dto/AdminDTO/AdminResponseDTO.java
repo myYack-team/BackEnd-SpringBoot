@@ -122,4 +122,42 @@ public class AdminResponseDTO {
 
         private LocalDateTime checkedAt;
     }
+
+    /**
+     * 에러 로그 목록 응답
+     */
+    @Getter
+    @Builder
+    public static class ErrorLogList {
+        private List<ErrorLogItem> logs;
+        private int page;
+        private int size;
+        private long totalElements;
+        private int totalPages;
+    }
+
+    /**
+     * 에러 로그 아이템
+     */
+    @Getter
+    @Builder
+    public static class ErrorLogItem {
+        private String id;
+        private LocalDateTime timestamp;
+        private String level;
+        private String logger;
+        private String message;
+        private String stackTrace;
+        private String threadName;
+    }
+
+    /**
+     * AI 채팅 응답
+     */
+    @Getter
+    @Builder
+    public static class ChatResponse {
+        private String response;
+        private LocalDateTime timestamp;
+    }
 }

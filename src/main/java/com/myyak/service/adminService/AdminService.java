@@ -1,5 +1,6 @@
 package com.myyak.service.adminService;
 
+import com.myyak.web.dto.AdminDTO.AdminRequestDTO;
 import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
 
 public interface AdminService {
@@ -39,4 +40,14 @@ public interface AdminService {
      * 서버 헬스 상태 확인
      */
     AdminResponseDTO.HealthStatus checkHealth();
+
+    /**
+     * 에러 로그 목록 조회
+     */
+    AdminResponseDTO.ErrorLogList getErrorLogs(int page, int size, String level, Integer hours);
+
+    /**
+     * AI 채팅 (에러 분석)
+     */
+    AdminResponseDTO.ChatResponse chat(AdminRequestDTO.ChatRequest request);
 }

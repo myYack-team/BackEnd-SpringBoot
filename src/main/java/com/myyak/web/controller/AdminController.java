@@ -2,10 +2,12 @@ package com.myyak.web.controller;
 
 import com.myyak.apiPayload.ApiResponse;
 import com.myyak.service.adminService.AdminService;
+import com.myyak.web.dto.AdminDTO.AdminRequestDTO;
 import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -93,5 +95,29 @@ public class AdminController {
     @GetMapping("/health")
     public ApiResponse<AdminResponseDTO.HealthStatus> getServerHealth() {
         return ApiResponse.onSuccess(adminService.checkHealth());
+    }
+
+    @Operation(
+            summary = "에러 로그 목록 조회",
+            description = "journalctl에서 서버 로그를 조회합니다. 레벨 필터링 및 시간 범위 지정이 가능합니다."
+    )
+    @GetMapping("/logs")
+    public ApiResponse<AdminResponseDTO.ErrorLogList> getErrorLogs(
+            @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "로그 레벨 (ERROR, WARN, INFO 등)") @RequestParam(required = false) String level,
+            @Parameter(description = "최근 N시간 (기본 24시간)") @RequestParam(required = false) Integer hours) {
+        return ApiResponse.onSuccess(adminService.getErrorLogs(page, size, level, hours));
+    }
+
+    @Operation(
+            summary = "AI 에러 분석 채팅",
+            description = "에러 로그에 대해 AI와 대화하며 원인을 분석합니다."
+    )
+    @PostMapping("/logs/chat")
+    public ApiResponse<AdminResponseDTO.ChatResponse> chat(
+            @Valid @RequestBody AdminRequestDTO.ChatRequest request) {
+        log.info("AI 채팅 요청: userMessage={}", request.getUserMessage());
+        return ApiResponse.onSuccess(adminService.chat(request));
     }
 }
