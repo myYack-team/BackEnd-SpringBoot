@@ -52,15 +52,17 @@ public class AdminServiceImpl implements AdminService {
     private final StorageClient storageClient;
     private final LlmClient llmClient;
 
+    // 서버 로그 형식: 2026-01-08T04:17:25.346Z  INFO 16927 --- [myyak-server] [           main] c.m.Class : Message
     private static final Pattern LOG_PATTERN = Pattern.compile(
-            "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+\\+\\d{2}:\\d{2})\\s+" +
+            "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+Z?)\\s+" +
             "(\\w+)\\s+" +
             "\\d+\\s+---\\s+" +
-            "\\[([^\\]]+)\\]\\s+" +
+            "\\[[^\\]]+\\]\\s+" +  // [myyak-server] 부분
+            "\\[([^\\]]+)\\]\\s+" +  // [main] 스레드명
             "([^:]+)\\s*:\\s*(.*)");
 
     private static final DateTimeFormatter LOG_DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSSXXX");
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
 
     @Value("${app.version:0.0.1-SNAPSHOT}")
     private String appVersion;
