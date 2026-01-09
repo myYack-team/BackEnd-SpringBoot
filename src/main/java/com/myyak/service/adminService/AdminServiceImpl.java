@@ -445,7 +445,7 @@ public class AdminServiceImpl implements AdminService {
         String userPrompt = conversationContext.toString() + "\nUSER: " + request.getUserMessage();
 
         try {
-            String response = llmClient.generateMessage(systemPrompt.toString(), userPrompt);
+            String response = llmClient.generate(systemPrompt.toString(), userPrompt);
 
             return AdminResponseDTO.ChatResponse.builder()
                     .response(response)
