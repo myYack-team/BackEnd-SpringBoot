@@ -161,9 +161,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const tr = document.createElement('tr');
             tr.className = `log-row log-${log.level.toLowerCase()}`;
 
-            // 발생 횟수 배지 (4회 이상일 때만 표시)
+            // 발생 횟수 배지 (동일 이벤트가 여러 번 발생한 경우)
             const occurrenceBadge = log.occurrenceCount > 1
                 ? `<span class="log-occurrence-badge">${log.occurrenceCount}회 발생</span>`
+                : '';
+
+            // 관련 로그 배지 (이벤트 내 여러 로그가 있는 경우)
+            const relatedBadge = log.relatedLogCount > 1
+                ? `<span class="log-related-badge">+${log.relatedLogCount - 1}개 관련</span>`
                 : '';
 
             tr.innerHTML = `
@@ -172,8 +177,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="log-logger" title="${log.logger}">${truncateLogger(log.logger)}</td>
                 <td class="log-message">
                     <div class="log-message-text" title="${escapeHtml(log.message)}">${escapeHtml(log.message)}</div>
-                    ${occurrenceBadge}
-                    ${log.stackTrace ? '<div class="log-has-stack">+ 스택트레이스</div>' : ''}
+                    <div class="log-badges">
+                        ${occurrenceBadge}
+                        ${relatedBadge}
+                        ${log.stackTrace ? '<span class="log-has-stack">+ 스택트레이스</span>' : ''}
+                    </div>
                 </td>
                 <td>
                     <button class="btn-analyze" data-log-id="${log.id}">AI 분석</button>
@@ -202,6 +210,38 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         stackDiv.remove();
                         stackIndicator.textContent = '+ 스택트레이스';
+                    }
+                });
+            }
+
+            // 관련 로그 토글
+            if (log.relatedLogs && log.relatedLogs.length > 0) {
+                const messageCell = tr.querySelector('.log-message');
+                const relatedBadge = tr.querySelector('.log-related-badge');
+
+                relatedBadge.style.cursor = 'pointer';
+                relatedBadge.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    let relatedDiv = tr.querySelector('.log-related-logs');
+
+                    if (!relatedDiv) {
+                        relatedDiv = document.createElement('div');
+                        relatedDiv.className = 'log-related-logs';
+                        relatedDiv.innerHTML = `
+                            <div class="related-logs-header">관련 로그 (${log.relatedLogs.length}개)</div>
+                            ${log.relatedLogs.map(r => `
+                                <div class="related-log-item">
+                                    <span class="related-log-time">${formatDateTime(r.timestamp)}</span>
+                                    <span class="log-level-badge ${r.level.toLowerCase()}">${r.level}</span>
+                                    <span class="related-log-message">${escapeHtml(r.message)}</span>
+                                </div>
+                            `).join('')}
+                        `;
+                        messageCell.appendChild(relatedDiv);
+                        relatedBadge.textContent = `- ${log.relatedLogs.length}개 관련 숨기기`;
+                    } else {
+                        relatedDiv.remove();
+                        relatedBadge.textContent = `+${log.relatedLogCount - 1}개 관련`;
                     }
                 });
             }

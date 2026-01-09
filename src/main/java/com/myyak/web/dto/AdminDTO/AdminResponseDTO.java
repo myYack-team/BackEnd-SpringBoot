@@ -137,19 +137,35 @@ public class AdminResponseDTO {
     }
 
     /**
-     * 에러 로그 아이템
+     * 에러 로그 아이템 (이벤트 그룹)
+     * 같은 스레드에서 1초 이내에 발생한 로그들을 하나의 이벤트로 묶음
      */
     @Getter
     @Builder
     public static class ErrorLogItem {
         private String id;
+        private LocalDateTime timestamp;      // 이벤트 시작 시간 (첫 로그 시간)
+        private String level;                 // 대표 레벨 (가장 심각한 레벨)
+        private String logger;
+        private String message;               // 대표 메시지 (첫 번째 또는 ERROR 메시지)
+        private String stackTrace;
+        private String threadName;
+        private int occurrenceCount;          // 동일 로그 발생 횟수
+        private int relatedLogCount;          // 이벤트 내 관련 로그 수
+        private List<RelatedLog> relatedLogs; // 이벤트 내 관련 로그 목록
+    }
+
+    /**
+     * 이벤트 내 관련 로그
+     */
+    @Getter
+    @Builder
+    public static class RelatedLog {
         private LocalDateTime timestamp;
         private String level;
         private String logger;
         private String message;
         private String stackTrace;
-        private String threadName;
-        private int occurrenceCount;  // 동일 로그 발생 횟수 (3 이하면 개별 표시, 초과시 카운트)
     }
 
     /**

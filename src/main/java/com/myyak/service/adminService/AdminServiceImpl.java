@@ -388,18 +388,21 @@ public class AdminServiceImpl implements AdminService {
             log.error("에러 로그 조회 실패: {}", e.getMessage(), e);
         }
 
-        // 레벨 필터링
+        // 1. 이벤트 그룹화: 같은 스레드에서 1초 이내 발생한 로그를 묶음
+        List<LogEventGroup> eventGroups = groupLogsByEvent(rawLogs);
+
+        // 2. 레벨 필터링 (이벤트 내 대표 레벨 기준)
         if (level != null && !level.isBlank()) {
-            rawLogs = rawLogs.stream()
-                    .filter(l -> level.equalsIgnoreCase(l.level))
+            eventGroups = eventGroups.stream()
+                    .filter(g -> level.equalsIgnoreCase(g.representativeLevel))
                     .collect(Collectors.toList());
         }
 
-        // 중복 제거 로직: 3번까지는 개별 표시, 그 이상은 카운트
-        List<AdminResponseDTO.ErrorLogItem> deduplicatedLogs = deduplicateLogs(rawLogs);
+        // 3. 중복 제거 로직: 동일 이벤트는 3번까지 개별 표시, 그 이상은 카운트
+        List<AdminResponseDTO.ErrorLogItem> deduplicatedLogs = deduplicateEventGroups(eventGroups);
 
-        // 최신순 정렬
-        Collections.reverse(deduplicatedLogs);
+        // 4. 최신순 정렬
+        deduplicatedLogs.sort((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()));
 
         long totalElements = deduplicatedLogs.size();
         int totalPages = (int) Math.ceil((double) totalElements / size);
@@ -420,50 +423,91 @@ public class AdminServiceImpl implements AdminService {
     }
 
     /**
-     * 중복 로그 제거: 동일한 로그는 3번까지 개별 표시, 그 이상은 카운트로 표시
+     * 로그를 이벤트 단위로 그룹화
+     * 같은 스레드에서 1초 이내에 발생한 로그들을 하나의 이벤트로 묶음
      */
-    private List<AdminResponseDTO.ErrorLogItem> deduplicateLogs(List<RawLogEntry> rawLogs) {
-        List<AdminResponseDTO.ErrorLogItem> result = new ArrayList<>();
-        Map<String, Integer> signatureCount = new LinkedHashMap<>();
-        Map<String, List<RawLogEntry>> signatureToEntries = new LinkedHashMap<>();
+    private List<LogEventGroup> groupLogsByEvent(List<RawLogEntry> rawLogs) {
+        List<LogEventGroup> groups = new ArrayList<>();
+        if (rawLogs.isEmpty()) return groups;
 
-        // 동일 로그 시그니처로 그룹화 (level + logger + message)
+        LogEventGroup currentGroup = null;
+
         for (RawLogEntry entry : rawLogs) {
-            String signature = entry.level + "|" + entry.logger + "|" + entry.message;
-            signatureCount.merge(signature, 1, Integer::sum);
-            signatureToEntries.computeIfAbsent(signature, k -> new ArrayList<>()).add(entry);
+            if (currentGroup == null) {
+                currentGroup = new LogEventGroup(entry);
+            } else if (currentGroup.shouldInclude(entry)) {
+                currentGroup.addEntry(entry);
+            } else {
+                groups.add(currentGroup);
+                currentGroup = new LogEventGroup(entry);
+            }
+        }
+
+        if (currentGroup != null) {
+            groups.add(currentGroup);
+        }
+
+        return groups;
+    }
+
+    /**
+     * 중복 이벤트 그룹 제거: 동일한 이벤트는 3번까지 개별 표시, 그 이상은 카운트로 표시
+     */
+    private List<AdminResponseDTO.ErrorLogItem> deduplicateEventGroups(List<LogEventGroup> eventGroups) {
+        List<AdminResponseDTO.ErrorLogItem> result = new ArrayList<>();
+        Map<String, List<LogEventGroup>> signatureToGroups = new LinkedHashMap<>();
+
+        // 동일 이벤트 시그니처로 그룹화 (대표 레벨 + 대표 로거 + 대표 메시지)
+        for (LogEventGroup group : eventGroups) {
+            String signature = group.getSignature();
+            signatureToGroups.computeIfAbsent(signature, k -> new ArrayList<>()).add(group);
         }
 
         // 각 시그니처별로 처리
-        for (Map.Entry<String, List<RawLogEntry>> entry : signatureToEntries.entrySet()) {
-            List<RawLogEntry> entries = entry.getValue();
-            int totalCount = entries.size();
+        for (Map.Entry<String, List<LogEventGroup>> entry : signatureToGroups.entrySet()) {
+            List<LogEventGroup> groups = entry.getValue();
+            int totalCount = groups.size();
 
             if (totalCount <= 3) {
-                // 3번 이하면 개별 표시 (occurrenceCount = 1)
-                for (RawLogEntry logEntry : entries) {
-                    result.add(toErrorLogItem(logEntry, 1));
+                // 3번 이하면 개별 표시
+                for (LogEventGroup group : groups) {
+                    result.add(toErrorLogItem(group, 1));
                 }
             } else {
                 // 3번 초과면 최신 1개만 표시하고 총 카운트 표기
-                RawLogEntry latestEntry = entries.get(entries.size() - 1);
-                result.add(toErrorLogItem(latestEntry, totalCount));
+                LogEventGroup latestGroup = groups.get(groups.size() - 1);
+                result.add(toErrorLogItem(latestGroup, totalCount));
             }
         }
 
         return result;
     }
 
-    private AdminResponseDTO.ErrorLogItem toErrorLogItem(RawLogEntry entry, int occurrenceCount) {
+    private AdminResponseDTO.ErrorLogItem toErrorLogItem(LogEventGroup group, int occurrenceCount) {
+        List<AdminResponseDTO.RelatedLog> relatedLogs = group.entries.stream()
+                .skip(1)  // 첫 번째는 대표 로그이므로 제외
+                .map(e -> AdminResponseDTO.RelatedLog.builder()
+                        .timestamp(e.timestamp)
+                        .level(e.level)
+                        .logger(e.logger)
+                        .message(e.message)
+                        .stackTrace(e.stackTrace)
+                        .build())
+                .collect(Collectors.toList());
+
+        RawLogEntry representative = group.getRepresentativeEntry();
+
         return AdminResponseDTO.ErrorLogItem.builder()
                 .id(UUID.randomUUID().toString())
-                .timestamp(entry.timestamp)
-                .level(entry.level)
-                .logger(entry.logger)
-                .message(entry.message)
-                .stackTrace(entry.stackTrace)
-                .threadName(entry.threadName)
+                .timestamp(group.startTime)
+                .level(group.representativeLevel)
+                .logger(representative.logger)
+                .message(representative.message)
+                .stackTrace(representative.stackTrace)
+                .threadName(group.threadName)
                 .occurrenceCount(occurrenceCount)
+                .relatedLogCount(group.entries.size())
+                .relatedLogs(relatedLogs.isEmpty() ? null : relatedLogs)
                 .build();
     }
 
@@ -477,6 +521,64 @@ public class AdminServiceImpl implements AdminService {
         String message;
         String stackTrace;
         String threadName;
+    }
+
+    /**
+     * 이벤트 그룹 클래스
+     * 같은 스레드에서 1초 이내에 발생한 로그들의 그룹
+     */
+    private static class LogEventGroup {
+        private static final long EVENT_WINDOW_SECONDS = 1;
+        private static final Map<String, Integer> LEVEL_PRIORITY = Map.of(
+                "ERROR", 4, "WARN", 3, "INFO", 2, "DEBUG", 1, "TRACE", 0
+        );
+
+        String threadName;
+        LocalDateTime startTime;
+        LocalDateTime lastTime;
+        String representativeLevel;
+        List<RawLogEntry> entries = new ArrayList<>();
+
+        LogEventGroup(RawLogEntry firstEntry) {
+            this.threadName = firstEntry.threadName;
+            this.startTime = firstEntry.timestamp;
+            this.lastTime = firstEntry.timestamp;
+            this.representativeLevel = firstEntry.level;
+            this.entries.add(firstEntry);
+        }
+
+        boolean shouldInclude(RawLogEntry entry) {
+            // 같은 스레드이고, 마지막 로그로부터 1초 이내면 같은 이벤트
+            if (!threadName.equals(entry.threadName)) return false;
+
+            long secondsDiff = java.time.Duration.between(lastTime, entry.timestamp).getSeconds();
+            return secondsDiff <= EVENT_WINDOW_SECONDS;
+        }
+
+        void addEntry(RawLogEntry entry) {
+            entries.add(entry);
+            lastTime = entry.timestamp;
+
+            // 더 심각한 레벨로 업데이트
+            int currentPriority = LEVEL_PRIORITY.getOrDefault(representativeLevel, 0);
+            int newPriority = LEVEL_PRIORITY.getOrDefault(entry.level, 0);
+            if (newPriority > currentPriority) {
+                representativeLevel = entry.level;
+            }
+        }
+
+        RawLogEntry getRepresentativeEntry() {
+            // ERROR 레벨 로그가 있으면 그것을 대표로, 없으면 첫 번째
+            return entries.stream()
+                    .filter(e -> "ERROR".equals(e.level))
+                    .findFirst()
+                    .orElse(entries.get(0));
+        }
+
+        String getSignature() {
+            RawLogEntry rep = getRepresentativeEntry();
+            return representativeLevel + "|" + rep.logger + "|" + rep.message;
+        }
     }
 
     @Override
