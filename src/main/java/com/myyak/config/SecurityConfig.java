@@ -33,6 +33,8 @@ public class SecurityConfig {
             "/api/admin/**",
             // 데이터 배치 (관리자 전용)
             "/api/drugs/batch/**",
+            // 에러 로그 (비로그인 상태에서도 전송 가능)
+            "/api/error-log/**",
             // 정적 파일 (업로드된 이미지)
             "/uploads/**",
             // Swagger

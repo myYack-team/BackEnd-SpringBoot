@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>클라이언트 에러 로그 - 마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .date-input {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            font-size: 1rem;
+        }
+        .file-list {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .file-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            background: white;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+        .file-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .file-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .log-viewer {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 70vh;
+            overflow-y: auto;
+            line-height: 1.5;
+        }
+        .log-viewer .error {
+            color: #f14c4c;
+        }
+        .log-viewer .warn {
+            color: #cca700;
+        }
+        .log-viewer .info {
+            color: #3794ff;
+        }
+        .log-viewer .separator {
+            color: #6a9955;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray-500);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+        .stat-card.error .stat-value { color: #dc2626; }
+        .stat-card.warn .stat-value { color: #d97706; }
+        .stat-card.info .stat-value { color: #2563eb; }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="마이약" class="logo-img">
+                <span>관리자</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">홈</a>
+                <a href="data-sync.html" class="nav-link">데이터 수집</a>
+                <a href="supplements.html" class="nav-link">영양제</a>
+                <a href="users.html" class="nav-link">가입자</a>
+                <a href="server-status.html" class="nav-link">서버 상태</a>
+                <a href="client-errors.html" class="nav-link active">클라이언트 에러</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+        <div class="page-header">
+            <h1 class="page-title">클라이언트 에러 로그</h1>
+            <p class="page-desc">모바일 앱에서 발생한 에러 로그를 확인합니다.</p>
+        </div>
+
+        <!-- 통계 -->
+        <div class="stats" id="stats">
+            <div class="stat-card error">
+                <div class="stat-value" id="errorCount">-</div>
+                <div class="stat-label">ERROR</div>
+            </div>
+            <div class="stat-card warn">
+                <div class="stat-value" id="warnCount">-</div>
+                <div class="stat-label">WARN</div>
+            </div>
+            <div class="stat-card info">
+                <div class="stat-value" id="infoCount">-</div>
+                <div class="stat-label">INFO</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <!-- 컨트롤 -->
+            <div class="controls">
+                <label>날짜 선택:</label>
+                <input type="date" id="dateInput" class="date-input">
+                <button class="btn btn-primary" onclick="loadLogs()">조회</button>
+                <button class="btn btn-secondary" onclick="loadToday()">오늘</button>
+            </div>
+
+            <!-- 파일 목록 -->
+            <div class="file-list" id="fileList">
+                <!-- 동적으로 생성 -->
+            </div>
+
+            <!-- 로그 뷰어 -->
+            <div id="logViewer" class="log-viewer">
+                <div class="empty-state">날짜를 선택하거나 파일을 클릭하여 로그를 확인하세요.</div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script>
+        const API_BASE = '/api/error-log';
+        let currentDate = new Date().toISOString().split('T')[0];
+
+        // 페이지 로드 시
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('dateInput').value = currentDate;
+            loadFileList();
+            loadToday();
+        });
+
+        // 파일 목록 로드
+        async function loadFileList() {
+            try {
+                const response = await fetch(`${API_BASE}/files?days=14`);
+                const data = await response.json();
+
+                if (data.isSuccess && data.result) {
+                    const fileList = document.getElementById('fileList');
+                    fileList.innerHTML = data.result.map(file => {
+                        const date = file.replace('client-error-', '').replace('.log', '');
+                        return `<button class="file-btn" onclick="loadLogByFile('${date}')">${date}</button>`;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('파일 목록 로드 실패:', error);
+            }
+        }
+
+        // 오늘 로그 로드
+        function loadToday() {
+            currentDate = new Date().toISOString().split('T')[0];
+            document.getElementById('dateInput').value = currentDate;
+            loadLogs();
+        }
+
+        // 파일 클릭으로 로드
+        function loadLogByFile(date) {
+            currentDate = date;
+            document.getElementById('dateInput').value = date;
+            loadLogs();
+
+            // 활성 버튼 표시
+            document.querySelectorAll('.file-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === date) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // 로그 로드
+        async function loadLogs() {
+            const date = document.getElementById('dateInput').value;
+            if (!date) {
+                alert('날짜를 선택하세요.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}?date=${date}`);
+                const data = await response.json();
+
+                const viewer = document.getElementById('logViewer');
+
+                if (data.isSuccess && data.result) {
+                    const content = data.result;
+
+                    if (content === '해당 날짜의 로그 파일이 없습니다.') {
+                        viewer.innerHTML = `<div class="empty-state">${content}</div>`;
+                        updateStats(content);
+                        return;
+                    }
+
+                    // 로그 하이라이팅
+                    const highlighted = content
+                        .replace(/\[ERROR\]/g, '<span class="error">[ERROR]</span>')
+                        .replace(/\[WARN\]/g, '<span class="warn">[WARN]</span>')
+                        .replace(/\[INFO\]/g, '<span class="info">[INFO]</span>')
+                        .replace(/={40}/g, '<span class="separator">========================================</span>');
+
+                    viewer.innerHTML = highlighted;
+                    updateStats(content);
+                } else {
+                    viewer.innerHTML = `<div class="empty-state">로그를 불러올 수 없습니다.</div>`;
+                }
+            } catch (error) {
+                console.error('로그 로드 실패:', error);
+                document.getElementById('logViewer').innerHTML =
+                    `<div class="empty-state">로그 로드 중 오류 발생: ${error.message}</div>`;
+            }
+        }
+
+        // 통계 업데이트
+        function updateStats(content) {
+            const errorCount = (content.match(/\[ERROR\]/g) || []).length;
+            const warnCount = (content.match(/\[WARN\]/g) || []).length;
+            const infoCount = (content.match(/\[INFO\]/g) || []).length;
+
+            document.getElementById('errorCount').textContent = errorCount;
+            document.getElementById('warnCount').textContent = warnCount;
+            document.getElementById('infoCount').textContent = infoCount;
+        }
+    </script>
+</body>
+</html>
