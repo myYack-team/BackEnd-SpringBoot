@@ -63,9 +63,17 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # 9. JAR 파일 및 설정 파일 전송
-      - name: Deploy to server
+      # 9. 기존 JAR 백업 및 새 JAR 전송
+      - name: Backup and deploy JAR
         run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            # 기존 JAR 백업 (롤백용)
+            if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar ]; then
+              cp /home/${{ secrets.EC2_USER }}/myyak-server.jar /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup
+              echo "기존 JAR 백업 완료: myyak-server.jar.backup"
+            fi
+          ENDSSH
+
           # JAR 파일 전송
           scp build/libs/myyak-server-*.jar ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
 
@@ -92,6 +100,7 @@ jobs:
 
       # 11. 헬스체크 (최대 90초 대기)
       - name: Health check
+        id: healthcheck
         run: |
           echo "Waiting for application to start..."
           for i in {1..6}; do
@@ -108,7 +117,39 @@ jobs:
           echo "Health check failed after 90 seconds"
           exit 1
 
-      # 12. 실패 시 로그 확인
+      # 12. 헬스체크 실패 시 롤백
+      - name: Rollback on failure
+        if: failure() && steps.healthcheck.outcome == 'failure'
+        run: |
+          echo "헬스체크 실패! 롤백을 시작합니다..."
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            # 백업 파일 존재 확인
+            if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup ]; then
+              echo "백업 파일로 롤백 중..."
+
+              # 새 버전 중지
+              sudo systemctl stop myyak || true
+
+              # 백업 파일로 복원
+              cp /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup /home/${{ secrets.EC2_USER }}/myyak-server.jar
+
+              # 이전 버전으로 재시작
+              sudo systemctl start myyak
+
+              # 롤백 후 상태 확인
+              sleep 5
+              if sudo systemctl is-active --quiet myyak; then
+                echo "롤백 성공! 이전 버전으로 복구되었습니다."
+              else
+                echo "롤백 후에도 서버 시작 실패"
+                sudo journalctl -u myyak -n 50 --no-pager
+              fi
+            else
+              echo "백업 파일이 없습니다. 롤백 불가."
+            fi
+          ENDSSH
+
+      # 13. 실패 시 로그 확인
       - name: Check logs on failure
         if: failure()
         run: |

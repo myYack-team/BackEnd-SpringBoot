@@ -32,6 +32,7 @@ import java.lang.management.OperatingSystemMXBean;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -52,9 +53,9 @@ public class AdminServiceImpl implements AdminService {
     private final StorageClient storageClient;
     private final LlmClient llmClient;
 
-    // 서버 로그 형식: 2026-01-08T04:17:25.346Z  INFO 16927 --- [myyak-server] [           main] c.m.Class : Message
+    // 서버 로그 형식: 2026-01-09T11:44:03.382+09:00  INFO 31804 --- [myyak-server] [           main] c.m.Class : Message
     private static final Pattern LOG_PATTERN = Pattern.compile(
-            "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+Z?)\\s+" +
+            "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d+[^\\s]*)\\s+" +
             "(\\w+)\\s+" +
             "\\d+\\s+---\\s+" +
             "\\[[^\\]]+\\]\\s+" +  // [myyak-server] 부분
@@ -62,7 +63,7 @@ public class AdminServiceImpl implements AdminService {
             "([^:]+)\\s*:\\s*(.*)");
 
     private static final DateTimeFormatter LOG_DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
     @Value("${app.version:0.0.1-SNAPSHOT}")
     private String appVersion;
@@ -353,7 +354,8 @@ public class AdminServiceImpl implements AdminService {
 
                         LocalDateTime parsedTime;
                         try {
-                            parsedTime = LocalDateTime.parse(timestamp, LOG_DATE_FORMATTER);
+                            OffsetDateTime odt = OffsetDateTime.parse(timestamp, LOG_DATE_FORMATTER);
+                            parsedTime = odt.toLocalDateTime();
                         } catch (Exception e) {
                             parsedTime = LocalDateTime.now();
                         }

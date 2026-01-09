@@ -9,12 +9,13 @@ import com.myyak.web.dto.AuthDTO.KakaoUserInfo;
 public interface KakaoOAuthService {
 
     /**
-     * 카카오 인가 URL 생성 (동적 redirect_uri)
+     * 카카오 인가 URL 생성 (동적 redirect_uri + state)
      *
      * @param baseUrl 요청의 base URL (예: http://192.168.45.32:8080)
+     * @param state OAuth state 파라미터 (CSRF 방지 및 앱 리다이렉트 URI 전달용)
      * @return 카카오 로그인 페이지 URL
      */
-    String getAuthorizationUrl(String baseUrl);
+    String getAuthorizationUrl(String baseUrl, String state);
 
     /**
      * 인가 코드로 카카오 액세스 토큰 교환

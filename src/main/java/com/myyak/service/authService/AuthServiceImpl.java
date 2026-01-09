@@ -34,8 +34,8 @@ public class AuthServiceImpl implements AuthService {
     private final JwtProvider jwtProvider;
 
     @Override
-    public String getKakaoAuthorizationUrl(String baseUrl) {
-        return kakaoOAuthService.getAuthorizationUrl(baseUrl);
+    public String getKakaoAuthorizationUrl(String baseUrl, String state) {
+        return kakaoOAuthService.getAuthorizationUrl(baseUrl, state);
     }
 
     @Override
