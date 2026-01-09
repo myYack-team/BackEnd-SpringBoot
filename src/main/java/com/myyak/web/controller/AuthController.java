@@ -53,16 +53,23 @@ public class AuthController {
     }
 
     /**
-     * 요청에서 base URL 추출 (예: http://192.168.45.32:8080)
+     * 요청에서 base URL 추출 (예: https://api.myyak.xyz)
+     * Nginx 리버스 프록시 환경에서 X-Forwarded-Proto 헤더를 우선 확인
      */
     private String getBaseUrl(HttpServletRequest request) {
-        String scheme = request.getScheme();
+        // X-Forwarded-Proto 헤더 확인 (Nginx 프록시 환경)
+        String forwardedProto = request.getHeader("X-Forwarded-Proto");
+        String scheme = (forwardedProto != null && !forwardedProto.isBlank())
+                ? forwardedProto
+                : request.getScheme();
+
         String serverName = request.getServerName();
         int serverPort = request.getServerPort();
 
         // 기본 포트는 생략
         if ((scheme.equals("http") && serverPort == 80) ||
-            (scheme.equals("https") && serverPort == 443)) {
+            (scheme.equals("https") && serverPort == 443) ||
+            forwardedProto != null) {  // 프록시 환경에서는 포트 생략
             return scheme + "://" + serverName;
         }
         return scheme + "://" + serverName + ":" + serverPort;
