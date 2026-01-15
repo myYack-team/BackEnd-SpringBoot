@@ -157,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
 
         String name = profile != null ? profile.getNickname() : "사용자";
         String email = account != null ? account.getEmail() : null;
-        String profileImage = profile != null ? profile.getProfileImageUrl() : null;
+        String profileImage = profile != null ? toHttpsUrl(profile.getProfileImageUrl()) : null;
 
         User user = User.builder()
                 .kakaoId(kakaoId)
@@ -175,7 +175,7 @@ public class AuthServiceImpl implements AuthService {
 
         String name = profile != null ? profile.getNickname() : user.getName();
         String email = account != null ? account.getEmail() : null;
-        String profileImage = profile != null ? profile.getProfileImageUrl() : null;
+        String profileImage = profile != null ? toHttpsUrl(profile.getProfileImageUrl()) : null;
 
         user.updateKakaoInfo(name, email, profileImage);
     }
@@ -211,5 +211,15 @@ public class AuthServiceImpl implements AuthService {
                 .fontSize(user.getFontSize())
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * HTTP URL을 HTTPS로 변환 (카카오 CDN은 HTTPS 지원)
+     */
+    private String toHttpsUrl(String url) {
+        if (url != null && url.startsWith("http://")) {
+            return url.replace("http://", "https://");
+        }
+        return url;
     }
 }
