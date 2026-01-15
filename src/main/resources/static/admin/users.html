@@ -103,6 +103,32 @@
                 </div>
             </div>
         </div>
+
+        <!-- 사용자 목록 -->
+        <div class="card">
+            <div class="card-header">
+                <span>📋 사용자 목록</span>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="text" id="userSearch" placeholder="이름, 이메일, 카카오ID 검색"
+                           style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; width: 200px;">
+                    <button id="searchBtn" class="btn btn-secondary" style="padding: 0.5rem 1rem;">검색</button>
+                    <button id="deleteSelectedBtn" class="btn btn-danger" style="padding: 0.5rem 1rem;" disabled>
+                        선택 삭제 (<span id="selectedCount">0</span>명)
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="userListContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>로딩 중...</span>
+                    </div>
+                </div>
+                <!-- 페이지네이션 -->
+                <div id="userPagination" class="pagination" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem;">
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="js/api.js"></script>

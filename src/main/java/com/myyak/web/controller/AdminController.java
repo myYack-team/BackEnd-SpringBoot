@@ -120,4 +120,31 @@ public class AdminController {
         log.info("AI 채팅 요청: userMessage={}", request.getUserMessage());
         return ApiResponse.onSuccess(adminService.chat(request));
     }
+
+    @Operation(
+            summary = "사용자 목록 조회",
+            description = "전체 사용자 목록을 페이징하여 조회합니다. 이름, 이메일, 카카오ID로 검색 가능합니다."
+    )
+    @GetMapping("/users")
+    public ApiResponse<AdminResponseDTO.UserList> getUserList(
+            @Parameter(description = "페이지 번호 (0부터 시작)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "검색어 (이름, 이메일, 카카오ID)") @RequestParam(required = false) String search) {
+        return ApiResponse.onSuccess(adminService.getUserList(page, size, search));
+    }
+
+    @Operation(
+            summary = "사용자 일괄 탈퇴 (관리자 전용)",
+            description = """
+                선택한 사용자들을 일괄 탈퇴 처리합니다.
+                각 사용자의 모든 관련 데이터(약물, 영양제, 복용기록, 알림 등)가 함께 삭제됩니다.
+                카카오 연동 해제도 함께 처리됩니다.
+                """
+    )
+    @DeleteMapping("/users/batch")
+    public ApiResponse<AdminResponseDTO.BatchDeleteUsersResult> batchDeleteUsers(
+            @Valid @RequestBody AdminRequestDTO.BatchDeleteUsersRequest request) {
+        log.info("관리자 사용자 일괄 탈퇴 요청: {} 명", request.getUserIds().size());
+        return ApiResponse.onSuccess(adminService.batchDeleteUsers(request));
+    }
 }

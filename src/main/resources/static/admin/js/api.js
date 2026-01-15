@@ -32,10 +32,15 @@ const API = {
     /**
      * DELETE 요청
      */
-    async delete(endpoint) {
-        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    async delete(endpoint, data = null) {
+        const options = {
             method: 'DELETE',
-        });
+        };
+        if (data) {
+            options.headers = { 'Content-Type': 'application/json' };
+            options.body = JSON.stringify(data);
+        }
+        const response = await fetch(`${this.baseUrl}${endpoint}`, options);
         return this.handleResponse(response);
     },
 
@@ -217,6 +222,27 @@ const AdminAPI = {
      */
     chat(request) {
         return API.post('/admin/logs/chat', request);
+    },
+
+    /**
+     * 사용자 목록 조회
+     */
+    getUserList(page = 0, size = 20, search = null) {
+        const params = new URLSearchParams({
+            page: page,
+            size: size,
+        });
+        if (search) {
+            params.append('search', search);
+        }
+        return API.get(`/admin/users?${params}`);
+    },
+
+    /**
+     * 사용자 일괄 탈퇴
+     */
+    batchDeleteUsers(userIds) {
+        return API.delete('/admin/users/batch', { userIds: userIds });
     },
 };
 

@@ -2,14 +2,47 @@
  * 가입자 통계 페이지 로직
  */
 const Users = {
+    currentPage: 0,
+    pageSize: 20,
+    searchKeyword: '',
+    selectedUserIds: new Set(),
+
     /**
      * 초기화
      */
     async init() {
+        this.bindEvents();
         await Promise.all([
             this.loadUserStats(),
             this.loadDailySignups(),
+            this.loadUserList(),
         ]);
+    },
+
+    /**
+     * 이벤트 바인딩
+     */
+    bindEvents() {
+        // 검색 버튼
+        document.getElementById('searchBtn')?.addEventListener('click', () => {
+            this.searchKeyword = document.getElementById('userSearch').value.trim();
+            this.currentPage = 0;
+            this.loadUserList();
+        });
+
+        // 검색 입력 엔터
+        document.getElementById('userSearch')?.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.searchKeyword = document.getElementById('userSearch').value.trim();
+                this.currentPage = 0;
+                this.loadUserList();
+            }
+        });
+
+        // 선택 삭제 버튼
+        document.getElementById('deleteSelectedBtn')?.addEventListener('click', () => {
+            this.deleteSelectedUsers();
+        });
     },
 
     /**
@@ -195,6 +228,216 @@ const Users = {
                 }).join('')}
             </div>
         `;
+    },
+
+    /**
+     * 사용자 목록 로드
+     */
+    async loadUserList() {
+        const container = document.getElementById('userListContainer');
+        container.innerHTML = '<div class="loading"><div class="spinner"></div><span>로딩 중...</span></div>';
+
+        try {
+            const result = await AdminAPI.getUserList(this.currentPage, this.pageSize, this.searchKeyword || null);
+            this.renderUserList(result);
+            this.renderPagination(result);
+        } catch (error) {
+            console.error('사용자 목록 로드 실패:', error);
+            container.innerHTML = `<div class="text-danger text-center">로드 실패: ${error.message}</div>`;
+        }
+    },
+
+    /**
+     * 사용자 목록 렌더링
+     */
+    renderUserList(result) {
+        const container = document.getElementById('userListContainer');
+
+        if (!result.users || result.users.length === 0) {
+            container.innerHTML = '<div class="text-muted text-center" style="padding: 2rem;">사용자가 없습니다.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="data-table" style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: var(--gray-100); text-align: left;">
+                        <th style="padding: 0.75rem; width: 40px;">
+                            <input type="checkbox" id="selectAllUsers" title="전체 선택">
+                        </th>
+                        <th style="padding: 0.75rem;">ID</th>
+                        <th style="padding: 0.75rem;">이름</th>
+                        <th style="padding: 0.75rem;">이메일</th>
+                        <th style="padding: 0.75rem;">성별</th>
+                        <th style="padding: 0.75rem;">연령대</th>
+                        <th style="padding: 0.75rem;">약물</th>
+                        <th style="padding: 0.75rem;">영양제</th>
+                        <th style="padding: 0.75rem;">가입일</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${result.users.map(user => this.renderUserRow(user)).join('')}
+                </tbody>
+            </table>
+        `;
+
+        // 전체 선택 체크박스 이벤트
+        document.getElementById('selectAllUsers')?.addEventListener('change', (e) => {
+            const checkboxes = container.querySelectorAll('.user-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = e.target.checked;
+                const userId = parseInt(cb.dataset.userId);
+                if (e.target.checked) {
+                    this.selectedUserIds.add(userId);
+                } else {
+                    this.selectedUserIds.delete(userId);
+                }
+            });
+            this.updateSelectedCount();
+        });
+
+        // 개별 체크박스 이벤트
+        container.querySelectorAll('.user-checkbox').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const userId = parseInt(e.target.dataset.userId);
+                if (e.target.checked) {
+                    this.selectedUserIds.add(userId);
+                } else {
+                    this.selectedUserIds.delete(userId);
+                }
+                this.updateSelectedCount();
+            });
+        });
+    },
+
+    /**
+     * 사용자 행 렌더링
+     */
+    renderUserRow(user) {
+        const genderLabels = { 'MALE': '남성', 'FEMALE': '여성' };
+        const createdAt = user.createdAt ? new Date(user.createdAt).toLocaleDateString('ko-KR') : '-';
+
+        return `
+            <tr style="border-bottom: 1px solid var(--gray-200);">
+                <td style="padding: 0.75rem;">
+                    <input type="checkbox" class="user-checkbox" data-user-id="${user.id}"
+                           ${this.selectedUserIds.has(user.id) ? 'checked' : ''}>
+                </td>
+                <td style="padding: 0.75rem;">${user.id}</td>
+                <td style="padding: 0.75rem;">${user.name || '-'}</td>
+                <td style="padding: 0.75rem; font-size: 0.875rem;">${user.email || '-'}</td>
+                <td style="padding: 0.75rem;">${genderLabels[user.gender] || '-'}</td>
+                <td style="padding: 0.75rem;">${user.ageRange || '-'}</td>
+                <td style="padding: 0.75rem;">${user.medicationCount}</td>
+                <td style="padding: 0.75rem;">${user.supplementCount}</td>
+                <td style="padding: 0.75rem; font-size: 0.875rem;">${createdAt}</td>
+            </tr>
+        `;
+    },
+
+    /**
+     * 페이지네이션 렌더링
+     */
+    renderPagination(result) {
+        const container = document.getElementById('userPagination');
+        if (!container) return;
+
+        if (result.totalPages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+
+        let html = '';
+
+        // 이전 버튼
+        html += `<button class="btn btn-secondary" ${this.currentPage === 0 ? 'disabled' : ''}
+                         onclick="Users.goToPage(${this.currentPage - 1})">&lt;</button>`;
+
+        // 페이지 번호들
+        const startPage = Math.max(0, this.currentPage - 2);
+        const endPage = Math.min(result.totalPages - 1, this.currentPage + 2);
+
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === this.currentPage;
+            html += `<button class="btn ${isActive ? 'btn-primary' : 'btn-secondary'}"
+                             onclick="Users.goToPage(${i})">${i + 1}</button>`;
+        }
+
+        // 다음 버튼
+        html += `<button class="btn btn-secondary" ${this.currentPage >= result.totalPages - 1 ? 'disabled' : ''}
+                         onclick="Users.goToPage(${this.currentPage + 1})">&gt;</button>`;
+
+        container.innerHTML = html;
+    },
+
+    /**
+     * 페이지 이동
+     */
+    goToPage(page) {
+        this.currentPage = page;
+        this.loadUserList();
+    },
+
+    /**
+     * 선택 개수 업데이트
+     */
+    updateSelectedCount() {
+        const countSpan = document.getElementById('selectedCount');
+        const deleteBtn = document.getElementById('deleteSelectedBtn');
+        if (countSpan) {
+            countSpan.textContent = this.selectedUserIds.size;
+        }
+        if (deleteBtn) {
+            deleteBtn.disabled = this.selectedUserIds.size === 0;
+        }
+    },
+
+    /**
+     * 선택된 사용자 삭제
+     */
+    async deleteSelectedUsers() {
+        if (this.selectedUserIds.size === 0) {
+            alert('선택된 사용자가 없습니다.');
+            return;
+        }
+
+        const confirmed = confirm(
+            `선택한 ${this.selectedUserIds.size}명의 사용자를 탈퇴 처리하시겠습니까?\n\n` +
+            `⚠️ 주의: 사용자의 모든 데이터(약물, 영양제, 복용기록 등)가 삭제되며 복구할 수 없습니다.`
+        );
+
+        if (!confirmed) return;
+
+        const deleteBtn = document.getElementById('deleteSelectedBtn');
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = '삭제 중...';
+
+        try {
+            const userIds = Array.from(this.selectedUserIds);
+            const result = await AdminAPI.batchDeleteUsers(userIds);
+
+            alert(
+                `탈퇴 처리 완료\n\n` +
+                `요청: ${result.requestedCount}명\n` +
+                `성공: ${result.deletedCount}명\n` +
+                `실패: ${result.failedUserIds?.length || 0}명`
+            );
+
+            // 선택 초기화 및 목록 새로고침
+            this.selectedUserIds.clear();
+            this.updateSelectedCount();
+            await Promise.all([
+                this.loadUserList(),
+                this.loadUserStats(),
+            ]);
+
+        } catch (error) {
+            console.error('사용자 삭제 실패:', error);
+            alert('삭제 실패: ' + error.message);
+        } finally {
+            deleteBtn.disabled = this.selectedUserIds.size === 0;
+            deleteBtn.innerHTML = `선택 삭제 (<span id="selectedCount">${this.selectedUserIds.size}</span>명)`;
+        }
     },
 };
 

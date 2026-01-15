@@ -177,4 +177,47 @@ public class AdminResponseDTO {
         private String response;
         private LocalDateTime timestamp;
     }
+
+    /**
+     * 사용자 목록 응답
+     */
+    @Getter
+    @Builder
+    public static class UserList {
+        private List<UserItem> users;
+        private int page;
+        private int size;
+        private int totalPages;
+        private long totalElements;
+    }
+
+    /**
+     * 사용자 아이템
+     */
+    @Getter
+    @Builder
+    public static class UserItem {
+        private Long id;
+        private String kakaoId;
+        private String name;
+        private String email;
+        private String gender;
+        private String ageRange;
+        private int medicationCount;
+        private int supplementCount;
+        private LocalDateTime createdAt;
+        private LocalDateTime lastLoginAt;
+    }
+
+    /**
+     * 사용자 일괄 탈퇴 결과
+     */
+    @Getter
+    @Builder
+    public static class BatchDeleteUsersResult {
+        private int requestedCount;
+        private int deletedCount;
+        private List<Long> deletedUserIds;
+        private List<Long> failedUserIds;
+    }
 }

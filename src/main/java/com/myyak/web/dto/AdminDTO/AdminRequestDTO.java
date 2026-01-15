@@ -61,4 +61,15 @@ public class AdminRequestDTO {
         private String role;  // "user" or "assistant"
         private String content;
     }
+
+    /**
+     * 사용자 일괄 탈퇴 요청
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class BatchDeleteUsersRequest {
+        @NotNull(message = "삭제할 사용자 ID 목록은 필수입니다")
+        private List<Long> userIds;
+    }
 }

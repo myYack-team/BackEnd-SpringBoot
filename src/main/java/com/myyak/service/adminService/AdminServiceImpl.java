@@ -9,10 +9,12 @@ import com.myyak.domain.enums.SignupPurpose;
 import com.myyak.domain.enums.SupplementTag;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.SupplementRepository;
+import com.myyak.repository.UserMedicationRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.repository.UserSupplementRepository;
 import com.myyak.service.llm.LlmClient;
 import com.myyak.service.storage.StorageClient;
+import com.myyak.service.userService.UserService;
 import com.myyak.web.dto.AdminDTO.AdminRequestDTO;
 import com.myyak.web.dto.AdminDTO.AdminResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,8 @@ public class AdminServiceImpl implements AdminService {
     private final DataSource dataSource;
     private final StorageClient storageClient;
     private final LlmClient llmClient;
+    private final UserService userService;
+    private final UserMedicationRepository userMedicationRepository;
 
     // 서버 로그 형식: 2026-01-09T11:44:03.382+09:00  INFO 31804 --- [myyak-server] [           main] c.m.Class : Message
     private static final Pattern LOG_PATTERN = Pattern.compile(
@@ -628,5 +632,79 @@ public class AdminServiceImpl implements AdminService {
                     .timestamp(LocalDateTime.now())
                     .build();
         }
+    }
+
+    @Override
+    public AdminResponseDTO.UserList getUserList(int page, int size, String search) {
+        PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<User> userPage;
+        if (search != null && !search.isBlank()) {
+            String trimmedSearch = search.trim();
+            userPage = userRepository.searchByKeyword(trimmedSearch, pageRequest);
+        } else {
+            userPage = userRepository.findAll(pageRequest);
+        }
+
+        List<AdminResponseDTO.UserItem> items = userPage.getContent().stream()
+                .map(this::toUserItem)
+                .collect(Collectors.toList());
+
+        return AdminResponseDTO.UserList.builder()
+                .users(items)
+                .page(page)
+                .size(size)
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AdminResponseDTO.BatchDeleteUsersResult batchDeleteUsers(AdminRequestDTO.BatchDeleteUsersRequest request) {
+        List<Long> userIds = request.getUserIds();
+        log.info("관리자 사용자 일괄 탈퇴 요청: {} 명", userIds.size());
+
+        List<Long> deletedUserIds = new ArrayList<>();
+        List<Long> failedUserIds = new ArrayList<>();
+
+        for (Long userId : userIds) {
+            try {
+                userService.deleteMe(userId);
+                deletedUserIds.add(userId);
+                log.info("사용자 탈퇴 완료: userId={}", userId);
+            } catch (Exception e) {
+                log.error("사용자 탈퇴 실패: userId={}, error={}", userId, e.getMessage());
+                failedUserIds.add(userId);
+            }
+        }
+
+        log.info("일괄 탈퇴 완료: 요청={}, 성공={}, 실패={}",
+                userIds.size(), deletedUserIds.size(), failedUserIds.size());
+
+        return AdminResponseDTO.BatchDeleteUsersResult.builder()
+                .requestedCount(userIds.size())
+                .deletedCount(deletedUserIds.size())
+                .deletedUserIds(deletedUserIds)
+                .failedUserIds(failedUserIds)
+                .build();
+    }
+
+    private AdminResponseDTO.UserItem toUserItem(User user) {
+        int medicationCount = userMedicationRepository.findByUser(user).size();
+        int supplementCount = userSupplementRepository.findByUser(user).size();
+
+        return AdminResponseDTO.UserItem.builder()
+                .id(user.getId())
+                .kakaoId(user.getKakaoId())
+                .name(user.getName())
+                .email(user.getEmail())
+                .gender(user.getGender() != null ? user.getGender().name() : null)
+                .ageRange(user.getAgeRange())
+                .medicationCount(medicationCount)
+                .supplementCount(supplementCount)
+                .createdAt(user.getCreatedAt())
+                .lastLoginAt(user.getUpdatedAt())
+                .build();
     }
 }

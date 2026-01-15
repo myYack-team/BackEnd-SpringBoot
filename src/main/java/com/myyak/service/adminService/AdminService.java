@@ -50,4 +50,14 @@ public interface AdminService {
      * AI 채팅 (에러 분석)
      */
     AdminResponseDTO.ChatResponse chat(AdminRequestDTO.ChatRequest request);
+
+    /**
+     * 사용자 목록 조회 (페이징, 검색)
+     */
+    AdminResponseDTO.UserList getUserList(int page, int size, String search);
+
+    /**
+     * 사용자 일괄 탈퇴 (관리자 전용)
+     */
+    AdminResponseDTO.BatchDeleteUsersResult batchDeleteUsers(AdminRequestDTO.BatchDeleteUsersRequest request);
 }
