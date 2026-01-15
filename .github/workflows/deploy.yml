@@ -162,20 +162,25 @@ jobs:
         run: |
           echo "헬스체크 실패! 롤백을 시작합니다..."
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
-            if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup ]; then
+            if [ -f /home/ubuntu/myyak-server.jar.backup ]; then
               echo "백업 파일로 롤백 중..."
+
+              # 자동 재시작 방지를 위해 서비스 일시 비활성화
+              sudo systemctl disable myyak
 
               # 새 버전 중지
               sudo systemctl stop myyak || true
+              sleep 3
 
               # 백업 파일로 복원
-              cp /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup /home/${{ secrets.EC2_USER }}/myyak-server.jar
+              cp /home/ubuntu/myyak-server.jar.backup /home/ubuntu/myyak-server.jar
 
-              # 이전 버전으로 재시작
+              # 서비스 다시 활성화 및 시작
+              sudo systemctl enable myyak
               sudo systemctl start myyak
 
               # 롤백 후 상태 확인
-              sleep 5
+              sleep 10
               if sudo systemctl is-active --quiet myyak; then
                 echo "롤백 성공! 이전 버전으로 복구되었습니다."
               else
