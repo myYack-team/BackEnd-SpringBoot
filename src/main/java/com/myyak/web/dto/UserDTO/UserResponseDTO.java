@@ -21,6 +21,7 @@ public class UserResponseDTO {
         private Long id;
         private String kakaoId;
         private String name;
+        private String email;
         private String profileImage;
         private FontSize fontSize;
         private LocalDateTime createdAt;

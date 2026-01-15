@@ -1,5 +1,6 @@
 package com.myyak.web.dto.AuthDTO;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.myyak.domain.enums.FontSize;
 import com.myyak.domain.enums.Gender;
 import lombok.AllArgsConstructor;
@@ -26,6 +27,7 @@ public class AuthResponseDTO {
         private String refreshToken;
         private Long accessTokenExpiresIn;  // 만료까지 남은 시간 (밀리초)
         private UserInfo user;
+        @JsonProperty("isNewUser")
         private boolean isNewUser;  // 신규 사용자 여부 (온보딩 필요)
     }
 
@@ -60,5 +62,10 @@ public class AuthResponseDTO {
         private String signupPurposes;
         private FontSize fontSize;
         private LocalDateTime createdAt;
+
+        // 클라이언트 하위 호환용 getter (name을 nickname으로도 반환)
+        public String getNickname() {
+            return name;
+        }
     }
 }

@@ -10,6 +10,7 @@ public class UserConverter {
                 .id(user.getId())
                 .kakaoId(user.getKakaoId())
                 .name(user.getName())
+                .email(user.getEmail())
                 .profileImage(user.getProfileImage())
                 .fontSize(user.getFontSize())
                 .createdAt(user.getCreatedAt())
