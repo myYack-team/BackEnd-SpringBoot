@@ -7,6 +7,7 @@ import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
 import com.myyak.domain.UserSupplement;
 import com.myyak.repository.*;
+import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
 import com.myyak.web.dto.UserDTO.UserRequestDTO;
 import com.myyak.web.dto.UserDTO.UserResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class UserServiceImpl implements UserService {
     private final ReminderRepository reminderRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final KakaoOAuthService kakaoOAuthService;
 
     @Override
     public User findById(Long userId) {
@@ -62,6 +64,12 @@ public class UserServiceImpl implements UserService {
     public void deleteMe(Long userId) {
         User user = findById(userId);
         log.info("회원 탈퇴 시작 - userId: {}, name: {}", userId, user.getName());
+
+        // 0. 카카오 연결 끊기 (Admin API 사용)
+        String kakaoId = user.getKakaoId();
+        if (kakaoId != null && !kakaoId.isBlank() && !kakaoId.startsWith("test_")) {
+            kakaoOAuthService.unlinkUserByAdmin(kakaoId);
+        }
 
         // 1. 사용자의 약물 목록 조회
         List<UserMedication> medications = userMedicationRepository.findByUser(user);

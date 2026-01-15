@@ -32,14 +32,17 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
     private final String clientId;
     private final String clientSecret;
     private final String redirectUri;
+    private final String adminKey;
 
     public KakaoOAuthServiceImpl(
             @Value("${oauth.kakao.client-id}") String clientId,
             @Value("${oauth.kakao.client-secret}") String clientSecret,
-            @Value("${oauth.kakao.redirect-uri}") String redirectUri) {
+            @Value("${oauth.kakao.redirect-uri}") String redirectUri,
+            @Value("${oauth.kakao.admin-key:}") String adminKey) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
         this.redirectUri = redirectUri;
+        this.adminKey = adminKey;
 
         this.kakaoAuthClient = WebClient.builder()
                 .baseUrl(KAKAO_AUTH_URL)
@@ -153,6 +156,89 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
         } catch (Exception e) {
             log.error("카카오 사용자 정보 조회 실패: {}", e.getMessage());
             throw new GeneralException(ErrorStatus.AUTH_KAKAO_LOGIN_FAILED);
+        }
+    }
+
+    @Override
+    public Long unlinkUser(String accessToken) {
+        log.info("카카오 연결 끊기 시작");
+
+        try {
+            // 카카오 연결 끊기 API 응답: {"id": 123456789}
+            var response = kakaoApiClient.post()
+                    .uri("/v1/user/unlink")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, clientResponse -> {
+                        log.warn("카카오 연결 끊기 4xx 에러: {} (토큰 만료 또는 이미 연결 해제됨)", clientResponse.statusCode());
+                        return Mono.empty(); // 4xx 에러는 무시 (이미 연결 해제된 경우 등)
+                    })
+                    .onStatus(HttpStatusCode::is5xxServerError, clientResponse -> {
+                        log.error("카카오 연결 끊기 5xx 에러: {}", clientResponse.statusCode());
+                        return Mono.empty(); // 5xx 에러도 무시 (탈퇴 자체는 진행)
+                    })
+                    .bodyToMono(java.util.Map.class)
+                    .block();
+
+            if (response != null && response.containsKey("id")) {
+                Long kakaoId = ((Number) response.get("id")).longValue();
+                log.info("카카오 연결 끊기 성공: kakaoId={}", kakaoId);
+                return kakaoId;
+            }
+
+            log.warn("카카오 연결 끊기 응답 없음 (이미 연결 해제되었을 수 있음)");
+            return null;
+
+        } catch (Exception e) {
+            // 연결 끊기 실패해도 탈퇴는 진행되어야 함
+            log.error("카카오 연결 끊기 실패 (탈퇴는 계속 진행): {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    public Long unlinkUserByAdmin(String kakaoId) {
+        log.info("카카오 연결 끊기 (Admin API) 시작 - kakaoId: {}", kakaoId);
+
+        if (adminKey == null || adminKey.isBlank()) {
+            log.warn("카카오 Admin Key가 설정되지 않음. 연결 끊기를 건너뜁니다.");
+            return null;
+        }
+
+        try {
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("target_id_type", "user_id");
+            formData.add("target_id", kakaoId);
+
+            var response = kakaoApiClient.post()
+                    .uri("/v1/user/unlink")
+                    .header("Authorization", "KakaoAK " + adminKey)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(formData))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, clientResponse -> {
+                        log.warn("카카오 연결 끊기 (Admin) 4xx 에러: {} (이미 연결 해제됨)", clientResponse.statusCode());
+                        return Mono.empty();
+                    })
+                    .onStatus(HttpStatusCode::is5xxServerError, clientResponse -> {
+                        log.error("카카오 연결 끊기 (Admin) 5xx 에러: {}", clientResponse.statusCode());
+                        return Mono.empty();
+                    })
+                    .bodyToMono(java.util.Map.class)
+                    .block();
+
+            if (response != null && response.containsKey("id")) {
+                Long unlinkedKakaoId = ((Number) response.get("id")).longValue();
+                log.info("카카오 연결 끊기 (Admin) 성공: kakaoId={}", unlinkedKakaoId);
+                return unlinkedKakaoId;
+            }
+
+            log.warn("카카오 연결 끊기 (Admin) 응답 없음");
+            return null;
+
+        } catch (Exception e) {
+            log.error("카카오 연결 끊기 (Admin) 실패 (탈퇴는 계속 진행): {}", e.getMessage());
+            return null;
         }
     }
 }

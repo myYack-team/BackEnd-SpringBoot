@@ -33,4 +33,26 @@ public interface KakaoOAuthService {
      * @return 카카오 사용자 정보
      */
     KakaoUserInfo getUserInfo(String accessToken);
+
+    /**
+     * 카카오 연결 끊기 - 사용자 토큰 사용 (회원 탈퇴 시 호출)
+     *
+     * 앱과 사용자 카카오 계정의 연결을 끊습니다.
+     * 연결이 끊어지면 해당 사용자의 카카오 토큰은 더 이상 유효하지 않습니다.
+     *
+     * @param accessToken 카카오 액세스 토큰
+     * @return 연결이 끊긴 사용자의 카카오 ID (실패 시 null)
+     */
+    Long unlinkUser(String accessToken);
+
+    /**
+     * 카카오 연결 끊기 - Admin API 사용 (회원 탈퇴 시 호출)
+     *
+     * 앱 Admin 키를 사용하여 사용자 토큰 없이 연결을 끊습니다.
+     * 사용자의 카카오 토큰이 만료되었거나 없는 경우에도 사용 가능합니다.
+     *
+     * @param kakaoId 카카오 사용자 ID
+     * @return 연결이 끊긴 사용자의 카카오 ID (실패 시 null)
+     */
+    Long unlinkUserByAdmin(String kakaoId);
 }
