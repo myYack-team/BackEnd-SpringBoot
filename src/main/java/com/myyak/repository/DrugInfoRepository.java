@@ -60,4 +60,13 @@ public interface DrugInfoRepository extends JpaRepository<DrugInfo, String> {
            "d.ingredientKr as ingredientKr, d.entpName as entpName, d.imageUrl as imageUrl, d.drugType as drugType " +
            "FROM DrugInfo d WHERE d.itemSeq IN :itemSeqs")
     List<DrugInfoSummary> findSummaryProjectionByItemSeqIn(@Param("itemSeqs") List<String> itemSeqs);
+
+    /**
+     * 캐시 초기화용 경량 조회 (검색에 필요한 최소 필드만)
+     * 메모리 최적화: TEXT 컬럼(효능, 부작용 등) 제외
+     *
+     * @return Object[] = {itemSeq, itemName, displayName, drugType, imageUrl}
+     */
+    @Query("SELECT d.itemSeq, d.itemName, d.displayName, d.drugType, d.imageUrl FROM DrugInfo d")
+    List<Object[]> findAllForCache();
 }

@@ -25,6 +25,11 @@ import java.util.concurrent.TimeUnit;
  *
  * OCR 오타에서 "이젤론정"으로 인식되었을 때 자모 기반 편집거리로
  * "아젤론정"을 정확히 찾아낼 수 있습니다.
+ *
+ * [메모리 최적화]
+ * DrugInfo 엔티티 전체(효능, 부작용 등 긴 텍스트)를 캐싱하면 OOM 발생.
+ * 검색에 필요한 최소 필드만 DrugSearchCache에 캐싱하고,
+ * 상세 정보는 DB에서 조회합니다.
  */
 @Slf4j
 @Service
@@ -48,10 +53,14 @@ public class DrugSearchServiceImpl implements DrugSearchService {
     private final Map<String, String> nameCache = new ConcurrentHashMap<>();
 
     /**
-     * 전체 DrugInfo 캐시 (DB 쿼리 없이 검색용)
-     * Key: itemSeq, Value: DrugInfo 객체
+     * 경량 검색 캐시 (DB 쿼리 없이 검색용)
+     * Key: itemSeq, Value: DrugSearchCache (검색에 필요한 최소 필드만)
+     *
+     * 메모리 최적화: DrugInfo 전체(효능, 부작용 등) 대신 경량 DTO 사용
+     * - DrugInfo 전체: 약물 1건당 5~20KB → 10만 건 시 500MB~2GB
+     * - DrugSearchCache: 약물 1건당 200~500bytes → 10만 건 시 20~50MB
      */
-    private final Map<String, DrugInfo> drugInfoCache = new ConcurrentHashMap<>();
+    private final Map<String, DrugSearchCache> drugSearchCache = new ConcurrentHashMap<>();
 
     /**
      * 검색 결과 캐시 (동일 키워드 반복 검색 최적화)
@@ -78,22 +87,29 @@ public class DrugSearchServiceImpl implements DrugSearchService {
         log.info("약물 캐시 초기화 시작...");
         long startTime = System.currentTimeMillis();
 
-        List<DrugInfo> allDrugs = drugInfoRepository.findAll();
-        for (DrugInfo drug : allDrugs) {
-            String itemSeq = drug.getItemSeq();
-            String itemName = drug.getItemName();
+        // 검색에 필요한 필드만 조회 (메모리 최적화)
+        List<Object[]> drugData = drugInfoRepository.findAllForCache();
+        for (Object[] row : drugData) {
+            String itemSeq = (String) row[0];
+            String itemName = (String) row[1];
+            String displayName = (String) row[2];
+            var drugType = (com.myyak.domain.enums.DrugType) row[3];
+            String imageUrl = (String) row[4];
+
             if (itemName != null && !itemName.isBlank()) {
                 // 괄호 제거한 순수 약물명으로 자모 분해
                 String pureName = extractPureDrugName(itemName);
                 jamoCache.put(itemSeq, decomposeToJamo(pureName));
                 nameCache.put(itemSeq, pureName);
-                // DrugInfo 전체 캐시 (DB 쿼리 없이 검색용)
-                drugInfoCache.put(itemSeq, drug);
+                // 경량 캐시에 저장
+                drugSearchCache.put(itemSeq, new DrugSearchCache(
+                        itemSeq, itemName, displayName, drugType, imageUrl
+                ));
             }
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
-        log.info("약물 캐시 초기화 완료: {}개 약물, {}ms", drugInfoCache.size(), elapsed);
+        log.info("약물 캐시 초기화 완료: {}개 약물, {}ms", drugSearchCache.size(), elapsed);
     }
 
     @Override
@@ -105,16 +121,18 @@ public class DrugSearchServiceImpl implements DrugSearchService {
         // 공백 제거 (DB의 약물명은 공백 없이 저장됨)
         String normalizedKeyword = keyword.replaceAll("\\s+", "");
 
-        // 메모리 캐시에서 부분 일치 검색 (DB 쿼리 없음)
-        return drugInfoCache.values().parallelStream()
-                .filter(drug -> {
-                    String itemName = drug.getItemName();
+        // 메모리 캐시에서 부분 일치 검색
+        Optional<DrugSearchCache> cached = drugSearchCache.values().parallelStream()
+                .filter(cache -> {
+                    String itemName = cache.getItemName();
                     if (itemName == null) return false;
-                    // 공백 제거 후 비교
                     String normalizedName = itemName.replaceAll("\\s+", "");
                     return normalizedName.contains(normalizedKeyword);
                 })
                 .findFirst();
+
+        // 캐시에서 찾으면 DB에서 상세 정보 조회
+        return cached.flatMap(cache -> drugInfoRepository.findById(cache.getItemSeq()));
     }
 
     @Override
@@ -147,8 +165,8 @@ public class DrugSearchServiceImpl implements DrugSearchService {
             String matchedName = nameCache.get(match.itemSeq);
             log.info("편집거리 매칭 성공: '{}' → '{}' (거리: {})",
                     drugName, matchedName, match.distance);
-            // 캐시에서 조회 (DB 쿼리 없음)
-            return Optional.ofNullable(drugInfoCache.get(match.itemSeq));
+            // DB에서 상세 정보 조회
+            return drugInfoRepository.findById(match.itemSeq);
         }
 
         log.debug("편집거리 매칭 실패: '{}' (임계값 {} 이내 결과 없음)", drugName, threshold);
@@ -160,7 +178,7 @@ public class DrugSearchServiceImpl implements DrugSearchService {
         log.info("약물 캐시 갱신 시작...");
         jamoCache.clear();
         nameCache.clear();
-        drugInfoCache.clear();
+        drugSearchCache.clear();
         searchResultCache.invalidateAll();
         searchCountCache.invalidateAll();
         init();
@@ -182,18 +200,21 @@ public class DrugSearchServiceImpl implements DrugSearchService {
 
         // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
         return searchResultCache.get(cacheKey, key -> {
-            // prefix 매칭과 contains 매칭을 분리하여 관련도 정렬
-            // 1순위: 약물명이 키워드로 시작하는 것
-            // 2순위: displayName이 키워드로 시작하는 것
-            // 3순위: 약물명에 키워드가 포함된 것
-            // 4순위: displayName에 키워드가 포함된 것
-            return drugInfoCache.values().parallelStream()
-                    .filter(drug -> matchesKeyword(drug, normalizedKeyword))
-                    .sorted(Comparator.comparingInt((DrugInfo drug) -> getRelevanceScore(drug, normalizedKeyword))
-                            .thenComparing(DrugInfo::getItemName))
+            // 경량 캐시에서 매칭되는 itemSeq 목록 추출 (페이징 적용)
+            List<String> matchedItemSeqs = drugSearchCache.values().parallelStream()
+                    .filter(cache -> matchesKeyword(cache, normalizedKeyword))
+                    .sorted(Comparator.comparingInt((DrugSearchCache cache) -> getRelevanceScore(cache, normalizedKeyword))
+                            .thenComparing(DrugSearchCache::getItemName))
                     .skip((long) page * size)
                     .limit(size)
+                    .map(DrugSearchCache::getItemSeq)
                     .toList();
+
+            // DB에서 상세 정보 조회
+            if (matchedItemSeqs.isEmpty()) {
+                return List.of();
+            }
+            return drugInfoRepository.findAllById(matchedItemSeqs);
         });
     }
 
@@ -207,18 +228,18 @@ public class DrugSearchServiceImpl implements DrugSearchService {
 
         // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
         return searchCountCache.get(normalizedKeyword, key ->
-                drugInfoCache.values().parallelStream()
-                        .filter(drug -> matchesKeyword(drug, key))
+                drugSearchCache.values().parallelStream()
+                        .filter(cache -> matchesKeyword(cache, key))
                         .count()
         );
     }
 
     /**
-     * 약물이 키워드와 매칭되는지 확인
+     * 약물이 키워드와 매칭되는지 확인 (경량 캐시용)
      */
-    private boolean matchesKeyword(DrugInfo drug, String normalizedKeyword) {
-        String itemName = drug.getItemName();
-        String displayName = drug.getDisplayName();
+    private boolean matchesKeyword(DrugSearchCache cache, String normalizedKeyword) {
+        String itemName = cache.getItemName();
+        String displayName = cache.getDisplayName();
 
         if (itemName != null) {
             String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
@@ -238,15 +259,15 @@ public class DrugSearchServiceImpl implements DrugSearchService {
     }
 
     /**
-     * 관련도 점수 계산 (낮을수록 관련도 높음)
+     * 관련도 점수 계산 (낮을수록 관련도 높음) - 경량 캐시용
      * 0: itemName이 키워드로 시작
      * 1: displayName이 키워드로 시작
      * 2: itemName에 키워드 포함
      * 3: displayName에 키워드 포함
      */
-    private int getRelevanceScore(DrugInfo drug, String normalizedKeyword) {
-        String itemName = drug.getItemName();
-        String displayName = drug.getDisplayName();
+    private int getRelevanceScore(DrugSearchCache cache, String normalizedKeyword) {
+        String itemName = cache.getItemName();
+        String displayName = cache.getDisplayName();
 
         if (itemName != null) {
             String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
