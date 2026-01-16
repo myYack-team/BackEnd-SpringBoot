@@ -327,10 +327,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         LocalDate prescriptionDate = request.getPrescriptionDate() != null ? request.getPrescriptionDate() : LocalDate.now();
 
         // 3. Prescription 저장
+        // 환자명은 로그인한 사용자 이름 사용 (스캔 시 마스킹된 값 대신)
         Prescription prescription = Prescription.create(user, imageUrl, prescriptionDate);
         prescription.update(
                 prescriptionDate,
-                request.getPatientName(),
+                user.getName(),
                 request.getHospitalName(),
                 null, // doctorName
                 request.getDiagnosis(),
