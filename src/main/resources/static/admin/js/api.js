@@ -202,6 +202,67 @@ const AdminAPI = {
         return API.get('/admin/health');
     },
 
+    // ===== Q&A API =====
+
+    /**
+     * 전체 문의 목록 조회
+     */
+    getQnAList(page = 0, size = 10, status = null) {
+        const params = new URLSearchParams({
+            page: page,
+            size: size,
+        });
+        if (status) {
+            params.append('status', status);
+        }
+        return API.get(`/admin/qna?${params}`);
+    },
+
+    /**
+     * 문의 상세 조회
+     */
+    getQnADetail(questionId) {
+        return API.get(`/admin/qna/${questionId}`);
+    },
+
+    /**
+     * 관리자 답변 추가
+     */
+    addQnAReply(questionId, content, adminName) {
+        return API.post(`/admin/qna/${questionId}/replies`, {
+            content: content,
+            adminName: adminName,
+        });
+    },
+
+    /**
+     * 문의 상태 변경
+     */
+    async updateQnAStatus(questionId, status) {
+        const response = await fetch(`${API.baseUrl}/admin/qna/${questionId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ status: status }),
+        });
+        return API.handleResponse(response);
+    },
+
+    /**
+     * Q&A 통계 조회
+     */
+    getQnAStats() {
+        return API.get('/admin/qna/stats');
+    },
+
+    /**
+     * 미답변 문의 수 조회
+     */
+    getQnAPendingCount() {
+        return API.get('/admin/qna/pending-count');
+    },
+
     /**
      * 에러 로그 목록 조회
      */

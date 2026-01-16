@@ -35,4 +35,14 @@ public interface UserService {
      * 신규 가입자 기본정보 설정
      */
     UserResponseDTO.ProfileSetupResult setupProfile(Long userId, UserRequestDTO.ProfileSetupRequest request);
+
+    /**
+     * AI 데이터 동의 상태 조회
+     */
+    UserResponseDTO.AiConsentStatus getAiConsentStatus(Long userId);
+
+    /**
+     * AI 데이터 동의 상태 변경
+     */
+    UserResponseDTO.AiConsentStatus updateAiConsent(Long userId, UserRequestDTO.UpdateAiConsentRequest request);
 }

@@ -57,7 +57,11 @@ public enum ErrorStatus implements BaseErrorCode {
     ANALYSIS_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "ANALYSIS429", "이번 달 분석 횟수를 초과했습니다."),
     ANALYSIS_NO_MEDICATIONS(HttpStatus.BAD_REQUEST, "ANALYSIS400", "분석할 복용 중인 약물이 없습니다."),
     ANALYSIS_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "ANALYSIS404", "분석 레포트를 찾을 수 없습니다."),
-    ANALYSIS_LLM_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "ANALYSIS503", "AI 분석 서비스 연동에 실패했습니다.");
+    ANALYSIS_LLM_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "ANALYSIS503", "AI 분석 서비스 연동에 실패했습니다."),
+
+    // Q&A 관련 에러
+    QNA_NOT_FOUND(HttpStatus.NOT_FOUND, "QNA404", "문의를 찾을 수 없습니다."),
+    QNA_ACCESS_DENIED(HttpStatus.FORBIDDEN, "QNA403", "해당 문의에 대한 접근 권한이 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

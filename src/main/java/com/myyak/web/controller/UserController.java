@@ -67,4 +67,20 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.setupProfile(userId, request));
     }
+
+    @Operation(summary = "AI 데이터 동의 상태 조회", description = "현재 로그인한 사용자의 AI 데이터 동의 상태를 조회합니다.")
+    @GetMapping("/me/ai-consent")
+    public ApiResponse<UserResponseDTO.AiConsentStatus> getAiConsentStatus(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.getAiConsentStatus(userId));
+    }
+
+    @Operation(summary = "AI 데이터 동의 상태 변경", description = "현재 로그인한 사용자의 AI 데이터 동의 상태를 변경합니다.")
+    @PatchMapping("/me/ai-consent")
+    public ApiResponse<UserResponseDTO.AiConsentStatus> updateAiConsent(
+            Authentication authentication,
+            @Valid @RequestBody UserRequestDTO.UpdateAiConsentRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.updateAiConsent(userId, request));
+    }
 }

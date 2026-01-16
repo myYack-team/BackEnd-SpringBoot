@@ -157,4 +157,28 @@ public class UserServiceImpl implements UserService {
                 .signupPurposes(request.getSignupPurposes())
                 .build();
     }
+
+    @Override
+    public UserResponseDTO.AiConsentStatus getAiConsentStatus(Long userId) {
+        User user = findById(userId);
+        return UserResponseDTO.AiConsentStatus.builder()
+                .aiDataAgreed(user.getAiDataAgreed())
+                .consentedAt(user.getConsentedAt())
+                .consentVersion(user.getConsentVersion())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO.AiConsentStatus updateAiConsent(Long userId, UserRequestDTO.UpdateAiConsentRequest request) {
+        User user = findById(userId);
+        user.updateAiConsent(request.getAiDataAgreed(), request.getConsentVersion());
+        log.info("AI 데이터 동의 설정 변경 - userId: {}, aiDataAgreed: {}, consentVersion: {}",
+                userId, request.getAiDataAgreed(), request.getConsentVersion());
+        return UserResponseDTO.AiConsentStatus.builder()
+                .aiDataAgreed(user.getAiDataAgreed())
+                .consentedAt(user.getConsentedAt())
+                .consentVersion(user.getConsentVersion())
+                .build();
+    }
 }

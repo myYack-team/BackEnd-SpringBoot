@@ -55,4 +55,14 @@ public class UserResponseDTO {
         private String ageRange;
         private List<SignupPurpose> signupPurposes;
     }
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AiConsentStatus {
+        private Boolean aiDataAgreed;
+        private LocalDateTime consentedAt;
+        private String consentVersion;
+    }
 }
