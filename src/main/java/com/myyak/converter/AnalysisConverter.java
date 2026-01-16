@@ -27,15 +27,23 @@ public class AnalysisConverter {
             AnalysisReport report,
             UserAnalysisQuota quota) {
 
+        String llmResponse = report.getLlmResponse();
+
         // LLM 응답 JSON 파싱
-        List<AnalysisResponseDTO.MechanismGroup> mechanismGroups = parseMechanismGroups(report.getLlmResponse());
-        List<AnalysisResponseDTO.FoodInteractionSummary> foodInteractions = parseFoodInteractions(report.getLlmResponse());
+        List<AnalysisResponseDTO.MechanismGroup> mechanismGroups = parseMechanismGroups(llmResponse);
+        List<AnalysisResponseDTO.FoodInteractionSummary> foodInteractions = parseFoodInteractions(llmResponse);
+        List<AnalysisResponseDTO.FoodSuggestion> foodSuggestions = parseFoodSuggestions(llmResponse);
+        List<AnalysisResponseDTO.SupplementInteraction> supplementInteractions = parseSupplementInteractions(llmResponse);
+        List<AnalysisResponseDTO.LifestyleTip> lifestyleTips = parseLifestyleTips(llmResponse);
 
         return AnalysisResponseDTO.AnalysisResult.builder()
                 .reportId(report.getId())
                 .analysisDate(report.getAnalysisDate())
                 .mechanismGroups(mechanismGroups)
                 .foodInteractions(foodInteractions)
+                .foodSuggestions(foodSuggestions)
+                .supplementInteractions(supplementInteractions)
+                .lifestyleTips(lifestyleTips)
                 .quota(toQuotaInfo(quota))
                 .build();
     }
@@ -173,5 +181,134 @@ public class AnalysisConverter {
             log.error("음식 상호작용 파싱 실패: ", e);
             return List.of();
         }
+    }
+
+    /**
+     * LLM 응답 JSON에서 음식 제안 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static List<AnalysisResponseDTO.FoodSuggestion> parseFoodSuggestions(String llmResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(llmResponse, new TypeReference<>() {});
+            List<Map<String, Object>> suggestions = (List<Map<String, Object>>) response.get("foodSuggestions");
+
+            if (suggestions == null) {
+                return List.of();
+            }
+
+            return suggestions.stream()
+                    .map(s -> {
+                        List<Map<String, String>> relatedMedMaps = (List<Map<String, String>>) s.get("relatedMedications");
+                        List<AnalysisResponseDTO.RelatedMedication> relatedMedications = parseRelatedMedications(relatedMedMaps);
+
+                        return AnalysisResponseDTO.FoodSuggestion.builder()
+                                .foodName((String) s.get("foodName"))
+                                .foodIcon((String) s.get("foodIcon"))
+                                .reason((String) s.get("reason"))
+                                .tip((String) s.get("tip"))
+                                .relatedMedications(relatedMedications)
+                                .build();
+                    })
+                    .toList();
+
+        } catch (JsonProcessingException e) {
+            log.error("음식 제안 파싱 실패: ", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * LLM 응답 JSON에서 영양제 상호작용 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static List<AnalysisResponseDTO.SupplementInteraction> parseSupplementInteractions(String llmResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(llmResponse, new TypeReference<>() {});
+            List<Map<String, Object>> interactions = (List<Map<String, Object>>) response.get("supplementInteractions");
+
+            if (interactions == null) {
+                return List.of();
+            }
+
+            return interactions.stream()
+                    .map(i -> {
+                        List<Map<String, String>> detailMaps = (List<Map<String, String>>) i.get("details");
+                        List<AnalysisResponseDTO.SupplementDetail> details = detailMaps != null ?
+                                detailMaps.stream()
+                                        .map(d -> AnalysisResponseDTO.SupplementDetail.builder()
+                                                .medicationName(d.get("medicationName"))
+                                                .reason(d.get("reason"))
+                                                .build())
+                                        .toList()
+                                : List.of();
+
+                        return AnalysisResponseDTO.SupplementInteraction.builder()
+                                .supplementName((String) i.get("supplementName"))
+                                .supplementTag((String) i.get("supplementTag"))
+                                .interactionLevel((String) i.get("interactionLevel"))
+                                .summaryReason((String) i.get("summaryReason"))
+                                .source((String) i.get("source"))
+                                .details(details)
+                                .build();
+                    })
+                    .toList();
+
+        } catch (JsonProcessingException e) {
+            log.error("영양제 상호작용 파싱 실패: ", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * LLM 응답 JSON에서 생활 팁 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static List<AnalysisResponseDTO.LifestyleTip> parseLifestyleTips(String llmResponse) {
+        try {
+            Map<String, Object> response = objectMapper.readValue(llmResponse, new TypeReference<>() {});
+            List<Map<String, Object>> tips = (List<Map<String, Object>>) response.get("lifestyleTips");
+
+            if (tips == null) {
+                return List.of();
+            }
+
+            return tips.stream()
+                    .map(t -> {
+                        List<Map<String, String>> relatedMedMaps = (List<Map<String, String>>) t.get("relatedMedications");
+                        List<AnalysisResponseDTO.RelatedMedication> relatedMedications = parseRelatedMedications(relatedMedMaps);
+
+                        return AnalysisResponseDTO.LifestyleTip.builder()
+                                .category((String) t.get("category"))
+                                .categoryIcon((String) t.get("categoryIcon"))
+                                .categoryLabel((String) t.get("categoryLabel"))
+                                .title((String) t.get("title"))
+                                .tip((String) t.get("tip"))
+                                .detailedExplanation((String) t.get("detailedExplanation"))
+                                .source((String) t.get("source"))
+                                .relatedMedications(relatedMedications)
+                                .build();
+                    })
+                    .toList();
+
+        } catch (JsonProcessingException e) {
+            log.error("생활 팁 파싱 실패: ", e);
+            return List.of();
+        }
+    }
+
+    /**
+     * 관련 약물 목록 파싱 (공통 메서드)
+     */
+    private static List<AnalysisResponseDTO.RelatedMedication> parseRelatedMedications(List<Map<String, String>> maps) {
+        if (maps == null) {
+            return List.of();
+        }
+
+        return maps.stream()
+                .map(m -> AnalysisResponseDTO.RelatedMedication.builder()
+                        .name(m.get("name"))
+                        .detail(m.get("detail"))
+                        .build())
+                .toList();
     }
 }

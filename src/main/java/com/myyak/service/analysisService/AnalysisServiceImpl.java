@@ -29,6 +29,7 @@ public class AnalysisServiceImpl implements AnalysisService {
 
     private final UserRepository userRepository;
     private final UserMedicationRepository userMedicationRepository;
+    private final UserSupplementRepository userSupplementRepository;
     private final DrugInteractionRepository drugInteractionRepository;
     private final DrugFoodInteractionRepository drugFoodInteractionRepository;
     private final AnalysisReportRepository analysisReportRepository;
@@ -42,6 +43,7 @@ public class AnalysisServiceImpl implements AnalysisService {
             역할:
             - 사용자가 복용 중인 약물들의 작용 맥락을 설명합니다
             - 음식/영양제와의 병용 시 주의가 필요한 이유를 설명합니다
+            - 복용 중인 약물에 도움이 되는 음식과 생활 습관을 제안합니다
             - 모바일 앱 UI에서 바로 사용할 수 있는 JSON을 생성합니다
 
             규칙:
@@ -50,6 +52,8 @@ public class AnalysisServiceImpl implements AnalysisService {
             3. 복용 지시나 권고를 하지 않습니다
             4. 일반인이 이해할 수 있는 쉬운 표현을 사용합니다
             5. 비유를 활용하여 이해를 돕습니다
+            6. 생활 팁은 학술적 근거가 있는 내용만 포함합니다 (출처 필수)
+            7. 영양제 상호작용은 사용자가 복용 중인 영양제만 분석합니다
 
             출력 형식:
             반드시 아래 JSON 스키마에 맞춰 응답합니다. JSON만 출력하고 다른 텍스트는 포함하지 않습니다.
@@ -81,6 +85,52 @@ public class AnalysisServiceImpl implements AnalysisService {
                     {
                       "medicationName": "약물명",
                       "reason": "상세 이유"
+                    }
+                  ]
+                }
+              ],
+              "foodSuggestions": [
+                {
+                  "foodName": "음식명",
+                  "foodIcon": "이모지",
+                  "reason": "추천 이유 1줄",
+                  "tip": "섭취 팁 (선택, 없으면 null)",
+                  "relatedMedications": [
+                    {
+                      "name": "약물명",
+                      "detail": "추가 설명 (선택, 없으면 null)"
+                    }
+                  ]
+                }
+              ],
+              "supplementInteractions": [
+                {
+                  "supplementName": "영양제명",
+                  "supplementTag": "영양제 태그 (VITAMIN_A, VITAMIN_B, VITAMIN_C, VITAMIN_D, VITAMIN_E, OMEGA_3, MAGNESIUM, CALCIUM, IRON, ZINC, ARGININE, COLLAGEN, PROBIOTICS, LUTEIN, COENZYME_Q10, OTHER 중 하나)",
+                  "interactionLevel": "GOOD/TIMING/CAUTION (GOOD: 좋은 궁합, TIMING: 복용 시간 조절 필요, CAUTION: 주의 필요)",
+                  "summaryReason": "요약 이유 1줄",
+                  "source": "출처 (선택, 없으면 null)",
+                  "details": [
+                    {
+                      "medicationName": "약물명",
+                      "reason": "상세 이유"
+                    }
+                  ]
+                }
+              ],
+              "lifestyleTips": [
+                {
+                  "category": "카테고리 코드 (EXERCISE, SLEEP, DIET, HYDRATION, STRESS, POSTURE 중 하나)",
+                  "categoryIcon": "카테고리 이모지 (🏃, 😴, 🥗, 💧, 🧘, 🪑 등)",
+                  "categoryLabel": "카테고리 한글명 (운동, 수면, 식이, 수분 섭취, 스트레스 관리, 자세 등)",
+                  "title": "팁 제목 (짧게)",
+                  "tip": "팁 내용 1~2줄",
+                  "detailedExplanation": "상세 설명 2~3줄",
+                  "source": "출처 (필수, 예: 대한고혈압학회 가이드라인)",
+                  "relatedMedications": [
+                    {
+                      "name": "약물명",
+                      "detail": "추가 설명 (선택, 없으면 null)"
                     }
                   ]
                 }
@@ -127,11 +177,14 @@ public class AnalysisServiceImpl implements AnalysisService {
         List<DrugFoodInteraction> foodInteractions = (itemSeqs.isEmpty() && ingredientNames.isEmpty()) ?
                 List.of() : drugFoodInteractionRepository.findByDrugItemSeqsOrIngredientNames(itemSeqs, ingredientNames);
 
-        // 5. LLM 입력 JSON 생성
-        String userPrompt = buildUserPrompt(medications, drugInteractions, foodInteractions);
+        // 5. 사용자 복용 영양제 조회
+        List<UserSupplement> userSupplements = userSupplementRepository.findByUserWithSupplement(user);
+
+        // 6. LLM 입력 JSON 생성
+        String userPrompt = buildUserPrompt(medications, drugInteractions, foodInteractions, userSupplements);
         log.info("[Analysis] LLM 입력 프롬프트 길이: {}", userPrompt.length());
 
-        // 6. LLM 호출
+        // 7. LLM 호출
         String llmResponse;
         try {
             llmResponse = llmClient.generate(SYSTEM_PROMPT, userPrompt);
@@ -141,10 +194,10 @@ public class AnalysisServiceImpl implements AnalysisService {
             throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
         }
 
-        // 7. JSON 추출 및 검증
+        // 8. JSON 추출 및 검증
         String cleanedResponse = extractJsonFromResponse(llmResponse);
 
-        // 8. 레포트 저장
+        // 9. 레포트 저장
         String medicationSnapshot = buildMedicationSnapshot(medications);
         int mechanismGroupCount = countMechanismGroups(cleanedResponse);
         int foodInteractionCount = countFoodInteractions(cleanedResponse);
@@ -244,7 +297,8 @@ public class AnalysisServiceImpl implements AnalysisService {
 
     private String buildUserPrompt(List<UserMedication> medications,
                                     List<DrugInteraction> drugInteractions,
-                                    List<DrugFoodInteraction> foodInteractions) {
+                                    List<DrugFoodInteraction> foodInteractions,
+                                    List<UserSupplement> userSupplements) {
         Map<String, Object> input = new LinkedHashMap<>();
 
         // 사용자 복용 약물 목록
@@ -252,6 +306,12 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .map(this::buildMedicationInfo)
                 .toList();
         input.put("user_medications", userMeds);
+
+        // 사용자 복용 영양제 목록
+        List<Map<String, Object>> userSupps = userSupplements.stream()
+                .map(this::buildSupplementInfo)
+                .toList();
+        input.put("user_supplements", userSupps);
 
         // 약-약 상호작용
         List<Map<String, Object>> drugIntList = drugInteractions.stream()
@@ -309,6 +369,28 @@ public class AnalysisServiceImpl implements AnalysisService {
         info.put("interaction_level", interaction.getInteractionLevel() != null ?
                 interaction.getInteractionLevel().name() : null);
         info.put("interaction_data", interaction.getInteractionData());
+        return info;
+    }
+
+    private Map<String, Object> buildSupplementInfo(UserSupplement userSupplement) {
+        Map<String, Object> info = new LinkedHashMap<>();
+        Supplement supplement = userSupplement.getSupplement();
+
+        if (supplement != null) {
+            info.put("supplement_name", supplement.getName());
+            info.put("supplement_tag", supplement.getTag() != null ? supplement.getTag().name() : null);
+            info.put("supplement_tag_description", supplement.getTag() != null ? supplement.getTag().getDescription() : null);
+            info.put("description", truncateText(supplement.getDescription(), 100));
+        } else {
+            info.put("supplement_name", null);
+            info.put("supplement_tag", null);
+            info.put("supplement_tag_description", null);
+            info.put("description", null);
+        }
+
+        info.put("dosage", userSupplement.getDosage());
+        info.put("frequency", userSupplement.getFrequency());
+
         return info;
     }
 
