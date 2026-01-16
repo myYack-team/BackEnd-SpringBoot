@@ -52,7 +52,7 @@ public class ScanServiceImpl implements ScanService {
     @Value("${ai.gemini.model:gemini-3-pro-preview}")
     private String geminiModel;
 
-    @Value("${app.debug.save-scan-images:true}")
+    @Value("${app.debug.save-scan-images:false}")
     private boolean saveScanImages;
 
     @Value("${app.debug.image-dir:#{systemProperties['java.io.tmpdir']}/myyak/scan_debug}")

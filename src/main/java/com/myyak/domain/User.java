@@ -7,6 +7,8 @@ import com.myyak.domain.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 
 @Entity
 @Table(name = "users")
@@ -50,6 +52,24 @@ public class User extends BaseEntity {
     @Builder.Default
     private Boolean notificationEnabled = true;
 
+    // 약관 동의 관련 필드
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean termsAgreed = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean privacyAgreed = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean aiDataAgreed = false;
+
+    private LocalDateTime consentedAt;
+
+    @Column(length = 20)
+    private String consentVersion;
+
     public void updateProfile(String name, String profileImage) {
         this.name = name;
         this.profileImage = profileImage;
@@ -79,5 +99,13 @@ public class User extends BaseEntity {
 
     public void updateNotificationEnabled(Boolean notificationEnabled) {
         this.notificationEnabled = notificationEnabled;
+    }
+
+    public void updateConsent(Boolean termsAgreed, Boolean privacyAgreed, Boolean aiDataAgreed, String consentVersion) {
+        this.termsAgreed = termsAgreed;
+        this.privacyAgreed = privacyAgreed;
+        this.aiDataAgreed = aiDataAgreed;
+        this.consentVersion = consentVersion;
+        this.consentedAt = LocalDateTime.now();
     }
 }

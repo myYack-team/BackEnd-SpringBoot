@@ -9,6 +9,7 @@ import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.service.drugSearchService.DrugSearchService;
 import com.myyak.service.ocr.OcrClient;
 import com.myyak.service.ocr.OcrResult;
+import com.myyak.util.PrescriptionMaskingUtil;
 import com.myyak.web.dto.ScanDTO.ScanResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -140,11 +141,14 @@ public class OcrLlmScanService implements ScanService {
                 return createErrorResponse("이미지에서 텍스트를 추출할 수 없습니다.");
             }
 
-            log.debug("OCR 추출 텍스트:\n{}", ocrResult.getFullText());
+            // Phase 2: 민감 정보 마스킹 후 LLM 전송
+            String rawText = ocrResult.getFullText();
+            String maskedText = PrescriptionMaskingUtil.maskSensitiveInfo(rawText);
+            log.debug("OCR 추출 텍스트 길이: {}", maskedText.length());
 
-            // Phase 2: LLM으로 텍스트 구조화
+            // Phase 3: LLM으로 텍스트 구조화
             long llmStartTime = System.currentTimeMillis();
-            ScanResponseDTO.ScanResult result = structureWithLlm(ocrResult.getFullText());
+            ScanResponseDTO.ScanResult result = structureWithLlm(maskedText);
             long llmElapsed = System.currentTimeMillis() - llmStartTime;
             log.info("LLM 구조화 완료: {}ms", llmElapsed);
 
@@ -330,7 +334,7 @@ public class OcrLlmScanService implements ScanService {
             }
         }
 
-        return ScanResponseDTO.ScanResult.builder()
+        ScanResponseDTO.ScanResult result = ScanResponseDTO.ScanResult.builder()
                 .success(true)
                 .confidence(medications.isEmpty() ? "low" : "high")
                 .patientName(patientName)
@@ -340,6 +344,8 @@ public class OcrLlmScanService implements ScanService {
                 .medications(medications)
                 .notes(null)
                 .build();
+
+        return maskResponseSensitiveInfo(result);
     }
 
     private Map<String, Object> buildGeminiRequest(String prompt) {
@@ -436,7 +442,7 @@ public class OcrLlmScanService implements ScanService {
                 }
             }
 
-            return ScanResponseDTO.ScanResult.builder()
+            ScanResponseDTO.ScanResult result = ScanResponseDTO.ScanResult.builder()
                     .success(true)
                     .confidence(medications.isEmpty() ? "low" : "high")
                     .patientName(patientName)
@@ -446,6 +452,8 @@ public class OcrLlmScanService implements ScanService {
                     .medications(medications)
                     .notes(null)
                     .build();
+
+            return maskResponseSensitiveInfo(result);
 
         } catch (Exception e) {
             log.error("Gemini 응답 파싱 실패: ", e);
@@ -698,5 +706,37 @@ public class OcrLlmScanService implements ScanService {
                 .medications(List.of())
                 .notes(message)
                 .build();
+    }
+
+    /**
+     * 클라이언트에 반환하기 전 응답 내 민감 정보 마스킹
+     */
+    private ScanResponseDTO.ScanResult maskResponseSensitiveInfo(ScanResponseDTO.ScanResult result) {
+        if (result == null) {
+            return null;
+        }
+
+        String maskedName = maskPatientName(result.getPatientName());
+
+        return ScanResponseDTO.ScanResult.builder()
+                .success(result.getSuccess())
+                .confidence(result.getConfidence())
+                .patientName(maskedName)
+                .hospitalName(result.getHospitalName())
+                .diagnosis("***")  // 진단명은 민감 정보이므로 마스킹
+                .durationDays(result.getDurationDays())
+                .medications(result.getMedications())
+                .notes(result.getNotes())
+                .build();
+    }
+
+    /**
+     * 환자 이름 마스킹 (홍길동 -> 홍*동)
+     */
+    private String maskPatientName(String name) {
+        if (name == null || name.length() <= 2) {
+            return "***";
+        }
+        return name.charAt(0) + "*".repeat(name.length() - 2) + name.charAt(name.length() - 1);
     }
 }
