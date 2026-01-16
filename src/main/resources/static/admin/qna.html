@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q&A 관리 - 마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css">
+    <style>
+        .filter-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            background: white;
+            color: var(--gray-600);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover {
+            background: var(--gray-100);
+        }
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .qna-table .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .status-badge.pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+        .status-badge.answered {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        .status-badge.closed {
+            background: var(--gray-100);
+            color: var(--gray-600);
+        }
+        .admin-reply-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.75rem;
+            color: var(--success);
+        }
+        .clickable-row {
+            cursor: pointer;
+        }
+        .clickable-row:hover {
+            background: var(--gray-100);
+        }
+        /* Detail Modal Styles */
+        .qna-modal {
+            max-width: 700px;
+            width: 95%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .qna-detail-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        .qna-detail-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 0.5rem;
+        }
+        .qna-detail-meta {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--gray-500);
+        }
+        .qna-detail-content {
+            padding: 1.5rem;
+            background: var(--gray-50);
+            border-bottom: 1px solid var(--gray-200);
+            white-space: pre-wrap;
+            line-height: 1.7;
+        }
+        .qna-replies {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--gray-200);
+        }
+        .qna-replies-title {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--gray-700);
+        }
+        .reply-item {
+            padding: 1rem;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-radius: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .reply-item.admin {
+            background: rgba(79, 70, 229, 0.05);
+            border-color: rgba(79, 70, 229, 0.2);
+        }
+        .reply-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .reply-author {
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+        .reply-author.admin {
+            color: var(--primary);
+        }
+        .reply-date {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+        }
+        .reply-content {
+            font-size: 0.875rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .reply-form {
+            padding: 1.5rem;
+        }
+        .reply-form textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.75rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            resize: vertical;
+            margin-bottom: 0.75rem;
+        }
+        .reply-form textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        .reply-form-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .reply-form-row input {
+            flex: 1;
+            max-width: 200px;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .status-actions {
+            padding: 1rem 1.5rem;
+            background: var(--gray-50);
+            border-top: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            min-width: 150px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--gray-500);
+        }
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <a href="index.html" class="logo">
+                <img src="images/logo.png" alt="마이약" class="logo-img">
+                <span>관리자</span>
+            </a>
+            <nav class="nav">
+                <a href="index.html" class="nav-link">홈</a>
+                <a href="data-sync.html" class="nav-link">데이터 수집</a>
+                <a href="supplements.html" class="nav-link">영양제</a>
+                <a href="users.html" class="nav-link">가입자</a>
+                <a href="qna.html" class="nav-link active">Q&A<span id="nav-qna-badge" class="nav-badge hidden"></span></a>
+                <a href="server-status.html" class="nav-link">서버 상태</a>
+                <a href="client-errors.html" class="nav-link">클라이언트 에러</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- 메인 컨텐츠 -->
+    <main class="main">
+        <h1 class="page-title">Q&A 관리</h1>
+
+        <!-- 통계 카드 -->
+        <div class="stats-grid" id="stats-container">
+            <div class="stat-card">
+                <div class="stat-label">전체 문의</div>
+                <div class="stat-value" id="stat-total">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">답변 대기</div>
+                <div class="stat-value warning" id="stat-pending">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">답변 완료</div>
+                <div class="stat-value success" id="stat-answered">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">종료됨</div>
+                <div class="stat-value" id="stat-closed">-</div>
+            </div>
+        </div>
+
+        <!-- 필터 바 -->
+        <div class="filter-bar">
+            <button class="filter-btn active" data-status="">전체</button>
+            <button class="filter-btn" data-status="PENDING">답변 대기</button>
+            <button class="filter-btn" data-status="ANSWERED">답변 완료</button>
+            <button class="filter-btn" data-status="CLOSED">종료됨</button>
+        </div>
+
+        <!-- 문의 목록 -->
+        <div class="card">
+            <div class="card-body">
+                <div class="table-container">
+                    <table class="table qna-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>제목</th>
+                                <th>작성자</th>
+                                <th>상태</th>
+                                <th>답변</th>
+                                <th>등록일</th>
+                            </tr>
+                        </thead>
+                        <tbody id="qna-table-body">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="loading">
+                                        <div class="spinner"></div>
+                                        <span>로딩 중...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 상세 모달 -->
+    <div class="modal-overlay" id="detail-modal">
+        <div class="modal qna-modal">
+            <div class="qna-detail-header">
+                <div class="qna-detail-title" id="modal-title">-</div>
+                <div class="qna-detail-meta">
+                    <span id="modal-user">-</span>
+                    <span id="modal-date">-</span>
+                </div>
+            </div>
+            <div class="qna-detail-content" id="modal-content">-</div>
+            <div class="qna-replies">
+                <div class="qna-replies-title">답변 (<span id="reply-count">0</span>)</div>
+                <div id="replies-container"></div>
+            </div>
+            <div class="reply-form">
+                <textarea id="reply-content" placeholder="답변을 입력하세요..."></textarea>
+                <div class="reply-form-row">
+                    <input type="text" id="admin-name" placeholder="관리자명 (선택)">
+                    <button class="btn btn-primary" id="submit-reply">답변 등록</button>
+                </div>
+            </div>
+            <div class="status-actions">
+                <div>
+                    <label>상태 변경: </label>
+                    <select class="status-select" id="status-select">
+                        <option value="PENDING">답변 대기</option>
+                        <option value="ANSWERED">답변 완료</option>
+                        <option value="CLOSED">종료됨</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" id="close-modal">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/qna.js"></script>
+</body>
+</html>
