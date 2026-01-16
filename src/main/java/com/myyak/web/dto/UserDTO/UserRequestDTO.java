@@ -38,4 +38,13 @@ public class UserRequestDTO {
         @NotEmpty(message = "가입 목적은 최소 1개 이상 선택해야 합니다")
         private List<SignupPurpose> signupPurposes;
     }
+
+    @Getter
+    @NoArgsConstructor
+    public static class UpdateAiConsentRequest {
+        @NotNull(message = "AI 데이터 동의 여부는 필수입니다")
+        private Boolean aiDataAgreed;
+
+        private String consentVersion;
+    }
 }

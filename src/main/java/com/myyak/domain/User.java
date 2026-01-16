@@ -108,4 +108,12 @@ public class User extends BaseEntity {
         this.consentVersion = consentVersion;
         this.consentedAt = LocalDateTime.now();
     }
+
+    public void updateAiConsent(Boolean aiDataAgreed, String consentVersion) {
+        this.aiDataAgreed = aiDataAgreed;
+        if (consentVersion != null) {
+            this.consentVersion = consentVersion;
+        }
+        this.consentedAt = LocalDateTime.now();
+    }
 }
