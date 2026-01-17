@@ -41,15 +41,15 @@ jobs:
           mkdir -p src/main/resources
           echo '${{ secrets.APPLICATION_YAML }}' > src/main/resources/application.yaml
 
-      # 5. Firebase 서비스 계정 파일 생성
+      # 5. Firebase 서비스 계정 파일 생성 (classpath에 포함되도록)
       - name: Create Firebase credentials
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > firebase-service-account.json
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > src/main/resources/firebase-service-account.json
 
-      # 6. Google Cloud 인증 파일 생성
+      # 6. Google Cloud 인증 파일 생성 (classpath에 포함되도록)
       - name: Create Google Cloud credentials
         run: |
-          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS_JSON }}' > google-cloud-credentials.json
+          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS_JSON }}' > src/main/resources/google-cloud-credentials.json
 
       # 7. Gradle 빌드
       - name: Build with Gradle
@@ -57,15 +57,13 @@ jobs:
           chmod +x ./gradlew
           ./gradlew bootJar --no-daemon
 
-      # 8. 빌드 결과물 업로드 (artifact)
+      # 8. 빌드 결과물 업로드 (artifact) - 인증 파일은 JAR에 포함됨
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
             build/libs/myyak-server-*.jar
-            firebase-service-account.json
-            google-cloud-credentials.json
           retention-days: 7
 
   # ===== 배포 단계 =====
@@ -109,19 +107,13 @@ jobs:
             fi
           ENDSSH
 
-      # 5. 파일 전송
-      - name: Transfer files to server
+      # 5. JAR 파일 전송 (인증 파일은 JAR에 포함됨)
+      - name: Transfer JAR to server
         run: |
           # JAR 파일 찾기 및 전송
           JAR_FILE=$(find ./artifacts -name "myyak-server-*.jar" | head -1)
           echo "Deploying: $JAR_FILE"
           scp "$JAR_FILE" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
-
-          # Firebase 인증 파일 전송
-          scp ./artifacts/firebase-service-account.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/firebase-service-account.json
-
-          # Google Cloud 인증 파일 전송
-          scp ./artifacts/google-cloud-credentials.json ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/google-cloud-credentials.json
 
       # 6. 서버 재시작
       - name: Restart application
