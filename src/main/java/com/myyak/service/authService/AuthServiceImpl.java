@@ -97,6 +97,8 @@ public class AuthServiceImpl implements AuthService {
                 .accessTokenExpiresIn(jwtProvider.getAccessTokenExpiry())
                 .user(toUserInfo(user))
                 .isNewUser(isNewUser)
+                .termsAgreed(user.getTermsAgreed())
+                .privacyAgreed(user.getPrivacyAgreed())
                 .build();
     }
 
