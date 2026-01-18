@@ -24,4 +24,13 @@ public class UserConverter {
                 .fontSize(user.getFontSize())
                 .build();
     }
+
+    public static UserResponseDTO.ConsentStatus toConsentStatus(User user) {
+        return UserResponseDTO.ConsentStatus.builder()
+                .termsAgreed(user.getTermsAgreed())
+                .privacyAgreed(user.getPrivacyAgreed())
+                .consentedAt(user.getConsentedAt())
+                .consentVersion(user.getConsentVersion())
+                .build();
+    }
 }
