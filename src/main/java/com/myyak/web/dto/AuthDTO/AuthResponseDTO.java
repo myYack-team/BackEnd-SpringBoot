@@ -29,6 +29,8 @@ public class AuthResponseDTO {
         private UserInfo user;
         @JsonProperty("isNewUser")
         private boolean isNewUser;  // 신규 사용자 여부 (온보딩 필요)
+        private Boolean termsAgreed;  // 이용약관 동의 여부
+        private Boolean privacyAgreed;  // 개인정보 처리방침 동의 여부
     }
 
     /**
