@@ -65,4 +65,18 @@ public class UserResponseDTO {
         private LocalDateTime consentedAt;
         private String consentVersion;
     }
+
+    /**
+     * 서비스 이용 동의 상태 (이용약관 + 개인정보 처리방침)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ConsentStatus {
+        private Boolean termsAgreed;
+        private Boolean privacyAgreed;
+        private LocalDateTime consentedAt;
+        private String consentVersion;
+    }
 }

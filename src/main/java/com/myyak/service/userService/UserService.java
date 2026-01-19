@@ -45,4 +45,14 @@ public interface UserService {
      * AI 데이터 동의 상태 변경
      */
     UserResponseDTO.AiConsentStatus updateAiConsent(Long userId, UserRequestDTO.UpdateAiConsentRequest request);
+
+    /**
+     * 서비스 이용 동의 상태 조회 (이용약관 + 개인정보 처리방침)
+     */
+    UserResponseDTO.ConsentStatus getConsentStatus(Long userId);
+
+    /**
+     * 서비스 이용 동의 제출 (이용약관 + 개인정보 처리방침)
+     */
+    UserResponseDTO.ConsentStatus submitConsent(Long userId, UserRequestDTO.ConsentRequest request);
 }

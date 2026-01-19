@@ -181,4 +181,25 @@ public class UserServiceImpl implements UserService {
                 .consentVersion(user.getConsentVersion())
                 .build();
     }
+
+    @Override
+    public UserResponseDTO.ConsentStatus getConsentStatus(Long userId) {
+        User user = findById(userId);
+        return UserConverter.toConsentStatus(user);
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO.ConsentStatus submitConsent(Long userId, UserRequestDTO.ConsentRequest request) {
+        User user = findById(userId);
+        user.updateConsent(
+                request.getTermsAgreed(),
+                request.getPrivacyAgreed(),
+                user.getAiDataAgreed(),  // AI 동의 상태는 유지
+                request.getConsentVersion()
+        );
+        log.info("서비스 이용 동의 제출 - userId: {}, termsAgreed: {}, privacyAgreed: {}, consentVersion: {}",
+                userId, request.getTermsAgreed(), request.getPrivacyAgreed(), request.getConsentVersion());
+        return UserConverter.toConsentStatus(user);
+    }
 }

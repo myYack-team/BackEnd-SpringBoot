@@ -83,4 +83,20 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.updateAiConsent(userId, request));
     }
+
+    @Operation(summary = "서비스 이용 동의 상태 조회", description = "현재 로그인한 사용자의 이용약관 및 개인정보 처리방침 동의 상태를 조회합니다.")
+    @GetMapping("/me/consent")
+    public ApiResponse<UserResponseDTO.ConsentStatus> getConsentStatus(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.getConsentStatus(userId));
+    }
+
+    @Operation(summary = "서비스 이용 동의 제출", description = "이용약관 및 개인정보 처리방침에 동의합니다.")
+    @PostMapping("/me/consent")
+    public ApiResponse<UserResponseDTO.ConsentStatus> submitConsent(
+            Authentication authentication,
+            @Valid @RequestBody UserRequestDTO.ConsentRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.submitConsent(userId, request));
+    }
 }
