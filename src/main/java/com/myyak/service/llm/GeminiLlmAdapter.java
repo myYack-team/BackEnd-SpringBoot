@@ -2,12 +2,15 @@ package com.myyak.service.llm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myyak.domain.AppSetting;
+import com.myyak.repository.AppSettingRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +19,7 @@ import java.util.Map;
 /**
  * Gemini LLM 어댑터
  * AI 약물 분석에 사용되는 LLM 클라이언트 구현체
+ * DB에서 모델 설정을 조회하며, 폴백 기능 지원
  */
 @Slf4j
 @Component
@@ -24,6 +28,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final AppSettingRepository appSettingRepository;
 
     @Value("${ai.gemini.api-key:}")
     private String apiKey;
@@ -32,14 +37,76 @@ public class GeminiLlmAdapter implements LlmClient {
     private String defaultModel;
 
     @Value("${ai.gemini.analysis-model:gemini-2.5-pro}")
-    private String analysisModel;
+    private String configAnalysisModel;
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final String DEFAULT_FALLBACK_MODEL = "gemini-3-flash-preview";
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
-        // AI 분석용 어댑터는 analysisModel 사용
-        return generateWithModel(systemPrompt, userPrompt, analysisModel);
+        String primaryModel = getAnalysisModel();
+        String fallbackModel = getFallbackModel();
+        boolean fallbackEnabled = isFallbackEnabled();
+
+        log.info("[Gemini] 모델 설정 - primary: {}, fallback: {}, enabled: {}",
+                primaryModel, fallbackModel, fallbackEnabled);
+
+        try {
+            return generateWithModel(systemPrompt, userPrompt, primaryModel);
+        } catch (Exception e) {
+            // 503 Service Unavailable 또는 기타 오류 시 폴백
+            if (fallbackEnabled && shouldFallback(e)) {
+                log.warn("[Gemini] 주 모델 {} 실패, 폴백 모델 {} 로 재시도: {}",
+                        primaryModel, fallbackModel, e.getMessage());
+                return generateWithModel(systemPrompt, userPrompt, fallbackModel);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * 폴백을 시도해야 하는 예외인지 판단
+     */
+    private boolean shouldFallback(Exception e) {
+        // 503 Service Unavailable (모델 과부하)
+        if (e instanceof WebClientResponseException.ServiceUnavailable) {
+            return true;
+        }
+        // RuntimeException 메시지에 503 또는 overloaded 포함
+        String message = e.getMessage();
+        if (message != null) {
+            return message.contains("503") ||
+                    message.toLowerCase().contains("overload") ||
+                    message.toLowerCase().contains("unavailable");
+        }
+        return false;
+    }
+
+    /**
+     * DB에서 분석 모델 설정 조회, 없으면 config 기본값 사용
+     */
+    private String getAnalysisModel() {
+        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_MODEL)
+                .map(AppSetting::getSettingValue)
+                .orElse(configAnalysisModel);
+    }
+
+    /**
+     * DB에서 폴백 모델 설정 조회
+     */
+    private String getFallbackModel() {
+        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL)
+                .map(AppSetting::getSettingValue)
+                .orElse(DEFAULT_FALLBACK_MODEL);
+    }
+
+    /**
+     * DB에서 폴백 활성화 설정 조회
+     */
+    private boolean isFallbackEnabled() {
+        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_FALLBACK_ENABLED)
+                .map(s -> Boolean.parseBoolean(s.getSettingValue()))
+                .orElse(true);
     }
 
     /**
@@ -91,7 +158,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
     @Override
     public String getModelName() {
-        return analysisModel;
+        return getAnalysisModel();
     }
 
     private String buildCombinedPrompt(String systemPrompt, String userPrompt) {
