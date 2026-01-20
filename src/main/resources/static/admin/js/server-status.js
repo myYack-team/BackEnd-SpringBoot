@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let totalPages = 0;
     let currentErrorLog = null;
     let chatMessages = [];
+    let currentAiModelSetting = null;
 
     // DOM 요소
     const healthRefreshBtn = document.getElementById('healthRefreshBtn');
@@ -32,9 +33,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const chatErrorLevel = document.getElementById('chatErrorLevel');
     const chatErrorMessage = document.getElementById('chatErrorMessage');
 
+    // AI 모델 설정 DOM 요소
+    const aiModelRefreshBtn = document.getElementById('aiModelRefreshBtn');
+    const analysisModelSelect = document.getElementById('analysisModelSelect');
+    const fallbackModelSelect = document.getElementById('fallbackModelSelect');
+    const fallbackEnabledToggle = document.getElementById('fallbackEnabledToggle');
+    const fallbackStatusText = document.getElementById('fallbackStatusText');
+    const saveAiModelBtn = document.getElementById('saveAiModelBtn');
+    const aiModelSaveStatus = document.getElementById('aiModelSaveStatus');
+    const configDefaultModel = document.getElementById('configDefaultModel');
+    const aiModelUpdatedAt = document.getElementById('aiModelUpdatedAt');
+
     // 초기화
     loadHealth();
     loadLogs();
+    loadAiModelSetting();
 
     // 이벤트 리스너
     healthRefreshBtn.addEventListener('click', loadHealth);
@@ -72,6 +85,13 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             sendChatMessage();
         }
+    });
+
+    // AI 모델 설정 이벤트
+    aiModelRefreshBtn.addEventListener('click', loadAiModelSetting);
+    saveAiModelBtn.addEventListener('click', saveAiModelSetting);
+    fallbackEnabledToggle.addEventListener('change', () => {
+        fallbackStatusText.textContent = fallbackEnabledToggle.checked ? '활성화' : '비활성화';
     });
 
     // 헬스 체크 로드
@@ -421,5 +441,85 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showError(message) {
         alert(message);
+    }
+
+    // ===== AI 모델 설정 관련 함수 =====
+
+    // AI 모델 설정 로드
+    async function loadAiModelSetting() {
+        try {
+            const data = await AdminAPI.getAiModelSetting();
+            currentAiModelSetting = data;
+
+            // 모델 선택 옵션 렌더링
+            renderModelOptions(analysisModelSelect, data.availableModels, data.analysisModel);
+            renderModelOptions(fallbackModelSelect, data.availableModels, data.fallbackModel);
+
+            // 폴백 토글 상태
+            fallbackEnabledToggle.checked = data.fallbackEnabled;
+            fallbackStatusText.textContent = data.fallbackEnabled ? '활성화' : '비활성화';
+
+            // 설정 정보
+            configDefaultModel.textContent = data.configAnalysisModel || '-';
+            aiModelUpdatedAt.textContent = data.updatedAt ? formatDateTime(data.updatedAt) : '변경 기록 없음';
+
+            // 저장 상태 초기화
+            aiModelSaveStatus.textContent = '';
+
+        } catch (error) {
+            console.error('AI 모델 설정 로드 실패:', error);
+            aiModelSaveStatus.textContent = '설정 로드 실패';
+            aiModelSaveStatus.className = 'save-status error';
+        }
+    }
+
+    // 모델 선택 옵션 렌더링
+    function renderModelOptions(selectElement, models, selectedModel) {
+        selectElement.innerHTML = '';
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            if (model === selectedModel) {
+                option.selected = true;
+            }
+            selectElement.appendChild(option);
+        });
+    }
+
+    // AI 모델 설정 저장
+    async function saveAiModelSetting() {
+        const request = {
+            analysisModel: analysisModelSelect.value,
+            fallbackModel: fallbackModelSelect.value,
+            fallbackEnabled: fallbackEnabledToggle.checked
+        };
+
+        saveAiModelBtn.disabled = true;
+        aiModelSaveStatus.textContent = '저장 중...';
+        aiModelSaveStatus.className = 'save-status';
+
+        try {
+            const data = await AdminAPI.updateAiModelSetting(request);
+            currentAiModelSetting = data;
+
+            aiModelSaveStatus.textContent = '저장 완료';
+            aiModelSaveStatus.className = 'save-status success';
+
+            // 마지막 변경 시간 업데이트
+            aiModelUpdatedAt.textContent = data.updatedAt ? formatDateTime(data.updatedAt) : '-';
+
+            // 3초 후 상태 메시지 제거
+            setTimeout(() => {
+                aiModelSaveStatus.textContent = '';
+            }, 3000);
+
+        } catch (error) {
+            console.error('AI 모델 설정 저장 실패:', error);
+            aiModelSaveStatus.textContent = '저장 실패: ' + (error.message || '알 수 없는 오류');
+            aiModelSaveStatus.className = 'save-status error';
+        } finally {
+            saveAiModelBtn.disabled = false;
+        }
     }
 });

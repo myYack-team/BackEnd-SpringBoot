@@ -109,6 +109,74 @@
             </div>
         </div>
 
+        <!-- AI 모델 설정 카드 -->
+        <div class="health-card">
+            <div class="health-header">
+                <div class="health-title">
+                    <span>AI 모델 설정</span>
+                </div>
+                <button id="aiModelRefreshBtn" class="btn-refresh">
+                    <span class="refresh-icon">&#8635;</span>
+                    새로고침
+                </button>
+            </div>
+            <div class="health-body">
+                <div class="ai-model-settings">
+                    <!-- 분석 모델 선택 -->
+                    <div class="setting-row">
+                        <label class="setting-label">분석 모델</label>
+                        <div class="setting-control">
+                            <select id="analysisModelSelect" class="model-select">
+                                <option value="">로딩 중...</option>
+                            </select>
+                            <span id="analysisModelStatus" class="model-status"></span>
+                        </div>
+                    </div>
+
+                    <!-- 폴백 모델 선택 -->
+                    <div class="setting-row">
+                        <label class="setting-label">폴백 모델</label>
+                        <div class="setting-control">
+                            <select id="fallbackModelSelect" class="model-select">
+                                <option value="">로딩 중...</option>
+                            </select>
+                            <span class="setting-hint">주 모델 503 에러 시 사용</span>
+                        </div>
+                    </div>
+
+                    <!-- 폴백 활성화 토글 -->
+                    <div class="setting-row">
+                        <label class="setting-label">폴백 자동 전환</label>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="fallbackEnabledToggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span id="fallbackStatusText" class="toggle-status">비활성화</span>
+                        </div>
+                    </div>
+
+                    <!-- 설정 저장 버튼 -->
+                    <div class="setting-row setting-actions">
+                        <button id="saveAiModelBtn" class="btn-primary">설정 저장</button>
+                        <span id="aiModelSaveStatus" class="save-status"></span>
+                    </div>
+
+                    <!-- 설정 정보 -->
+                    <div class="health-info" style="margin-top: 16px;">
+                        <div class="health-info-row">
+                            <span>Config 기본값</span>
+                            <span id="configDefaultModel">-</span>
+                        </div>
+                        <div class="health-info-row">
+                            <span>마지막 변경</span>
+                            <span id="aiModelUpdatedAt">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 에러 로그 섹션 -->
         <div class="logs-section">
             <div class="logs-header">
