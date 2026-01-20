@@ -113,17 +113,17 @@ public class AnalysisResponseDTO {
     }
 
     /**
-     * 분석 쿼터 정보
+     * 분석 쿼터 정보 (주간)
      */
     @Getter
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class QuotaInfo {
-        private Integer monthlyLimit;
-        private Integer usedCount;
-        private Integer remainingCount;
-        private String resetDate;
+        private Integer weeklyLimit;
+        private Integer weeklyUsedCount;
+        private Integer weeklyRemainingCount;
+        private String weeklyResetDate;
     }
 
     // ===== 신규 기능: 음식 제안, 영양제 상호작용, 생활 팁 =====

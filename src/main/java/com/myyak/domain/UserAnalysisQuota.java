@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 /**
  * 사용자 AI 분석 횟수 관리 엔티티
- * 월별 분석 횟수 제한 (향후 유료결제 도입 대비)
+ * 주간 분석 횟수 제한 (향후 유료결제 도입 대비)
  */
 @Entity
 @Table(name = "user_analysis_quota")
@@ -28,48 +28,48 @@ public class UserAnalysisQuota extends BaseEntity {
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer monthlyLimit = 3;       // 월간 제한 (기본 3회)
+    private Integer weeklyLimit = 3;        // 주간 제한 (기본 3회)
 
     @Column(nullable = false)
     @Builder.Default
-    private Integer usedCount = 0;          // 사용 횟수
+    private Integer weeklyUsedCount = 0;    // 주간 사용 횟수
 
-    @Column(nullable = false)
-    private LocalDate resetDate;            // 다음 리셋 날짜 (매월 1일)
+    @Column
+    private LocalDate weeklyResetDate;      // 다음 리셋 날짜 (매주 월요일)
 
     /**
      * 남은 분석 횟수 계산
      */
-    public Integer getRemainingCount() {
-        return Math.max(0, monthlyLimit - usedCount);
+    public Integer getWeeklyRemainingCount() {
+        return Math.max(0, weeklyLimit - weeklyUsedCount);
     }
 
     /**
-     * 분석 가능 여부 확인
+     * 이번 주 분석 가능 여부 확인
      */
-    public boolean canAnalyze() {
-        return usedCount < monthlyLimit;
+    public boolean canAnalyzeThisWeek() {
+        return weeklyUsedCount < weeklyLimit;
     }
 
     /**
-     * 분석 횟수 증가
+     * 주간 분석 횟수 증가
      */
-    public void incrementUsedCount() {
-        this.usedCount++;
+    public void incrementWeeklyUsedCount() {
+        this.weeklyUsedCount++;
     }
 
     /**
-     * 월별 리셋 (매월 1일)
+     * 주간 리셋 (매주 월요일)
      */
-    public void resetMonthlyQuota(LocalDate newResetDate) {
-        this.usedCount = 0;
-        this.resetDate = newResetDate;
+    public void resetWeeklyQuota(LocalDate nextMonday) {
+        this.weeklyUsedCount = 0;
+        this.weeklyResetDate = nextMonday;
     }
 
     /**
      * 리셋 필요 여부 확인
      */
-    public boolean needsReset(LocalDate today) {
-        return today.isAfter(resetDate) || today.isEqual(resetDate);
+    public boolean needsWeeklyReset(LocalDate today) {
+        return weeklyResetDate == null || !today.isBefore(weeklyResetDate);
     }
 }

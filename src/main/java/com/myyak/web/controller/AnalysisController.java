@@ -61,12 +61,11 @@ public class AnalysisController {
         return ApiResponse.of(SuccessStatus.ANALYSIS_REPORT_DELETED, null);
     }
 
-    // TODO: 유료 결제 도입 후 쿼터 조회 API 활성화
-    // @Operation(summary = "분석 쿼터 조회",
-    //         description = "이번 달 남은 AI 분석 횟수를 조회합니다.")
-    // @GetMapping("/quota")
-    // public ApiResponse<AnalysisResponseDTO.QuotaInfo> getQuotaInfo(Authentication authentication) {
-    //     Long userId = (Long) authentication.getPrincipal();
-    //     return ApiResponse.onSuccess(analysisService.getQuotaInfo(userId));
-    // }
+    @Operation(summary = "분석 쿼터 조회",
+            description = "이번 주 남은 AI 분석 횟수를 조회합니다. 매주 월요일에 리셋됩니다.")
+    @GetMapping("/quota")
+    public ApiResponse<AnalysisResponseDTO.QuotaInfo> getQuotaInfo(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(analysisService.getQuotaInfo(userId));
+    }
 }

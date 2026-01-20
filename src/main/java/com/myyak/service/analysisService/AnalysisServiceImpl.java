@@ -150,16 +150,30 @@ public class AnalysisServiceImpl implements AnalysisService {
             역할:
             - 사용자의 30일간 복약 기록과 건강 메모를 분석합니다
             - 복약 패턴을 파악하고 개선을 위한 인사이트를 제공합니다
-            - 컨디션 점수와 복약률의 상관관계를 분석합니다
+            - 컨디션 점수와 복약률의 시간적 상관관계를 분석합니다
             - 격려와 응원의 메시지를 전달합니다
+
+            시간적 상관관계 분석 원칙:
+            1. 복용 시간 변화와 컨디션 변화의 관계를 분석합니다
+               - 특정 약물의 복용 시간이 변경된 후 컨디션 변화가 있는지 확인
+               - 예: "아침 → 저녁으로 복용 시간 변경 후 다음 날 컨디션 변화"
+            2. 복용 누락과 컨디션 하락의 관계를 분석합니다
+               - 복용을 누락한 다음 날 또는 2-3일 후 컨디션 변화 관찰
+               - 연속 누락일수와 컨디션 하락 폭의 상관관계 파악
+            3. 꾸준한 복용과 컨디션 유지/개선의 관계를 분석합니다
+               - 연속 복용 기간이 길어질수록 컨디션 안정화 여부 확인
+            4. 각 약물별로 개별 분석합니다
+               - medications 배열의 각 약물에 대해 taken_at 시간 패턴 분석
+               - 특정 약물만 누락했을 때의 영향도 분석
 
             규칙:
             1. 의학적 판단을 하지 않습니다
-            2. "위험합니다", "경고", "심각합니다" 같은 표현을 사용하지 않습니다
+            2. 절대 사용 금지 표현: "위험", "경고", "심각", "주의", "문제"
             3. 복용 지시나 의학적 권고를 하지 않습니다
             4. 긍정적이고 격려하는 톤을 유지합니다
             5. 구체적이고 실천 가능한 습관 개선 제안만 합니다
             6. 사용자의 노력을 인정하고 칭찬합니다
+            7. 상관관계 발견 시 "~와 관련이 있어 보입니다", "~한 경향이 있네요" 등 완곡한 표현 사용
 
             출력 형식:
             반드시 아래 JSON 스키마에 맞춰 응답합니다. JSON만 출력하고 다른 텍스트는 포함하지 않습니다.
@@ -208,7 +222,7 @@ public class AnalysisServiceImpl implements AnalysisService {
               "events": [
                 {
                   "date": "YYYY-MM-DD",
-                  "eventType": "CONDITION_CHANGE/ADHERENCE_CHANGE/STREAK",
+                  "eventType": "CONDITION_CHANGE/ADHERENCE_CHANGE/STREAK/SYMPTOM_AFTER_TIMING_CHANGE/SYMPTOM_AFTER_MISSED/STABLE_CONDITION_WITH_ADHERENCE/CONDITION_DROP_WITH_PATTERN",
                   "eventIcon": "이모지 1개",
                   "title": "이벤트 제목",
                   "description": "이벤트 설명"
@@ -221,22 +235,21 @@ public class AnalysisServiceImpl implements AnalysisService {
     public AnalysisResponseDTO.AnalysisResult requestAnalysis(Long userId) {
         User user = findUserById(userId);
 
-        // TODO: 유료 결제 도입 후 쿼터 제한 활성화
-        // // 1. 쿼터 확인 및 리셋 처리
-        // UserAnalysisQuota quota = getOrCreateQuota(user);
-        // checkAndResetQuotaIfNeeded(quota);
-        //
-        // if (!quota.canAnalyze()) {
-        //     throw new GeneralException(ErrorStatus.ANALYSIS_QUOTA_EXCEEDED);
-        // }
+        // 1. 주간 쿼터 확인 및 리셋 처리
+        UserAnalysisQuota quota = getOrCreateQuota(user);
+        checkAndResetWeeklyQuotaIfNeeded(quota);
 
-        // 1. 사용자 복용 약물 조회
+        if (!quota.canAnalyzeThisWeek()) {
+            throw new GeneralException(ErrorStatus.ANALYSIS_WEEKLY_QUOTA_EXCEEDED);
+        }
+
+        // 2. 사용자 복용 약물 조회
         List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
         if (medications.isEmpty()) {
             throw new GeneralException(ErrorStatus.ANALYSIS_NO_MEDICATIONS);
         }
 
-        // 2. 약물 코드 및 성분명 추출
+        // 3. 약물 코드 및 성분명 추출
         List<String> itemSeqs = medications.stream()
                 .filter(m -> m.getDrugInfo() != null)
                 .map(m -> m.getDrugInfo().getItemSeq())
@@ -248,22 +261,22 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .distinct()
                 .toList();
 
-        // 3. 약-약 상호작용 조회
+        // 4. 약-약 상호작용 조회
         List<DrugInteraction> drugInteractions = itemSeqs.isEmpty() ?
                 List.of() : drugInteractionRepository.findByDrugItemSeqsIn(itemSeqs);
 
-        // 4. 약-음식 상호작용 조회
+        // 5. 약-음식 상호작용 조회
         List<DrugFoodInteraction> foodInteractions = (itemSeqs.isEmpty() && ingredientNames.isEmpty()) ?
                 List.of() : drugFoodInteractionRepository.findByDrugItemSeqsOrIngredientNames(itemSeqs, ingredientNames);
 
-        // 5. 사용자 복용 영양제 조회
+        // 6. 사용자 복용 영양제 조회
         List<UserSupplement> userSupplements = userSupplementRepository.findByUserWithSupplement(user);
 
-        // 6. LLM 입력 JSON 생성
+        // 7. LLM 입력 JSON 생성
         String userPrompt = buildUserPrompt(medications, drugInteractions, foodInteractions, userSupplements);
         log.info("[Analysis] LLM 입력 프롬프트 길이: {}", userPrompt.length());
 
-        // 7. LLM 호출
+        // 8. LLM 호출
         String llmResponse;
         try {
             llmResponse = llmClient.generate(SYSTEM_PROMPT, userPrompt);
@@ -273,15 +286,15 @@ public class AnalysisServiceImpl implements AnalysisService {
             throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
         }
 
-        // 8. JSON 추출 및 검증
+        // 9. JSON 추출 및 검증
         String cleanedResponse = extractJsonFromResponse(llmResponse);
 
-        // 9. 패턴 분석 수행
+        // 10. 패턴 분석 수행
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
         String patternAnalysisJson = performPatternAnalysis(userId, startDate, endDate);
 
-        // 10. 레포트 저장
+        // 11. 레포트 저장
         String medicationSnapshot = buildMedicationSnapshot(medications);
         int mechanismGroupCount = countMechanismGroups(cleanedResponse);
         int foodInteractionCount = countFoodInteractions(cleanedResponse);
@@ -300,13 +313,13 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         analysisReportRepository.save(report);
 
-        // TODO: 유료 결제 도입 후 쿼터 사용량 증가 활성화
-        // quota.incrementUsedCount();
+        // 12. 주간 쿼터 사용량 증가
+        quota.incrementWeeklyUsedCount();
 
         log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
                 userId, report.getId(), mechanismGroupCount, foodInteractionCount);
 
-        return AnalysisConverter.toAnalysisResult(report, null);
+        return AnalysisConverter.toAnalysisResult(report, quota);
     }
 
     @Override
@@ -366,24 +379,29 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .orElseGet(() -> {
                     UserAnalysisQuota newQuota = UserAnalysisQuota.builder()
                             .user(user)
-                            .monthlyLimit(3)
-                            .usedCount(0)
-                            .resetDate(getNextMonthFirstDay())
+                            .weeklyLimit(3)
+                            .weeklyUsedCount(0)
+                            .weeklyResetDate(getNextMonday())
                             .build();
                     return userAnalysisQuotaRepository.save(newQuota);
                 });
     }
 
-    private void checkAndResetQuotaIfNeeded(UserAnalysisQuota quota) {
+    private void checkAndResetWeeklyQuotaIfNeeded(UserAnalysisQuota quota) {
         LocalDate today = LocalDate.now();
-        if (quota.needsReset(today)) {
-            quota.resetMonthlyQuota(getNextMonthFirstDay());
-            log.info("[Analysis] 쿼터 리셋 - userId: {}", quota.getUser().getId());
+        if (quota.needsWeeklyReset(today)) {
+            quota.resetWeeklyQuota(getNextMonday());
+            log.info("[Analysis] 주간 쿼터 리셋 - userId: {}", quota.getUser().getId());
         }
     }
 
-    private LocalDate getNextMonthFirstDay() {
-        return LocalDate.now().plusMonths(1).withDayOfMonth(1);
+    private LocalDate getNextMonday() {
+        LocalDate today = LocalDate.now();
+        int daysUntilMonday = (8 - today.getDayOfWeek().getValue()) % 7;
+        if (daysUntilMonday == 0) {
+            daysUntilMonday = 7;
+        }
+        return today.plusDays(daysUntilMonday);
     }
 
     private String buildUserPrompt(List<UserMedication> medications,
@@ -632,6 +650,22 @@ public class AnalysisServiceImpl implements AnalysisService {
                 "total_days", PATTERN_ANALYSIS_DAYS
         ));
 
+        // 복용 중인 약물 목록 (중복 제거)
+        Set<Long> medicationIds = new HashSet<>();
+        List<Map<String, Object>> medications = new ArrayList<>();
+        for (Intake intake : intakes) {
+            Long medId = getMedicationIdFromIntake(intake);
+            if (medId != null && !medicationIds.contains(medId)) {
+                medicationIds.add(medId);
+                Map<String, Object> medInfo = new LinkedHashMap<>();
+                medInfo.put("id", medId);
+                medInfo.put("name", getMedicationNameFromIntake(intake));
+                medInfo.put("ingredient", getMedicationIngredientFromIntake(intake));
+                medications.add(medInfo);
+            }
+        }
+        input.put("medications", medications);
+
         // 일별 데이터 구성
         List<Map<String, Object>> dailyData = buildDailyData(intakes, healthNotes, startDate, endDate);
         input.put("daily_records", dailyData);
@@ -646,6 +680,48 @@ public class AnalysisServiceImpl implements AnalysisService {
             log.error("[PatternAnalysis] 프롬프트 JSON 생성 실패: ", e);
             throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
         }
+    }
+
+    /**
+     * Intake에서 약물/영양제 ID 추출
+     */
+    private Long getMedicationIdFromIntake(Intake intake) {
+        if (intake.getUserMedication() != null) {
+            return intake.getUserMedication().getId();
+        }
+        if (intake.getUserSupplement() != null) {
+            return intake.getUserSupplement().getId();
+        }
+        return null;
+    }
+
+    /**
+     * Intake에서 약물/영양제명 추출
+     */
+    private String getMedicationNameFromIntake(Intake intake) {
+        if (intake.getUserMedication() != null) {
+            UserMedication um = intake.getUserMedication();
+            if (um.getDrugInfo() != null) {
+                return um.getDrugInfo().getDisplayName() != null
+                        ? um.getDrugInfo().getDisplayName()
+                        : um.getDrugInfo().getItemName();
+            }
+            return um.getCustomDrugName();
+        }
+        if (intake.getUserSupplement() != null) {
+            return intake.getUserSupplement().getSupplement().getName();
+        }
+        return null;
+    }
+
+    /**
+     * Intake에서 성분명 추출 (의약품만 해당)
+     */
+    private String getMedicationIngredientFromIntake(Intake intake) {
+        if (intake.getUserMedication() != null && intake.getUserMedication().getDrugInfo() != null) {
+            return intake.getUserMedication().getDrugInfo().getIngredientKr();
+        }
+        return null;
     }
 
     /**
@@ -704,6 +780,24 @@ public class AnalysisServiceImpl implements AnalysisService {
                 }
             }
             dayInfo.put("timing_breakdown", timingCount);
+
+            // 개별 복약 기록 (taken_at 포함)
+            List<Map<String, Object>> intakeDetails = new ArrayList<>();
+            for (Intake intake : dayIntakes) {
+                Map<String, Object> intakeInfo = new LinkedHashMap<>();
+                intakeInfo.put("medication_id", getMedicationIdFromIntake(intake));
+                intakeInfo.put("medication_name", getMedicationNameFromIntake(intake));
+                intakeInfo.put("timing", intake.getTiming() != null ? intake.getTiming().name() : null);
+                intakeInfo.put("status", intake.getStatus().name());
+                if (intake.getStatus() == IntakeStatus.TAKEN && intake.getTakenAt() != null) {
+                    intakeInfo.put("taken_at", intake.getTakenAt().toLocalTime()
+                            .format(DateTimeFormatter.ofPattern("HH:mm")));
+                } else {
+                    intakeInfo.put("taken_at", null);
+                }
+                intakeDetails.add(intakeInfo);
+            }
+            dayInfo.put("intakes", intakeDetails);
 
             // 해당 일의 건강 메모
             HealthNote note = notesByDate.get(date);
