@@ -47,7 +47,12 @@ public enum SuccessStatus implements BaseCode {
 
     // AI 분석 관련
     ANALYSIS_COMPLETED(HttpStatus.OK, "ANALYSIS200", "AI 약물 분석이 완료되었습니다."),
-    ANALYSIS_REPORT_DELETED(HttpStatus.OK, "ANALYSIS201", "분석 레포트가 삭제되었습니다.");
+    ANALYSIS_REPORT_DELETED(HttpStatus.OK, "ANALYSIS201", "분석 레포트가 삭제되었습니다."),
+
+    // 건강 메모 관련
+    HEALTH_NOTE_CREATED(HttpStatus.CREATED, "HNOTE201", "건강 메모가 저장되었습니다."),
+    HEALTH_NOTE_UPDATED(HttpStatus.OK, "HNOTE200", "건강 메모가 수정되었습니다."),
+    HEALTH_NOTE_DELETED(HttpStatus.OK, "HNOTE202", "건강 메모가 삭제되었습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

@@ -8,6 +8,7 @@ import com.myyak.domain.UserAnalysisQuota;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +34,14 @@ public class AnalysisConverter {
         List<AnalysisResponseDTO.MechanismGroup> mechanismGroups = parseMechanismGroups(llmResponse);
         List<AnalysisResponseDTO.FoodInteractionSummary> foodInteractions = parseFoodInteractions(llmResponse);
         List<AnalysisResponseDTO.FoodSuggestion> foodSuggestions = parseFoodSuggestions(llmResponse);
-        List<AnalysisResponseDTO.SupplementInteraction> supplementInteractions = parseSupplementInteractions(llmResponse);
         List<AnalysisResponseDTO.LifestyleTip> lifestyleTips = parseLifestyleTips(llmResponse);
+
+        // 패턴 분석 파싱
+        AnalysisResponseDTO.PatternAnalysis patternAnalysis = parsePatternAnalysis(
+                report.getPatternAnalysis(),
+                report.getAnalysisStartDate(),
+                report.getAnalysisEndDate()
+        );
 
         return AnalysisResponseDTO.AnalysisResult.builder()
                 .reportId(report.getId())
@@ -42,8 +49,8 @@ public class AnalysisConverter {
                 .mechanismGroups(mechanismGroups)
                 .foodInteractions(foodInteractions)
                 .foodSuggestions(foodSuggestions)
-                .supplementInteractions(supplementInteractions)
                 .lifestyleTips(lifestyleTips)
+                .patternAnalysis(patternAnalysis)
                 .quota(toQuotaInfo(quota))
                 .build();
     }
@@ -310,5 +317,213 @@ public class AnalysisConverter {
                         .detail(m.get("detail"))
                         .build())
                 .toList();
+    }
+
+    // ===== 패턴 분석 파싱 메서드 =====
+
+    /**
+     * 패턴 분석 JSON 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static AnalysisResponseDTO.PatternAnalysis parsePatternAnalysis(
+            String patternJson, LocalDate startDate, LocalDate endDate) {
+        if (patternJson == null || patternJson.isBlank()) {
+            return null;
+        }
+
+        try {
+            Map<String, Object> response = objectMapper.readValue(patternJson, new TypeReference<>() {});
+
+            // 복약 순응도 분석
+            AnalysisResponseDTO.AdherenceAnalysis adherenceAnalysis = parseAdherenceAnalysis(
+                    (Map<String, Object>) response.get("adherenceAnalysis"));
+
+            // 패턴 목록
+            List<AnalysisResponseDTO.Pattern> patterns = parsePatterns(
+                    (List<Map<String, Object>>) response.get("patterns"));
+
+            // 인사이트 목록
+            List<AnalysisResponseDTO.Insight> insights = parseInsights(
+                    (List<Map<String, Object>>) response.get("insights"));
+
+            // 요약
+            AnalysisResponseDTO.PatternSummary summary = parseSummary(
+                    (Map<String, Object>) response.get("summary"));
+
+            // 타임라인 이벤트
+            List<AnalysisResponseDTO.TimelineEvent> events = parseEvents(
+                    (List<Map<String, Object>>) response.get("events"));
+
+            return AnalysisResponseDTO.PatternAnalysis.builder()
+                    .analysisStartDate(startDate)
+                    .analysisEndDate(endDate)
+                    .adherenceAnalysis(adherenceAnalysis)
+                    .patterns(patterns)
+                    .insights(insights)
+                    .summary(summary)
+                    .dailyConditions(List.of())  // LLM에서 생성하지 않음, 별도 조회 필요 시 추가
+                    .events(events)
+                    .build();
+
+        } catch (JsonProcessingException e) {
+            log.error("패턴 분석 파싱 실패: ", e);
+            return null;
+        }
+    }
+
+    /**
+     * 복약 순응도 분석 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static AnalysisResponseDTO.AdherenceAnalysis parseAdherenceAnalysis(Map<String, Object> data) {
+        if (data == null) {
+            return null;
+        }
+
+        // 요일별 패턴
+        AnalysisResponseDTO.WeekdayPattern weekdayPattern = null;
+        Map<String, Object> weekdayData = (Map<String, Object>) data.get("weekdayPattern");
+        if (weekdayData != null) {
+            weekdayPattern = AnalysisResponseDTO.WeekdayPattern.builder()
+                    .mondayRate(toDouble(weekdayData.get("mondayRate")))
+                    .tuesdayRate(toDouble(weekdayData.get("tuesdayRate")))
+                    .wednesdayRate(toDouble(weekdayData.get("wednesdayRate")))
+                    .thursdayRate(toDouble(weekdayData.get("thursdayRate")))
+                    .fridayRate(toDouble(weekdayData.get("fridayRate")))
+                    .saturdayRate(toDouble(weekdayData.get("saturdayRate")))
+                    .sundayRate(toDouble(weekdayData.get("sundayRate")))
+                    .bestDay((String) weekdayData.get("bestDay"))
+                    .worstDay((String) weekdayData.get("worstDay"))
+                    .build();
+        }
+
+        // 시간대별 패턴
+        AnalysisResponseDTO.TimingPattern timingPattern = null;
+        Map<String, Object> timingData = (Map<String, Object>) data.get("timingPattern");
+        if (timingData != null) {
+            timingPattern = AnalysisResponseDTO.TimingPattern.builder()
+                    .morningRate(toDouble(timingData.get("morningRate")))
+                    .lunchRate(toDouble(timingData.get("lunchRate")))
+                    .dinnerRate(toDouble(timingData.get("dinnerRate")))
+                    .bedtimeRate(toDouble(timingData.get("bedtimeRate")))
+                    .bestTiming((String) timingData.get("bestTiming"))
+                    .worstTiming((String) timingData.get("worstTiming"))
+                    .build();
+        }
+
+        return AnalysisResponseDTO.AdherenceAnalysis.builder()
+                .overallRate(toDouble(data.get("overallRate")))
+                .weekdayPattern(weekdayPattern)
+                .timingPattern(timingPattern)
+                .missedDays(toInteger(data.get("missedDays")))
+                .perfectDays(toInteger(data.get("perfectDays")))
+                .build();
+    }
+
+    /**
+     * 패턴 목록 파싱
+     */
+    private static List<AnalysisResponseDTO.Pattern> parsePatterns(List<Map<String, Object>> patternList) {
+        if (patternList == null) {
+            return List.of();
+        }
+
+        return patternList.stream()
+                .map(p -> AnalysisResponseDTO.Pattern.builder()
+                        .patternType((String) p.get("patternType"))
+                        .patternIcon((String) p.get("patternIcon"))
+                        .title((String) p.get("title"))
+                        .description((String) p.get("description"))
+                        .suggestion((String) p.get("suggestion"))
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 인사이트 목록 파싱
+     */
+    private static List<AnalysisResponseDTO.Insight> parseInsights(List<Map<String, Object>> insightList) {
+        if (insightList == null) {
+            return List.of();
+        }
+
+        return insightList.stream()
+                .map(i -> AnalysisResponseDTO.Insight.builder()
+                        .insightType((String) i.get("insightType"))
+                        .insightIcon((String) i.get("insightIcon"))
+                        .title((String) i.get("title"))
+                        .description((String) i.get("description"))
+                        .actionItem((String) i.get("actionItem"))
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 요약 파싱
+     */
+    private static AnalysisResponseDTO.PatternSummary parseSummary(Map<String, Object> summaryData) {
+        if (summaryData == null) {
+            return null;
+        }
+
+        return AnalysisResponseDTO.PatternSummary.builder()
+                .overallAssessment((String) summaryData.get("overallAssessment"))
+                .positivePoint((String) summaryData.get("positivePoint"))
+                .improvementPoint((String) summaryData.get("improvementPoint"))
+                .encouragement((String) summaryData.get("encouragement"))
+                .build();
+    }
+
+    /**
+     * 타임라인 이벤트 파싱
+     */
+    private static List<AnalysisResponseDTO.TimelineEvent> parseEvents(List<Map<String, Object>> eventList) {
+        if (eventList == null) {
+            return List.of();
+        }
+
+        return eventList.stream()
+                .map(e -> {
+                    LocalDate date = null;
+                    String dateStr = (String) e.get("date");
+                    if (dateStr != null) {
+                        try {
+                            date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+                        } catch (Exception ex) {
+                            log.warn("이벤트 날짜 파싱 실패: {}", dateStr);
+                        }
+                    }
+
+                    return AnalysisResponseDTO.TimelineEvent.builder()
+                            .date(date)
+                            .eventType((String) e.get("eventType"))
+                            .eventIcon((String) e.get("eventIcon"))
+                            .title((String) e.get("title"))
+                            .description((String) e.get("description"))
+                            .build();
+                })
+                .toList();
+    }
+
+    // ===== 유틸리티 메서드 =====
+
+    private static Double toDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return null;
+    }
+
+    private static Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        return null;
     }
 }

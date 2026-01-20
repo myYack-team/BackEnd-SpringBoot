@@ -4,6 +4,7 @@ import com.myyak.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -52,4 +53,25 @@ public class AnalysisReport extends BaseEntity {
         "foodInteractions": [...]
     }
     */
+
+    // ===== 패턴 분석 관련 필드 =====
+
+    @Column(columnDefinition = "JSON")
+    private String patternAnalysis;         // 패턴 분석 결과 JSON
+    /*
+    {
+        "adherenceAnalysis": {...},
+        "patterns": [...],
+        "insights": [...],
+        "summary": {...},
+        "dailyConditions": [...],
+        "events": [...]
+    }
+    */
+
+    @Column
+    private LocalDate analysisStartDate;    // 패턴 분석 시작 날짜 (30일 전)
+
+    @Column
+    private LocalDate analysisEndDate;      // 패턴 분석 종료 날짜 (분석 당일)
 }

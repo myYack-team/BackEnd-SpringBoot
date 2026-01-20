@@ -2,6 +2,7 @@ package com.myyak.web.dto.AnalysisDTO;
 
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,8 +24,8 @@ public class AnalysisResponseDTO {
         private List<MechanismGroup> mechanismGroups;
         private List<FoodInteractionSummary> foodInteractions;
         private List<FoodSuggestion> foodSuggestions;
-        private List<SupplementInteraction> supplementInteractions;
         private List<LifestyleTip> lifestyleTips;
+        private PatternAnalysis patternAnalysis;  // 패턴 분석 결과
         private QuotaInfo quota;
     }
 
@@ -198,5 +199,148 @@ public class AnalysisResponseDTO {
     public static class RelatedMedication {
         private String name;    // 약물명
         private String detail;  // 추가 설명 (선택)
+    }
+
+    // ===== 패턴 분석 관련 DTO =====
+
+    /**
+     * 패턴 분석 결과 (메인)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PatternAnalysis {
+        private LocalDate analysisStartDate;              // 분석 시작 날짜
+        private LocalDate analysisEndDate;                // 분석 종료 날짜
+        private AdherenceAnalysis adherenceAnalysis;      // 복약 순응도 분석
+        private List<Pattern> patterns;                   // 발견된 패턴 목록
+        private List<Insight> insights;                   // 인사이트 목록
+        private PatternSummary summary;                   // 요약
+        private List<DailyCondition> dailyConditions;     // 일별 컨디션 (그래프용)
+        private List<TimelineEvent> events;               // 타임라인 이벤트
+    }
+
+    /**
+     * 복약 순응도 분석
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class AdherenceAnalysis {
+        private Double overallRate;                   // 전체 복약률 (0~100)
+        private WeekdayPattern weekdayPattern;        // 요일별 패턴
+        private TimingPattern timingPattern;          // 시간대별 패턴
+        private Integer missedDays;                   // 복용 누락 일수
+        private Integer perfectDays;                  // 완벽 복용 일수
+    }
+
+    /**
+     * 요일별 패턴
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class WeekdayPattern {
+        private Double mondayRate;
+        private Double tuesdayRate;
+        private Double wednesdayRate;
+        private Double thursdayRate;
+        private Double fridayRate;
+        private Double saturdayRate;
+        private Double sundayRate;
+        private String bestDay;           // 가장 복약률이 높은 요일
+        private String worstDay;          // 가장 복약률이 낮은 요일
+    }
+
+    /**
+     * 시간대별 패턴
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TimingPattern {
+        private Double morningRate;       // 아침 복약률
+        private Double lunchRate;         // 점심 복약률
+        private Double dinnerRate;        // 저녁 복약률
+        private Double bedtimeRate;       // 취침 전 복약률
+        private String bestTiming;        // 가장 복약률이 높은 시간대
+        private String worstTiming;       // 가장 복약률이 낮은 시간대
+    }
+
+    /**
+     * 발견된 패턴
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Pattern {
+        private String patternType;       // POSITIVE, NEGATIVE, NEUTRAL
+        private String patternIcon;       // 이모지 아이콘
+        private String title;             // 패턴 제목
+        private String description;       // 패턴 설명
+        private String suggestion;        // 개선 제안 (선택)
+    }
+
+    /**
+     * 인사이트 (분석 결과에서 도출된 통찰)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class Insight {
+        private String insightType;       // CONDITION_CORRELATION, HABIT_SUGGESTION, ACHIEVEMENT
+        private String insightIcon;       // 이모지 아이콘
+        private String title;             // 인사이트 제목
+        private String description;       // 인사이트 설명
+        private String actionItem;        // 실천 항목 (선택)
+    }
+
+    /**
+     * 패턴 분석 요약
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PatternSummary {
+        private String overallAssessment;     // 전반적인 평가 (1~2문장)
+        private String positivePoint;         // 긍정적인 점
+        private String improvementPoint;      // 개선이 필요한 점
+        private String encouragement;         // 격려 메시지
+    }
+
+    /**
+     * 일별 컨디션 (그래프 데이터용)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DailyCondition {
+        private LocalDate date;           // 날짜
+        private Integer conditionScore;   // 컨디션 점수 (0~10)
+        private Double adherenceRate;     // 해당 일 복약률 (0~100)
+        private Boolean hasNote;          // 메모 존재 여부
+    }
+
+    /**
+     * 타임라인 이벤트 (주요 변화 포인트)
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TimelineEvent {
+        private LocalDate date;           // 이벤트 날짜
+        private String eventType;         // CONDITION_CHANGE, ADHERENCE_CHANGE, MEDICATION_CHANGE
+        private String eventIcon;         // 이모지 아이콘
+        private String title;             // 이벤트 제목
+        private String description;       // 이벤트 설명
     }
 }

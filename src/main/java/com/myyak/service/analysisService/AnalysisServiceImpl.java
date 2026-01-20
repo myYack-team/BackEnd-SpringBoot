@@ -6,6 +6,7 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.converter.AnalysisConverter;
 import com.myyak.domain.*;
+import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.repository.*;
 import com.myyak.service.llm.LlmClient;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -34,8 +36,12 @@ public class AnalysisServiceImpl implements AnalysisService {
     private final DrugFoodInteractionRepository drugFoodInteractionRepository;
     private final AnalysisReportRepository analysisReportRepository;
     private final UserAnalysisQuotaRepository userAnalysisQuotaRepository;
+    private final IntakeRepository intakeRepository;
+    private final HealthNoteRepository healthNoteRepository;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
+
+    private static final int PATTERN_ANALYSIS_DAYS = 30;  // 패턴 분석 기간 (30일)
 
     private static final String SYSTEM_PROMPT = """
             당신은 복약 정보 요약 도우미입니다.
@@ -138,6 +144,79 @@ public class AnalysisServiceImpl implements AnalysisService {
             }
             """;
 
+    private static final String PATTERN_ANALYSIS_SYSTEM_PROMPT = """
+            당신은 복약 습관 분석 도우미입니다.
+
+            역할:
+            - 사용자의 30일간 복약 기록과 건강 메모를 분석합니다
+            - 복약 패턴을 파악하고 개선을 위한 인사이트를 제공합니다
+            - 컨디션 점수와 복약률의 상관관계를 분석합니다
+            - 격려와 응원의 메시지를 전달합니다
+
+            규칙:
+            1. 의학적 판단을 하지 않습니다
+            2. "위험합니다", "경고", "심각합니다" 같은 표현을 사용하지 않습니다
+            3. 복용 지시나 의학적 권고를 하지 않습니다
+            4. 긍정적이고 격려하는 톤을 유지합니다
+            5. 구체적이고 실천 가능한 습관 개선 제안만 합니다
+            6. 사용자의 노력을 인정하고 칭찬합니다
+
+            출력 형식:
+            반드시 아래 JSON 스키마에 맞춰 응답합니다. JSON만 출력하고 다른 텍스트는 포함하지 않습니다.
+
+            {
+              "adherenceAnalysis": {
+                "overallRate": 0~100 사이 숫자 (전체 복약률),
+                "weekdayPattern": {
+                  "mondayRate": 숫자, "tuesdayRate": 숫자, "wednesdayRate": 숫자,
+                  "thursdayRate": 숫자, "fridayRate": 숫자, "saturdayRate": 숫자, "sundayRate": 숫자,
+                  "bestDay": "가장 복약률 높은 요일 한글 (예: 월요일)",
+                  "worstDay": "가장 복약률 낮은 요일 한글 (예: 토요일)"
+                },
+                "timingPattern": {
+                  "morningRate": 숫자, "lunchRate": 숫자, "dinnerRate": 숫자, "bedtimeRate": 숫자,
+                  "bestTiming": "가장 복약률 높은 시간대 한글 (예: 아침)",
+                  "worstTiming": "가장 복약률 낮은 시간대 한글 (예: 점심)"
+                },
+                "missedDays": 숫자 (복용 누락 일수),
+                "perfectDays": 숫자 (완벽 복용 일수)
+              },
+              "patterns": [
+                {
+                  "patternType": "POSITIVE/NEGATIVE/NEUTRAL",
+                  "patternIcon": "이모지 1개",
+                  "title": "패턴 제목 (짧게)",
+                  "description": "패턴 설명 1~2줄",
+                  "suggestion": "개선 제안 (선택, POSITIVE면 null)"
+                }
+              ],
+              "insights": [
+                {
+                  "insightType": "CONDITION_CORRELATION/HABIT_SUGGESTION/ACHIEVEMENT",
+                  "insightIcon": "이모지 1개",
+                  "title": "인사이트 제목",
+                  "description": "인사이트 설명 1~2줄",
+                  "actionItem": "실천 항목 (선택, 없으면 null)"
+                }
+              ],
+              "summary": {
+                "overallAssessment": "전반적인 평가 1~2문장",
+                "positivePoint": "긍정적인 점 1문장",
+                "improvementPoint": "개선이 필요한 점 1문장 (부정적 표현 금지)",
+                "encouragement": "격려 메시지 1문장"
+              },
+              "events": [
+                {
+                  "date": "YYYY-MM-DD",
+                  "eventType": "CONDITION_CHANGE/ADHERENCE_CHANGE/STREAK",
+                  "eventIcon": "이모지 1개",
+                  "title": "이벤트 제목",
+                  "description": "이벤트 설명"
+                }
+              ]
+            }
+            """;
+
     @Override
     public AnalysisResponseDTO.AnalysisResult requestAnalysis(Long userId) {
         User user = findUserById(userId);
@@ -197,7 +276,12 @@ public class AnalysisServiceImpl implements AnalysisService {
         // 8. JSON 추출 및 검증
         String cleanedResponse = extractJsonFromResponse(llmResponse);
 
-        // 9. 레포트 저장
+        // 9. 패턴 분석 수행
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
+        String patternAnalysisJson = performPatternAnalysis(userId, startDate, endDate);
+
+        // 10. 레포트 저장
         String medicationSnapshot = buildMedicationSnapshot(medications);
         int mechanismGroupCount = countMechanismGroups(cleanedResponse);
         int foodInteractionCount = countFoodInteractions(cleanedResponse);
@@ -209,6 +293,9 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .foodInteractionCount(foodInteractionCount)
                 .medicationSnapshot(medicationSnapshot)
                 .llmResponse(cleanedResponse)
+                .patternAnalysis(patternAnalysisJson)
+                .analysisStartDate(startDate)
+                .analysisEndDate(endDate)
                 .build();
 
         analysisReportRepository.save(report);
@@ -484,5 +571,200 @@ public class AnalysisServiceImpl implements AnalysisService {
             return text;
         }
         return text.substring(0, maxLength) + "...";
+    }
+
+    // ===== Pattern Analysis Methods =====
+
+    /**
+     * 패턴 분석 수행
+     * 30일간의 복약 기록과 건강 메모를 수집하여 LLM으로 분석
+     */
+    private String performPatternAnalysis(Long userId, LocalDate startDate, LocalDate endDate) {
+        // 1. 30일간 복약 기록 조회
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
+        List<Intake> intakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(
+                userId, startDateTime, endDateTime);
+
+        // 2. 30일간 건강 메모 조회
+        List<HealthNote> healthNotes = healthNoteRepository.findByUserIdAndNoteDateBetween(
+                userId, startDate, endDate);
+
+        // 3. 데이터가 부족한 경우 빈 응답 반환
+        if (intakes.isEmpty() && healthNotes.isEmpty()) {
+            log.info("[PatternAnalysis] 분석할 데이터 부족 - userId: {}", userId);
+            return null;
+        }
+
+        // 4. LLM 입력 JSON 생성
+        String patternPrompt = buildPatternAnalysisPrompt(intakes, healthNotes, startDate, endDate);
+        log.info("[PatternAnalysis] LLM 입력 프롬프트 길이: {}", patternPrompt.length());
+
+        // 5. LLM 호출
+        String patternResponse;
+        try {
+            patternResponse = llmClient.generate(PATTERN_ANALYSIS_SYSTEM_PROMPT, patternPrompt);
+            log.info("[PatternAnalysis] LLM 응답 길이: {}", patternResponse.length());
+        } catch (Exception e) {
+            log.error("[PatternAnalysis] LLM 호출 실패: ", e);
+            return null;  // 패턴 분석 실패해도 기본 분석은 진행
+        }
+
+        // 6. JSON 추출
+        return extractJsonFromResponse(patternResponse);
+    }
+
+    /**
+     * 패턴 분석용 프롬프트 생성
+     */
+    private String buildPatternAnalysisPrompt(List<Intake> intakes, List<HealthNote> healthNotes,
+                                               LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> input = new LinkedHashMap<>();
+
+        // 분석 기간
+        input.put("analysis_period", Map.of(
+                "start_date", startDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                "end_date", endDate.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                "total_days", PATTERN_ANALYSIS_DAYS
+        ));
+
+        // 일별 데이터 구성
+        List<Map<String, Object>> dailyData = buildDailyData(intakes, healthNotes, startDate, endDate);
+        input.put("daily_records", dailyData);
+
+        // 요약 통계
+        Map<String, Object> statistics = buildStatistics(intakes, healthNotes, startDate, endDate);
+        input.put("statistics", statistics);
+
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(input);
+        } catch (JsonProcessingException e) {
+            log.error("[PatternAnalysis] 프롬프트 JSON 생성 실패: ", e);
+            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
+        }
+    }
+
+    /**
+     * 일별 데이터 구성
+     */
+    private List<Map<String, Object>> buildDailyData(List<Intake> intakes, List<HealthNote> healthNotes,
+                                                      LocalDate startDate, LocalDate endDate) {
+        // 날짜별 복약 기록 그룹화
+        Map<LocalDate, List<Intake>> intakesByDate = intakes.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        i -> i.getTakenAt().toLocalDate()
+                ));
+
+        // 날짜별 건강 메모 매핑
+        Map<LocalDate, HealthNote> notesByDate = healthNotes.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        HealthNote::getNoteDate,
+                        n -> n,
+                        (a, b) -> a  // 중복 시 첫 번째 사용
+                ));
+
+        List<Map<String, Object>> dailyData = new ArrayList<>();
+
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            Map<String, Object> dayInfo = new LinkedHashMap<>();
+            dayInfo.put("date", date.format(DateTimeFormatter.ISO_LOCAL_DATE));
+            dayInfo.put("day_of_week", date.getDayOfWeek().name());
+
+            // 해당 일의 복약 기록
+            List<Intake> dayIntakes = intakesByDate.getOrDefault(date, List.of());
+            int takenCount = (int) dayIntakes.stream()
+                    .filter(i -> i.getStatus() == IntakeStatus.TAKEN)
+                    .count();
+            int skippedCount = (int) dayIntakes.stream()
+                    .filter(i -> i.getStatus() == IntakeStatus.SKIPPED)
+                    .count();
+            int totalScheduled = dayIntakes.size();
+
+            dayInfo.put("taken_count", takenCount);
+            dayInfo.put("skipped_count", skippedCount);
+            dayInfo.put("total_scheduled", totalScheduled);
+            dayInfo.put("adherence_rate", totalScheduled > 0 ?
+                    Math.round((double) takenCount / totalScheduled * 100.0) : null);
+
+            // 시간대별 복약 (아침/점심/저녁/취침전)
+            Map<String, Integer> timingCount = new LinkedHashMap<>();
+            timingCount.put("MORNING", 0);
+            timingCount.put("LUNCH", 0);
+            timingCount.put("DINNER", 0);
+            timingCount.put("BEDTIME", 0);
+
+            for (Intake intake : dayIntakes) {
+                if (intake.getStatus() == IntakeStatus.TAKEN && intake.getTiming() != null) {
+                    String timing = intake.getTiming().name();
+                    timingCount.merge(timing, 1, Integer::sum);
+                }
+            }
+            dayInfo.put("timing_breakdown", timingCount);
+
+            // 해당 일의 건강 메모
+            HealthNote note = notesByDate.get(date);
+            if (note != null) {
+                dayInfo.put("condition_score", note.getConditionScore());
+                dayInfo.put("note_content", truncateText(note.getContent(), 100));
+            } else {
+                dayInfo.put("condition_score", null);
+                dayInfo.put("note_content", null);
+            }
+
+            dailyData.add(dayInfo);
+        }
+
+        return dailyData;
+    }
+
+    /**
+     * 통계 정보 생성
+     */
+    private Map<String, Object> buildStatistics(List<Intake> intakes, List<HealthNote> healthNotes,
+                                                 LocalDate startDate, LocalDate endDate) {
+        Map<String, Object> stats = new LinkedHashMap<>();
+
+        // 전체 복약 통계
+        long totalTaken = intakes.stream()
+                .filter(i -> i.getStatus() == IntakeStatus.TAKEN)
+                .count();
+        long totalSkipped = intakes.stream()
+                .filter(i -> i.getStatus() == IntakeStatus.SKIPPED)
+                .count();
+        long totalScheduled = intakes.size();
+
+        stats.put("total_taken", totalTaken);
+        stats.put("total_skipped", totalSkipped);
+        stats.put("total_scheduled", totalScheduled);
+        stats.put("overall_adherence_rate", totalScheduled > 0 ?
+                Math.round((double) totalTaken / totalScheduled * 100.0) : 0);
+
+        // 건강 메모 통계
+        if (!healthNotes.isEmpty()) {
+            double avgCondition = healthNotes.stream()
+                    .mapToInt(HealthNote::getConditionScore)
+                    .average()
+                    .orElse(0);
+            int minCondition = healthNotes.stream()
+                    .mapToInt(HealthNote::getConditionScore)
+                    .min()
+                    .orElse(0);
+            int maxCondition = healthNotes.stream()
+                    .mapToInt(HealthNote::getConditionScore)
+                    .max()
+                    .orElse(10);
+
+            stats.put("avg_condition_score", Math.round(avgCondition * 10.0) / 10.0);
+            stats.put("min_condition_score", minCondition);
+            stats.put("max_condition_score", maxCondition);
+            stats.put("notes_count", healthNotes.size());
+        } else {
+            stats.put("avg_condition_score", null);
+            stats.put("min_condition_score", null);
+            stats.put("max_condition_score", null);
+            stats.put("notes_count", 0);
+        }
+
+        return stats;
     }
 }
