@@ -209,13 +209,22 @@ public class GeminiLlmAdapter implements LlmClient {
         // candidates 추출
         JsonNode candidates = root.path("candidates");
         if (candidates.isEmpty() || !candidates.isArray() || candidates.size() == 0) {
-            log.error("[Gemini] 응답에 candidates가 없음");
+            log.error("[Gemini] 응답에 candidates가 없음. 전체 응답: {}", response);
             throw new RuntimeException("Gemini 응답이 비어있습니다.");
         }
 
-        // finishReason 로깅
-        String finishReason = candidates.get(0).path("finishReason").asText("UNKNOWN");
-        log.debug("[Gemini] finishReason: {}", finishReason);
+        JsonNode firstCandidate = candidates.get(0);
+
+        // finishReason 로깅 (SAFETY로 차단된 경우 확인)
+        String finishReason = firstCandidate.path("finishReason").asText("UNKNOWN");
+        log.info("[Gemini] finishReason: {}", finishReason);
+
+        // 안전 필터에 의해 차단된 경우
+        if ("SAFETY".equals(finishReason) || "BLOCKED".equals(finishReason)) {
+            JsonNode safetyRatings = firstCandidate.path("safetyRatings");
+            log.error("[Gemini] 안전 필터에 의해 차단됨. safetyRatings: {}", safetyRatings);
+            throw new RuntimeException("Gemini 응답이 안전 필터에 의해 차단되었습니다.");
+        }
 
         // 토큰 사용량 로깅
         JsonNode usageMetadata = root.path("usageMetadata");
@@ -226,13 +235,32 @@ public class GeminiLlmAdapter implements LlmClient {
                     usageMetadata.path("totalTokenCount").asInt());
         }
 
+        // content 추출
+        JsonNode content = firstCandidate.path("content");
+        if (content.isMissingNode()) {
+            log.error("[Gemini] content가 없음. candidate: {}", firstCandidate);
+            throw new RuntimeException("Gemini 응답에 content가 없습니다. finishReason: " + finishReason);
+        }
+
+        // parts 추출
+        JsonNode parts = content.path("parts");
+        if (parts.isEmpty() || !parts.isArray() || parts.size() == 0) {
+            log.error("[Gemini] parts가 비어있음. content: {}", content);
+            throw new RuntimeException("Gemini 응답의 parts가 비어있습니다. finishReason: " + finishReason);
+        }
+
+        JsonNode firstPart = parts.get(0);
+        if (firstPart == null) {
+            log.error("[Gemini] parts[0]이 null. parts: {}", parts);
+            throw new RuntimeException("Gemini 응답의 parts[0]이 null입니다.");
+        }
+
         // 텍스트 추출
-        String text = candidates.get(0)
-                .path("content")
-                .path("parts")
-                .get(0)
-                .path("text")
-                .asText();
+        String text = firstPart.path("text").asText("");
+
+        if (text.isEmpty()) {
+            log.warn("[Gemini] 텍스트가 비어있음. firstPart: {}", firstPart);
+        }
 
         log.debug("[Gemini] 응답 텍스트 길이: {}", text.length());
 
