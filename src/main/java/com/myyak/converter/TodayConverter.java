@@ -12,6 +12,7 @@ import com.myyak.web.dto.TodayDTO.TodayResponseDTO;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -43,8 +44,9 @@ public class TodayConverter {
             Map<Long, List<Intake>> intakesByMedicationId,
             Map<Long, List<Intake>> intakesBySupplementId) {
 
+        // 실제 알림 시간(LocalTime)을 기준으로 timing을 결정하여 그룹핑
         Map<MedicationTiming, List<Reminder>> remindersByTiming = reminders.stream()
-                .collect(Collectors.groupingBy(Reminder::getTiming));
+                .collect(Collectors.groupingBy(r -> MedicationTiming.fromTime(r.getTime())));
 
         List<TodayResponseDTO.TodaySchedule> schedules = new ArrayList<>();
         int totalMedications = 0;
