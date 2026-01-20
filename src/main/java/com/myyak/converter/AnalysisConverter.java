@@ -27,6 +27,16 @@ public class AnalysisConverter {
     public static AnalysisResponseDTO.AnalysisResult toAnalysisResult(
             AnalysisReport report,
             UserAnalysisQuota quota) {
+        return toAnalysisResult(report, quota, List.of());
+    }
+
+    /**
+     * 레포트 엔티티 → 분석 결과 DTO (dailyConditions 포함)
+     */
+    public static AnalysisResponseDTO.AnalysisResult toAnalysisResult(
+            AnalysisReport report,
+            UserAnalysisQuota quota,
+            List<AnalysisResponseDTO.DailyCondition> dailyConditions) {
 
         String llmResponse = report.getLlmResponse();
 
@@ -36,11 +46,12 @@ public class AnalysisConverter {
         List<AnalysisResponseDTO.FoodSuggestion> foodSuggestions = parseFoodSuggestions(llmResponse);
         List<AnalysisResponseDTO.LifestyleTip> lifestyleTips = parseLifestyleTips(llmResponse);
 
-        // 패턴 분석 파싱
+        // 패턴 분석 파싱 (dailyConditions 전달)
         AnalysisResponseDTO.PatternAnalysis patternAnalysis = parsePatternAnalysis(
                 report.getPatternAnalysis(),
                 report.getAnalysisStartDate(),
-                report.getAnalysisEndDate()
+                report.getAnalysisEndDate(),
+                dailyConditions
         );
 
         return AnalysisResponseDTO.AnalysisResult.builder()
@@ -326,7 +337,8 @@ public class AnalysisConverter {
      */
     @SuppressWarnings("unchecked")
     private static AnalysisResponseDTO.PatternAnalysis parsePatternAnalysis(
-            String patternJson, LocalDate startDate, LocalDate endDate) {
+            String patternJson, LocalDate startDate, LocalDate endDate,
+            List<AnalysisResponseDTO.DailyCondition> dailyConditions) {
         if (patternJson == null || patternJson.isBlank()) {
             return null;
         }
@@ -361,7 +373,7 @@ public class AnalysisConverter {
                     .patterns(patterns)
                     .insights(insights)
                     .summary(summary)
-                    .dailyConditions(List.of())  // LLM에서 생성하지 않음, 별도 조회 필요 시 추가
+                    .dailyConditions(dailyConditions != null ? dailyConditions : List.of())
                     .events(events)
                     .build();
 

@@ -327,7 +327,11 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         UserAnalysisQuota quota = userAnalysisQuotaRepository.findByUser(user).orElse(null);
 
-        return AnalysisConverter.toAnalysisResult(report, quota);
+        // dailyConditions 조회 (분석 기간 내 건강 메모에서)
+        List<AnalysisResponseDTO.DailyCondition> dailyConditions = buildDailyConditions(
+                user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
+
+        return AnalysisConverter.toAnalysisResult(report, quota, dailyConditions);
     }
 
     @Override
@@ -766,5 +770,59 @@ public class AnalysisServiceImpl implements AnalysisService {
         }
 
         return stats;
+    }
+
+    /**
+     * 분석 기간 내 일별 컨디션 데이터 생성 (그래프용)
+     */
+    private List<AnalysisResponseDTO.DailyCondition> buildDailyConditions(
+            User user, LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            return List.of();
+        }
+
+        // 분석 기간 내 건강 메모 조회
+        List<HealthNote> healthNotes = healthNoteRepository.findByUserAndNoteDateBetween(
+                user, startDate, endDate);
+
+        if (healthNotes.isEmpty()) {
+            return List.of();
+        }
+
+        // 해당 기간의 복약 기록 조회 (복약률 계산용)
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
+        List<Intake> intakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(
+                user.getId(), startDateTime, endDateTime);
+
+        // 날짜별 복약 기록 그룹화
+        Map<LocalDate, List<Intake>> intakesByDate = intakes.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        i -> i.getTakenAt().toLocalDate()
+                ));
+
+        // 건강 메모를 DailyCondition DTO로 변환
+        return healthNotes.stream()
+                .map(note -> {
+                    LocalDate date = note.getNoteDate();
+
+                    // 해당 일의 복약률 계산
+                    List<Intake> dayIntakes = intakesByDate.getOrDefault(date, List.of());
+                    Double adherenceRate = null;
+                    if (!dayIntakes.isEmpty()) {
+                        long takenCount = dayIntakes.stream()
+                                .filter(i -> i.getStatus() == IntakeStatus.TAKEN)
+                                .count();
+                        adherenceRate = Math.round((double) takenCount / dayIntakes.size() * 100.0 * 10.0) / 10.0;
+                    }
+
+                    return AnalysisResponseDTO.DailyCondition.builder()
+                            .date(date)
+                            .conditionScore(note.getConditionScore())
+                            .adherenceRate(adherenceRate)
+                            .hasNote(note.getContent() != null && !note.getContent().isBlank())
+                            .build();
+                })
+                .toList();
     }
 }
