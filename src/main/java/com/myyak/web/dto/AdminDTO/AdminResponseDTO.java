@@ -220,4 +220,18 @@ public class AdminResponseDTO {
         private List<Long> deletedUserIds;
         private List<Long> failedUserIds;
     }
+
+    /**
+     * AI 모델 설정 응답
+     */
+    @Getter
+    @Builder
+    public static class AiModelSetting {
+        private String analysisModel;           // 현재 분석 모델
+        private String fallbackModel;           // 폴백 모델
+        private boolean fallbackEnabled;        // 폴백 활성화 여부
+        private String configAnalysisModel;     // application.yaml에 설정된 기본값
+        private List<String> availableModels;   // 선택 가능한 모델 목록
+        private LocalDateTime updatedAt;
+    }
 }

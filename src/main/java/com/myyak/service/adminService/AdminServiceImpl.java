@@ -7,6 +7,8 @@ import com.myyak.domain.User;
 import com.myyak.domain.enums.Gender;
 import com.myyak.domain.enums.SignupPurpose;
 import com.myyak.domain.enums.SupplementTag;
+import com.myyak.domain.AppSetting;
+import com.myyak.repository.AppSettingRepository;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.SupplementRepository;
 import com.myyak.repository.UserMedicationRepository;
@@ -56,6 +58,7 @@ public class AdminServiceImpl implements AdminService {
     private final LlmClient llmClient;
     private final UserService userService;
     private final UserMedicationRepository userMedicationRepository;
+    private final AppSettingRepository appSettingRepository;
 
     // 서버 로그 형식: 2026-01-09T11:44:03.382+09:00  INFO 31804 --- [myyak-server] [           main] c.m.Class : Message
     private static final Pattern LOG_PATTERN = Pattern.compile(
@@ -706,5 +709,97 @@ public class AdminServiceImpl implements AdminService {
                 .createdAt(user.getCreatedAt())
                 .lastLoginAt(user.getUpdatedAt())
                 .build();
+    }
+
+    // ===== AI 모델 설정 관련 =====
+
+    @Value("${ai.gemini.analysis-model:gemini-2.5-pro}")
+    private String configAnalysisModel;
+
+    private static final List<String> AVAILABLE_MODELS = List.of(
+            "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash"
+    );
+
+    @Override
+    public AdminResponseDTO.AiModelSetting getAiModelSetting() {
+        // DB에서 설정 조회, 없으면 config 기본값 사용
+        String analysisModel = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_MODEL)
+                .map(AppSetting::getSettingValue)
+                .orElse(configAnalysisModel);
+
+        String fallbackModel = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL)
+                .map(AppSetting::getSettingValue)
+                .orElse("gemini-3-flash-preview");
+
+        boolean fallbackEnabled = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_FALLBACK_ENABLED)
+                .map(s -> Boolean.parseBoolean(s.getSettingValue()))
+                .orElse(true);
+
+        LocalDateTime updatedAt = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_MODEL)
+                .map(AppSetting::getUpdatedAt)
+                .orElse(null);
+
+        return AdminResponseDTO.AiModelSetting.builder()
+                .analysisModel(analysisModel)
+                .fallbackModel(fallbackModel)
+                .fallbackEnabled(fallbackEnabled)
+                .configAnalysisModel(configAnalysisModel)
+                .availableModels(AVAILABLE_MODELS)
+                .updatedAt(updatedAt)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AdminResponseDTO.AiModelSetting updateAiModelSetting(AdminRequestDTO.AiModelSettingRequest request) {
+        log.info("AI 모델 설정 변경 요청: model={}, fallback={}, enabled={}",
+                request.getAnalysisModel(), request.getFallbackModel(), request.getFallbackEnabled());
+
+        // 분석 모델 설정
+        if (request.getAnalysisModel() != null) {
+            updateOrCreateSetting(
+                    AppSetting.KEY_GEMINI_ANALYSIS_MODEL,
+                    request.getAnalysisModel(),
+                    "Gemini 분석용 모델"
+            );
+        }
+
+        // 폴백 모델 설정
+        if (request.getFallbackModel() != null) {
+            updateOrCreateSetting(
+                    AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL,
+                    request.getFallbackModel(),
+                    "Gemini 폴백 모델"
+            );
+        }
+
+        // 폴백 활성화 설정
+        if (request.getFallbackEnabled() != null) {
+            updateOrCreateSetting(
+                    AppSetting.KEY_GEMINI_FALLBACK_ENABLED,
+                    String.valueOf(request.getFallbackEnabled()),
+                    "Gemini 폴백 활성화 여부"
+            );
+        }
+
+        log.info("AI 모델 설정 변경 완료");
+
+        return getAiModelSetting();
+    }
+
+    private void updateOrCreateSetting(String key, String value, String description) {
+        AppSetting setting = appSettingRepository.findBySettingKey(key)
+                .orElse(AppSetting.builder()
+                        .settingKey(key)
+                        .settingValue(value)
+                        .description(description)
+                        .build());
+
+        setting.updateValue(value);
+        appSettingRepository.save(setting);
     }
 }

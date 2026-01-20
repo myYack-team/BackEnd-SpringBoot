@@ -305,6 +305,29 @@ const AdminAPI = {
     batchDeleteUsers(userIds) {
         return API.delete('/admin/users/batch', { userIds: userIds });
     },
+
+    // ===== AI 모델 설정 API =====
+
+    /**
+     * AI 모델 설정 조회
+     */
+    getAiModelSetting() {
+        return API.get('/admin/settings/ai-model');
+    },
+
+    /**
+     * AI 모델 설정 변경
+     */
+    async updateAiModelSetting(request) {
+        const response = await fetch(`${API.baseUrl}/admin/settings/ai-model`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(request),
+        });
+        return API.handleResponse(response);
+    },
 };
 
 // 전역에서 사용 가능하도록

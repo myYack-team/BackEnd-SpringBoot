@@ -147,4 +147,32 @@ public class AdminController {
         log.info("관리자 사용자 일괄 탈퇴 요청: {} 명", request.getUserIds().size());
         return ApiResponse.onSuccess(adminService.batchDeleteUsers(request));
     }
+
+    // ===== AI 모델 설정 API =====
+
+    @Operation(
+            summary = "AI 모델 설정 조회",
+            description = "현재 AI 분석에 사용되는 모델 설정을 조회합니다. 선택 가능한 모델 목록도 함께 반환됩니다."
+    )
+    @GetMapping("/settings/ai-model")
+    public ApiResponse<AdminResponseDTO.AiModelSetting> getAiModelSetting() {
+        return ApiResponse.onSuccess(adminService.getAiModelSetting());
+    }
+
+    @Operation(
+            summary = "AI 모델 설정 변경",
+            description = """
+                AI 분석용 모델 설정을 변경합니다.
+                - analysisModel: 분석에 사용할 주 모델
+                - fallbackModel: 주 모델 실패 시 사용할 폴백 모델
+                - fallbackEnabled: 폴백 기능 활성화 여부
+                변경 사항은 즉시 적용됩니다.
+                """
+    )
+    @PutMapping("/settings/ai-model")
+    public ApiResponse<AdminResponseDTO.AiModelSetting> updateAiModelSetting(
+            @Valid @RequestBody AdminRequestDTO.AiModelSettingRequest request) {
+        log.info("AI 모델 설정 변경 요청: model={}", request.getAnalysisModel());
+        return ApiResponse.onSuccess(adminService.updateAiModelSetting(request));
+    }
 }

@@ -60,4 +60,14 @@ public interface AdminService {
      * 사용자 일괄 탈퇴 (관리자 전용)
      */
     AdminResponseDTO.BatchDeleteUsersResult batchDeleteUsers(AdminRequestDTO.BatchDeleteUsersRequest request);
+
+    /**
+     * AI 모델 설정 조회
+     */
+    AdminResponseDTO.AiModelSetting getAiModelSetting();
+
+    /**
+     * AI 모델 설정 변경
+     */
+    AdminResponseDTO.AiModelSetting updateAiModelSetting(AdminRequestDTO.AiModelSettingRequest request);
 }

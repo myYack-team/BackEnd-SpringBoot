@@ -72,4 +72,19 @@ public class AdminRequestDTO {
         @NotNull(message = "삭제할 사용자 ID 목록은 필수입니다")
         private List<Long> userIds;
     }
+
+    /**
+     * AI 모델 설정 변경 요청
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class AiModelSettingRequest {
+        @NotNull(message = "분석 모델은 필수입니다")
+        private String analysisModel;
+
+        private String fallbackModel;
+
+        private Boolean fallbackEnabled;
+    }
 }
