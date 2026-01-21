@@ -115,7 +115,55 @@ jobs:
           echo "Deploying: $JAR_FILE"
           scp "$JAR_FILE" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
 
-      # 6. 서버 재시작
+      # 6. Nginx 리버스 프록시 설정
+      - name: Setup Nginx reverse proxy
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            # Nginx 설치 확인
+            if ! command -v nginx &> /dev/null; then
+              echo "Nginx not installed, installing..."
+              sudo apt-get update
+              sudo apt-get install -y nginx
+            fi
+
+            # Nginx 설정 파일 생성
+            sudo tee /etc/nginx/sites-available/myyak > /dev/null <<'EOF'
+          server {
+              listen 80;
+              server_name _;
+
+              # 최대 요청 바디 크기 (이미지 업로드 등)
+              client_max_body_size 20M;
+
+              location / {
+                  proxy_pass http://localhost:8080;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_cache_bypass $http_upgrade;
+
+                  # 타임아웃 설정 (AI 분석 등 오래 걸리는 요청 대비)
+                  proxy_connect_timeout 300;
+                  proxy_send_timeout 300;
+                  proxy_read_timeout 300;
+              }
+          }
+          EOF
+
+            # 심볼릭 링크 생성 및 기본 사이트 제거
+            sudo ln -sf /etc/nginx/sites-available/myyak /etc/nginx/sites-enabled/myyak
+            sudo rm -f /etc/nginx/sites-enabled/default
+
+            # Nginx 설정 테스트 및 재시작
+            sudo nginx -t && sudo systemctl restart nginx
+            echo "Nginx 리버스 프록시 설정 완료"
+          ENDSSH
+
+      # 7. 서버 재시작
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -130,7 +178,7 @@ jobs:
             sudo systemctl status myyak
           ENDSSH
 
-      # 7. 헬스체크 (최대 90초 대기)
+      # 8. 헬스체크 (최대 90초 대기)
       - name: Health check
         id: healthcheck
         run: |
@@ -148,7 +196,7 @@ jobs:
           echo "Health check failed after 90 seconds"
           exit 1
 
-      # 8. 헬스체크 실패 시 롤백
+      # 9. 헬스체크 실패 시 롤백
       - name: Rollback on failure
         if: failure() && steps.healthcheck.outcome == 'failure'
         run: |
@@ -184,7 +232,7 @@ jobs:
             fi
           ENDSSH
 
-      # 9. 실패 시 로그 확인
+      # 10. 실패 시 로그 확인
       - name: Check logs on failure
         if: failure()
         run: |
