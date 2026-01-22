@@ -167,6 +167,21 @@ public class AnalysisServiceImpl implements AnalysisService {
             5. 의학적 판단이나 복용 지시를 하지 않습니다
             6. 구체적인 수치와 사실을 기반으로 작성합니다
 
+            이벤트(events) 작성 규칙 - 매우 중요:
+            1. 반드시 특정 약물과 컨디션/증상 메모 변화 사이의 상관관계만 이벤트로 추출합니다
+            2. 이벤트로 추출해야 하는 것:
+               - 특정 약물 복용 후 증상 메모에 기록된 변화 (예: "A약 복용 후 두통 완화 기록됨")
+               - 특정 약물 누락 후 컨디션 점수 하락과 증상 메모 변화
+               - 복용 시간 변경 후 증상 메모에 나타난 변화
+               - 특정 약물 조합 복용일과 컨디션 점수/증상 메모의 상관관계
+            3. 이벤트로 추출하지 말아야 하는 것 (절대 금지):
+               - 단순 약 개수 변화 (예: "복용 약물이 N정으로 늘어남/줄어듦")
+               - 당연한 패턴 (예: "N일 연속 복용 후 컨디션 좋아짐", "꾸준히 복용해서 안정적")
+               - 단순 복약률 변화 (예: "이번 주 복약률 상승")
+               - 구체적인 약물명이나 증상 메모 내용 없이 일반적인 진술
+            4. 이벤트는 최대 5개까지만 추출합니다
+            5. 상관관계가 뚜렷하지 않으면 events 배열을 비워두세요
+
             출력 형식:
             반드시 아래 JSON 스키마에 맞춰 응답합니다. JSON만 출력하고 다른 텍스트는 포함하지 않습니다.
 
@@ -176,8 +191,8 @@ public class AnalysisServiceImpl implements AnalysisService {
                 "weekdayPattern": {
                   "mondayRate": 숫자, "tuesdayRate": 숫자, "wednesdayRate": 숫자,
                   "thursdayRate": 숫자, "fridayRate": 숫자, "saturdayRate": 숫자, "sundayRate": 숫자,
-                  "bestDay": "가장 복약률 높은 요일 한글 (예: 월요일)",
-                  "worstDay": "가장 복약률 낮은 요일 한글 (예: 토요일)"
+                  "bestDay": "가장 복약률 높은 요일 (예: 월)",
+                  "worstDay": "가장 복약률 낮은 요일 (예: 토)"
                 },
                 "timingPattern": {
                   "morningRate": 숫자, "lunchRate": 숫자, "dinnerRate": 숫자, "bedtimeRate": 숫자,
@@ -196,18 +211,17 @@ public class AnalysisServiceImpl implements AnalysisService {
                 }
               ],
               "summary": {
-                "overallAssessment": "전반적인 평가 1~2문장 (객관적 사실 기반, 예: '전체 복약률 82%로 양호한 수준입니다. 복약률이 높은 날에 컨디션 점수도 높은 경향이 있습니다.')",
-                "positivePoint": "긍정적인 점 1문장 (사실 기반, 예: '1월 중순 이후 복약 집중도가 높아졌고 컨디션 점수도 상승했습니다.')",
-                "improvementPoint": "개선이 필요한 점 1문장 (사실 기반, 예: '주말 복약률이 평일 대비 20% 낮습니다. 주말에도 같은 시간에 복용하세요.')",
-                "encouragement": "격려 메시지 1문장 (간결하게, 예: '꾸준히 기록하고 복용하세요.')"
+                "overallAssessment": "전반적인 평가 1~2문장 (객관적 사실 기반)",
+                "positivePoint": "긍정적인 점 1문장 (사실 기반)",
+                "improvementPoint": "개선이 필요한 점 1문장 (사실 기반)"
               },
               "events": [
                 {
                   "date": "YYYY-MM-DD",
-                  "eventType": "CONDITION_CHANGE/ADHERENCE_CHANGE/STREAK/SYMPTOM_AFTER_TIMING_CHANGE/SYMPTOM_AFTER_MISSED/STABLE_CONDITION_WITH_ADHERENCE/CONDITION_DROP_WITH_PATTERN",
+                  "eventType": "MEDICATION_SYMPTOM_CORRELATION/TIMING_CHANGE_EFFECT/MISSED_DOSE_EFFECT/COMBINATION_EFFECT",
                   "eventIcon": "이모지 1개",
-                  "title": "이벤트 제목",
-                  "description": "이벤트 설명 (간결한 사실 기반)"
+                  "title": "이벤트 제목 (구체적 약물명 포함)",
+                  "description": "이벤트 설명 (구체적 약물명과 증상/컨디션 변화 포함)"
                 }
               ]
             }
