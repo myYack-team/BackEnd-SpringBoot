@@ -327,6 +327,7 @@ public class AnalysisResponseDTO {
         private Integer conditionScore;   // 컨디션 점수 (0~10)
         private Double adherenceRate;     // 해당 일 복약률 (0~100)
         private Boolean hasNote;          // 메모 존재 여부
+        private String content;           // 메모 내용 (건강 메모)
     }
 
     /**

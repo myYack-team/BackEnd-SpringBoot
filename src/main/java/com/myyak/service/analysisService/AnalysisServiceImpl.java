@@ -911,6 +911,7 @@ public class AnalysisServiceImpl implements AnalysisService {
                             .conditionScore(note.getConditionScore())
                             .adherenceRate(adherenceRate)
                             .hasNote(note.getContent() != null && !note.getContent().isBlank())
+                            .content(note.getContent())
                             .build();
                 })
                 .toList();
