@@ -147,6 +147,7 @@ public class TodayConverter {
                 .supplementTag(null)
                 .isSupplement(false)
                 .imageUrl(imageUrl)
+                .reminderTime(reminder.getTime().format(TIME_FORMATTER))
                 .build();
     }
 
@@ -181,6 +182,7 @@ public class TodayConverter {
                 .supplementTag(supplementTag)
                 .isSupplement(true)
                 .imageUrl(imageUrl)
+                .reminderTime(reminder.getTime().format(TIME_FORMATTER))
                 .build();
     }
 

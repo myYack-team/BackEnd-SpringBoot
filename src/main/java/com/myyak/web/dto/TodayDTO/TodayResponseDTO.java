@@ -27,6 +27,7 @@ public class TodayResponseDTO {
         private SupplementTag supplementTag;  // 영양제 태그 (영양제인 경우)
         private Boolean isSupplement; // 영양제 여부
         private String imageUrl;      // 약 이미지
+        private String reminderTime;  // 개별 알림 시간 (HH:mm)
     }
 
     @Getter
