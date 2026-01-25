@@ -1,7 +1,12 @@
 package com.myyak.web.controller;
 
 import com.myyak.apiPayload.ApiResponse;
+import com.myyak.apiPayload.code.status.ErrorStatus;
+import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.service.authService.AuthCodeStore;
 import com.myyak.service.authService.AuthService;
+import com.myyak.service.authService.OAuthStateStore;
+import com.myyak.service.authService.RedirectUriValidator;
 import com.myyak.web.dto.AuthDTO.AuthRequestDTO;
 import com.myyak.web.dto.AuthDTO.AuthResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,10 +21,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 
 @Tag(name = "Auth", description = "인증 API")
 @Slf4j
@@ -29,6 +32,9 @@ import java.util.Base64;
 public class AuthController {
 
     private final AuthService authService;
+    private final OAuthStateStore oAuthStateStore;
+    private final AuthCodeStore authCodeStore;
+    private final RedirectUriValidator redirectUriValidator;
 
     /**
      * 카카오 로그인 페이지로 리다이렉트
@@ -46,13 +52,16 @@ public class AuthController {
             HttpServletResponse response) throws IOException {
         String baseUrl = getBaseUrl(request);
 
-        // app_redirect_uri를 Base64로 인코딩하여 state 파라미터로 전달
-        // STATELESS 세션 정책에서는 세션 사용이 불가하므로 state를 활용
-        String state = null;
-        if (app_redirect_uri != null && !app_redirect_uri.isBlank()) {
-            state = Base64.getUrlEncoder().encodeToString(app_redirect_uri.getBytes(StandardCharsets.UTF_8));
-            log.info("앱 리다이렉트 URI를 state로 인코딩: {} -> {}", app_redirect_uri, state);
+        // 1. Validate app_redirect_uri against allowlist (use default if invalid)
+        String validatedUri = app_redirect_uri;
+        if (validatedUri == null || validatedUri.isBlank() || !redirectUriValidator.isAllowed(validatedUri)) {
+            validatedUri = redirectUriValidator.getDefaultRedirectUri();
+            log.warn("Invalid or missing app_redirect_uri, using default: {}", validatedUri);
         }
+
+        // 2. Create state with validated URI
+        String state = oAuthStateStore.createState(validatedUri);
+        log.info("Created OAuth state for redirect URI: {}", validatedUri);
 
         String authUrl = authService.getKakaoAuthorizationUrl(baseUrl, state);
         log.info("카카오 로그인 페이지로 리다이렉트: {}, baseUrl: {}", authUrl, baseUrl);
@@ -86,7 +95,7 @@ public class AuthController {
      * 카카오 OAuth 콜백 처리
      * 카카오에서 인증 후 인가 코드를 전달받아 토큰 발급 후 앱으로 리다이렉트
      *
-     * state 파라미터에서 app_redirect_uri를 디코딩하여 사용합니다.
+     * state 파라미터를 검증하여 CSRF 공격을 방지하고, 앱 리다이렉트 URI를 복원합니다.
      */
     @Operation(summary = "카카오 OAuth 콜백", description = "카카오 인증 후 콜백을 처리하고 앱으로 리다이렉트합니다.")
     @GetMapping("/kakao/callback")
@@ -94,15 +103,22 @@ public class AuthController {
             @Parameter(description = "인가 코드") @RequestParam(required = false) String code,
             @Parameter(description = "에러 코드") @RequestParam(required = false) String error,
             @Parameter(description = "에러 설명") @RequestParam(required = false) String error_description,
-            @Parameter(description = "OAuth state (Base64 인코딩된 app_redirect_uri)") @RequestParam(required = false) String state,
+            @Parameter(description = "OAuth state (CSRF 방지용)") @RequestParam(required = false) String state,
             HttpServletRequest request,
             HttpServletResponse response) throws IOException {
 
-        // state 파라미터에서 앱 리다이렉트 URI 디코딩 (STATELESS 세션 정책 대응)
-        String appRedirectUri = decodeAppRedirectUri(state);
-        log.info("앱 리다이렉트 URI (state에서 디코딩): {}", appRedirectUri);
+        // 1. Validate and consume state (CSRF protection)
+        String appRedirectUri = oAuthStateStore.validateAndConsume(state);
+        if (appRedirectUri == null) {
+            log.error("Invalid or expired OAuth state: {}", state);
+            String fallbackUri = redirectUriValidator.getDefaultRedirectUri();
+            String redirectUrl = fallbackUri + "?error=" + URLEncoder.encode("잘못된 요청입니다", StandardCharsets.UTF_8);
+            response.sendRedirect(redirectUrl);
+            return;
+        }
+        log.info("OAuth state validated, redirect URI: {}", appRedirectUri);
 
-        // 에러 발생 시 앱으로 에러 전달
+        // 2. Handle OAuth errors from Kakao
         if (error != null) {
             log.error("카카오 OAuth 에러: {} - {}", error, error_description);
             String errorMessage = error_description != null ? error_description : error;
@@ -111,7 +127,7 @@ public class AuthController {
             return;
         }
 
-        // 인가 코드 없으면 에러
+        // 3. Validate authorization code
         if (code == null || code.isBlank()) {
             log.error("카카오 OAuth 인가 코드 없음");
             String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode("인가 코드가 없습니다", StandardCharsets.UTF_8);
@@ -120,21 +136,23 @@ public class AuthController {
         }
 
         try {
-            // 인가 코드로 로그인 처리 (동적 redirect_uri 사용)
+            // 4. Process Kakao login
             String baseUrl = getBaseUrl(request);
             log.debug("콜백 처리 baseUrl: {}", baseUrl);
             AuthResponseDTO.LoginResponse loginResponse = authService.loginWithKakaoCode(code, baseUrl);
 
-            // 앱으로 리다이렉트 (Expo Go: exp://..., Production: myyak://...)
-            String redirectUrl = String.format(
-                    "%s?accessToken=%s&refreshToken=%s&isNewUser=%s",
-                    appRedirectUri,
+            // 5. Create auth code for token exchange (instead of exposing tokens in URL)
+            String authCode = authCodeStore.createCode(
                     loginResponse.getAccessToken(),
                     loginResponse.getRefreshToken(),
-                    loginResponse.isNewUser()
+                    loginResponse.isNewUser(),
+                    loginResponse.getTermsAgreed(),
+                    loginResponse.getPrivacyAgreed()
             );
 
-            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}, redirectUrl={}", loginResponse.isNewUser(), redirectUrl);
+            // 6. Redirect with auth code only (NO tokens in URL)
+            String redirectUrl = appRedirectUri + "?code=" + authCode;
+            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}, code={}", loginResponse.isNewUser(), authCode);
             response.sendRedirect(redirectUrl);
 
         } catch (Exception e) {
@@ -143,6 +161,31 @@ public class AuthController {
             String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
             response.sendRedirect(redirectUrl);
         }
+    }
+
+    @Operation(summary = "인증 코드 교환", description = "OAuth 콜백에서 받은 인증 코드를 토큰으로 교환합니다.")
+    @PostMapping("/exchange")
+    public ApiResponse<AuthResponseDTO.ExchangeResponse> exchangeCode(
+            @Valid @RequestBody AuthRequestDTO.ExchangeRequest request) {
+        log.info("인증 코드 교환 요청");
+
+        // Exchange auth code for tokens
+        AuthCodeStore.CodeEntry codeEntry = authCodeStore.exchangeCode(request.getCode());
+        if (codeEntry == null) {
+            throw new GeneralException(ErrorStatus.AUTH_INVALID_CODE);
+        }
+
+        // Build response
+        AuthResponseDTO.ExchangeResponse response = AuthResponseDTO.ExchangeResponse.builder()
+                .accessToken(codeEntry.accessToken())
+                .refreshToken(codeEntry.refreshToken())
+                .isNewUser(codeEntry.isNewUser())
+                .termsAgreed(codeEntry.termsAgreed())
+                .privacyAgreed(codeEntry.privacyAgreed())
+                .build();
+
+        log.info("인증 코드 교환 성공: isNewUser={}", codeEntry.isNewUser());
+        return ApiResponse.onSuccess(response);
     }
 
     @Operation(summary = "카카오 토큰 로그인", description = "카카오 액세스 토큰으로 직접 로그인합니다. (하위 호환용)")
@@ -170,23 +213,4 @@ public class AuthController {
         return ApiResponse.onSuccess(null);
     }
 
-    /**
-     * OAuth state 파라미터에서 app_redirect_uri를 디코딩
-     * state가 없거나 디코딩 실패 시 기본값 반환
-     */
-    private String decodeAppRedirectUri(String state) {
-        if (state == null || state.isBlank()) {
-            log.debug("state 파라미터가 없음, 기본 redirect URI 사용");
-            return "myyak://oauth/callback";
-        }
-
-        try {
-            String decoded = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
-            log.debug("state 디코딩 성공: {}", decoded);
-            return decoded;
-        } catch (Exception e) {
-            log.warn("state 디코딩 실패, 기본 redirect URI 사용: {}", e.getMessage());
-            return "myyak://oauth/callback";
-        }
-    }
 }

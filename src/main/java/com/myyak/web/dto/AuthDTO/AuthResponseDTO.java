@@ -47,6 +47,22 @@ public class AuthResponseDTO {
     }
 
     /**
+     * 인증 코드 교환 응답
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ExchangeResponse {
+        private String accessToken;
+        private String refreshToken;
+        @JsonProperty("isNewUser")
+        private boolean isNewUser;
+        private Boolean termsAgreed;
+        private Boolean privacyAgreed;
+    }
+
+    /**
      * 사용자 정보
      */
     @Getter

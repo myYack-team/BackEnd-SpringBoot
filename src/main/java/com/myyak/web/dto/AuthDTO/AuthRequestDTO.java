@@ -28,4 +28,14 @@ public class AuthRequestDTO {
         @NotBlank(message = "리프레시 토큰은 필수입니다")
         private String refreshToken;
     }
+
+    /**
+     * 인증 코드 교환 요청
+     */
+    @Getter
+    @NoArgsConstructor
+    public static class ExchangeRequest {
+        @NotBlank(message = "인증 코드는 필수입니다")
+        private String code;
+    }
 }
