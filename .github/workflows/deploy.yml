@@ -83,7 +83,7 @@ jobs:
           echo "Deploying: $JAR_FILE"
           scp "$JAR_FILE" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
 
-      # 11. Nginx 리버스 프록시 설정
+      # 11. Nginx 리버스 프록시 설정 (초기 설치 시에만 설정, 기존 SSL 설정 보호)
       - name: Setup Nginx reverse proxy
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -94,13 +94,30 @@ jobs:
               sudo apt-get install -y nginx
             fi
 
-            # Nginx 설정 파일 생성
-            sudo tee /etc/nginx/sites-available/myyak > /dev/null <<'EOF'
+            # Nginx 설정이 없을 때만 생성 (기존 SSL 설정 보호)
+            if [ ! -f /etc/nginx/sites-available/myyak ]; then
+              echo "Nginx 설정 파일 없음 - 초기 설정 생성"
+              sudo tee /etc/nginx/sites-available/myyak > /dev/null <<'EOF'
           server {
               listen 80;
-              server_name _;
+              server_name api.myyak.xyz;
 
-              # 최대 요청 바디 크기 (이미지 업로드 등)
+              location /.well-known/acme-challenge/ {
+                  root /var/www/html;
+              }
+
+              location / {
+                  return 301 https://$host$request_uri;
+              }
+          }
+
+          server {
+              listen 443 ssl;
+              server_name api.myyak.xyz;
+
+              ssl_certificate /etc/letsencrypt/live/api.myyak.xyz/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/api.myyak.xyz/privkey.pem;
+
               client_max_body_size 20M;
 
               location / {
@@ -114,7 +131,6 @@ jobs:
                   proxy_set_header X-Forwarded-Proto $scheme;
                   proxy_cache_bypass $http_upgrade;
 
-                  # 타임아웃 설정 (AI 분석 등 오래 걸리는 요청 대비)
                   proxy_connect_timeout 300;
                   proxy_send_timeout 300;
                   proxy_read_timeout 300;
@@ -122,13 +138,14 @@ jobs:
           }
           EOF
 
-            # 심볼릭 링크 생성 및 기본 사이트 제거
-            sudo ln -sf /etc/nginx/sites-available/myyak /etc/nginx/sites-enabled/myyak
-            sudo rm -f /etc/nginx/sites-enabled/default
-
-            # Nginx 설정 테스트 및 재시작
-            sudo nginx -t && sudo systemctl restart nginx
-            echo "Nginx 리버스 프록시 설정 완료"
+              sudo ln -sf /etc/nginx/sites-available/myyak /etc/nginx/sites-enabled/myyak
+              sudo rm -f /etc/nginx/sites-enabled/default
+              sudo nginx -t && sudo systemctl restart nginx
+              echo "Nginx 초기 설정 완료"
+            else
+              echo "Nginx 설정 이미 존재 - 건너뜀"
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
           ENDSSH
 
       # 12. 서버 재시작
@@ -146,23 +163,25 @@ jobs:
             sudo systemctl status myyak
           ENDSSH
 
-      # 13. 헬스체크 (최대 90초 대기)
+      # 13. 헬스체크 (최대 90초 대기, 서버 내부에서 확인)
       - name: Health check
         id: healthcheck
         run: |
-          echo "Waiting for application to start..."
-          for i in {1..6}; do
-            sleep 15
-            echo "Attempt $i: Checking health..."
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://api.myyak.xyz/v3/api-docs)
-            echo "HTTP Status: $HTTP_CODE"
-            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
-              echo "Health check passed!"
-              exit 0
-            fi
-          done
-          echo "Health check failed after 90 seconds"
-          exit 1
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            echo "Waiting for application to start..."
+            for i in 1 2 3 4 5 6; do
+              sleep 15
+              echo "Attempt $i: Checking health..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/v3/api-docs)
+              echo "HTTP Status: $HTTP_CODE"
+              if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "302" ]; then
+                echo "Health check passed!"
+                exit 0
+              fi
+            done
+            echo "Health check failed after 90 seconds"
+            exit 1
+          ENDSSH
 
       # 14. 헬스체크 실패 시 롤백
       - name: Rollback on failure
