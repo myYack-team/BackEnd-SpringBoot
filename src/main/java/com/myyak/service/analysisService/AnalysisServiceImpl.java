@@ -9,6 +9,7 @@ import com.myyak.domain.*;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.repository.*;
 import com.myyak.service.llm.LlmClient;
+import com.myyak.web.dto.AnalysisDTO.AnalysisRequestDTO;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     private final UserAnalysisQuotaRepository userAnalysisQuotaRepository;
     private final IntakeRepository intakeRepository;
     private final HealthNoteRepository healthNoteRepository;
+    private final AnalysisTemporaryNoteRepository analysisTemporaryNoteRepository;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
 
@@ -278,12 +280,12 @@ public class AnalysisServiceImpl implements AnalysisService {
     public AnalysisResponseDTO.AnalysisResult requestAnalysis(Long userId) {
         User user = findUserById(userId);
 
-        // 1. 주간 쿼터 확인 및 리셋 처리
+        // 1. 월간 쿼터 확인 및 리셋 처리
         UserAnalysisQuota quota = getOrCreateQuota(user);
-        checkAndResetWeeklyQuotaIfNeeded(quota);
+        checkAndResetMonthlyQuotaIfNeeded(quota);
 
-        if (!quota.canAnalyzeThisWeek()) {
-            throw new GeneralException(ErrorStatus.ANALYSIS_WEEKLY_QUOTA_EXCEEDED);
+        if (!quota.canAnalyzeThisMonth()) {
+            throw new GeneralException(ErrorStatus.ANALYSIS_MONTHLY_QUOTA_EXCEEDED);
         }
 
         // 2. 사용자 복용 약물 조회
@@ -356,8 +358,8 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         analysisReportRepository.save(report);
 
-        // 12. 주간 쿼터 사용량 증가
-        quota.incrementWeeklyUsedCount();
+        // 12. 월간 쿼터 사용량 증가
+        quota.incrementMonthlyUsedCount();
 
         log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
                 userId, report.getId(), mechanismGroupCount, foodInteractionCount);
@@ -410,6 +412,48 @@ public class AnalysisServiceImpl implements AnalysisService {
         return AnalysisConverter.toQuotaInfo(quota);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public AnalysisResponseDTO.DataSufficiencyCheck checkDataSufficiency(Long userId) {
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        LocalDate thirtyDaysAgoDate = thirtyDaysAgo.toLocalDate();
+
+        int intakeCount = intakeRepository.countByUserIdAndTakenAtAfter(userId, thirtyDaysAgo);
+        int healthNoteCount = healthNoteRepository.countByUserIdAndNoteDateAfter(userId, thirtyDaysAgoDate);
+        int totalCount = intakeCount + healthNoteCount;
+
+        return AnalysisResponseDTO.DataSufficiencyCheck.builder()
+                .isSufficient(totalCount > 5)
+                .totalDataCount(totalCount)
+                .intakeCount(intakeCount)
+                .healthNoteCount(healthNoteCount)
+                .requiredMinimum(5)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public void saveTemporaryNote(Long userId, AnalysisRequestDTO.TemporaryNoteRequest request) {
+        User user = findUserById(userId);
+        AnalysisTemporaryNote note = AnalysisTemporaryNote.builder()
+                .user(user)
+                .noteDate(LocalDate.now())
+                .conditionScore(request.getConditionScore())
+                .symptoms(request.getSymptoms())
+                .additionalNote(request.getAdditionalNote())
+                .build();
+        analysisTemporaryNoteRepository.save(note);
+        log.info("[Analysis] 임시 메모 저장 - userId: {}", userId);
+    }
+
+    @Override
+    @Transactional
+    public void deleteAllTemporaryNotes(Long userId) {
+        User user = findUserById(userId);
+        analysisTemporaryNoteRepository.deleteByUser(user);
+        log.info("[Analysis] 임시 메모 일괄 삭제 - userId: {}", userId);
+    }
+
     // ===== Private Methods =====
 
     private User findUserById(Long userId) {
@@ -425,6 +469,9 @@ public class AnalysisServiceImpl implements AnalysisService {
                             .weeklyLimit(3)
                             .weeklyUsedCount(0)
                             .weeklyResetDate(getNextMonday())
+                            .monthlyLimit(2)
+                            .monthlyUsedCount(0)
+                            .monthlyResetDate(getNextMonthFirstDay())
                             .build();
                     return userAnalysisQuotaRepository.save(newQuota);
                 });
@@ -438,6 +485,14 @@ public class AnalysisServiceImpl implements AnalysisService {
         }
     }
 
+    private void checkAndResetMonthlyQuotaIfNeeded(UserAnalysisQuota quota) {
+        LocalDate today = LocalDate.now();
+        if (quota.needsMonthlyReset(today)) {
+            quota.resetMonthlyQuota(getNextMonthFirstDay());
+            log.info("[Analysis] 월간 쿼터 리셋 - userId: {}", quota.getUser().getId());
+        }
+    }
+
     private LocalDate getNextMonday() {
         LocalDate today = LocalDate.now();
         int daysUntilMonday = (8 - today.getDayOfWeek().getValue()) % 7;
@@ -445,6 +500,14 @@ public class AnalysisServiceImpl implements AnalysisService {
             daysUntilMonday = 7;
         }
         return today.plusDays(daysUntilMonday);
+    }
+
+    /**
+     * 다음 달 1일 계산
+     */
+    private LocalDate getNextMonthFirstDay() {
+        LocalDate today = LocalDate.now();
+        return today.plusMonths(1).withDayOfMonth(1);
     }
 
     private String buildUserPrompt(List<UserMedication> medications,
@@ -645,6 +708,8 @@ public class AnalysisServiceImpl implements AnalysisService {
      * 30일간의 복약 기록과 건강 메모를 수집하여 LLM으로 분석
      */
     private String performPatternAnalysis(Long userId, LocalDate startDate, LocalDate endDate) {
+        User user = findUserById(userId);
+
         // 1. 30일간 복약 기록 조회
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
@@ -655,14 +720,17 @@ public class AnalysisServiceImpl implements AnalysisService {
         List<HealthNote> healthNotes = healthNoteRepository.findByUserIdAndNoteDateBetween(
                 userId, startDate, endDate);
 
-        // 3. 데이터가 부족한 경우 빈 응답 반환
-        if (intakes.isEmpty() && healthNotes.isEmpty()) {
+        // 3. 임시 건강 메모 조회
+        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
+
+        // 4. 데이터가 부족한 경우 빈 응답 반환
+        if (intakes.isEmpty() && healthNotes.isEmpty() && tempNotes.isEmpty()) {
             log.info("[PatternAnalysis] 분석할 데이터 부족 - userId: {}", userId);
             return null;
         }
 
-        // 4. LLM 입력 JSON 생성
-        String patternPrompt = buildPatternAnalysisPrompt(intakes, healthNotes, startDate, endDate);
+        // 5. LLM 입력 JSON 생성 (임시 메모 포함)
+        String patternPrompt = buildPatternAnalysisPrompt(intakes, healthNotes, tempNotes, startDate, endDate);
         log.info("[PatternAnalysis] LLM 입력 프롬프트 길이: {}", patternPrompt.length());
 
         // 5. LLM 호출
@@ -680,9 +748,10 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     /**
-     * 패턴 분석용 프롬프트 생성
+     * 패턴 분석용 프롬프트 생성 (임시 메모 포함)
      */
     private String buildPatternAnalysisPrompt(List<Intake> intakes, List<HealthNote> healthNotes,
+                                               List<AnalysisTemporaryNote> tempNotes,
                                                LocalDate startDate, LocalDate endDate) {
         Map<String, Object> input = new LinkedHashMap<>();
 
@@ -716,6 +785,21 @@ public class AnalysisServiceImpl implements AnalysisService {
         // 요약 통계
         Map<String, Object> statistics = buildStatistics(intakes, healthNotes, startDate, endDate);
         input.put("statistics", statistics);
+
+        // 사용자 입력 임시 메모
+        if (tempNotes != null && !tempNotes.isEmpty()) {
+            List<Map<String, Object>> tempNoteData = tempNotes.stream()
+                    .map(note -> {
+                        Map<String, Object> noteInfo = new LinkedHashMap<>();
+                        noteInfo.put("date", note.getNoteDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
+                        noteInfo.put("condition_score", note.getConditionScore());
+                        noteInfo.put("symptoms", note.getSymptoms());
+                        noteInfo.put("additional_note", note.getAdditionalNote());
+                        return noteInfo;
+                    })
+                    .toList();
+            input.put("temporary_notes", tempNoteData);
+        }
 
         try {
             return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(input);

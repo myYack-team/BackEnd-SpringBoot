@@ -93,24 +93,23 @@ public class AnalysisConverter {
     }
 
     /**
-     * 쿼터 엔티티 → 쿼터 정보 DTO (주간)
+     * 쿼터 엔티티 → 쿼터 정보 DTO (월간)
      */
     public static AnalysisResponseDTO.QuotaInfo toQuotaInfo(UserAnalysisQuota quota) {
         if (quota == null) {
             return AnalysisResponseDTO.QuotaInfo.builder()
-                    .weeklyLimit(3)
-                    .weeklyUsedCount(0)
-                    .weeklyRemainingCount(3)
-                    .weeklyResetDate(null)
+                    .monthlyLimit(2)
+                    .monthlyUsedCount(0)
+                    .monthlyRemainingCount(2)
+                    .monthlyResetDate(null)
                     .build();
         }
 
         return AnalysisResponseDTO.QuotaInfo.builder()
-                .weeklyLimit(quota.getWeeklyLimit())
-                .weeklyUsedCount(quota.getWeeklyUsedCount())
-                .weeklyRemainingCount(quota.getWeeklyRemainingCount())
-                .weeklyResetDate(quota.getWeeklyResetDate() != null ?
-                        quota.getWeeklyResetDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : null)
+                .monthlyLimit(quota.getMonthlyLimit())
+                .monthlyUsedCount(quota.getMonthlyUsedCount())
+                .monthlyRemainingCount(quota.getMonthlyRemainingCount())
+                .monthlyResetDate(quota.getMonthlyResetDate())
                 .build();
     }
 

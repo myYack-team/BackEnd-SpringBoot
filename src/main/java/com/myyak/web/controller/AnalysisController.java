@@ -3,10 +3,12 @@ package com.myyak.web.controller;
 import com.myyak.apiPayload.ApiResponse;
 import com.myyak.apiPayload.code.status.SuccessStatus;
 import com.myyak.service.analysisService.AnalysisService;
+import com.myyak.web.dto.AnalysisDTO.AnalysisRequestDTO;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -62,10 +64,38 @@ public class AnalysisController {
     }
 
     @Operation(summary = "분석 쿼터 조회",
-            description = "이번 주 남은 AI 분석 횟수를 조회합니다. 매주 월요일에 리셋됩니다.")
+            description = "이번 달 남은 AI 분석 횟수를 조회합니다. 매월 1일에 리셋됩니다.")
     @GetMapping("/quota")
     public ApiResponse<AnalysisResponseDTO.QuotaInfo> getQuotaInfo(Authentication authentication) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(analysisService.getQuotaInfo(userId));
+    }
+
+    @Operation(summary = "AI 분석 데이터 충분성 확인",
+            description = "AI 분석을 수행하기에 충분한 데이터가 있는지 확인합니다. 최근 30일간의 복약 기록과 건강 메모를 기준으로 판단합니다.")
+    @GetMapping("/data-sufficiency")
+    public ApiResponse<AnalysisResponseDTO.DataSufficiencyCheck> checkDataSufficiency(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(analysisService.checkDataSufficiency(userId));
+    }
+
+    @Operation(summary = "임시 건강 메모 저장",
+            description = "AI 분석 요청 전 추가 컨디션/증상 정보를 임시로 저장합니다.")
+    @PostMapping("/temporary-notes")
+    public ApiResponse<Void> saveTemporaryNote(
+            Authentication authentication,
+            @Valid @RequestBody AnalysisRequestDTO.TemporaryNoteRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        analysisService.saveTemporaryNote(userId, request);
+        return ApiResponse.onSuccess(null);
+    }
+
+    @Operation(summary = "임시 건강 메모 일괄 삭제",
+            description = "사용자의 모든 임시 건강 메모를 삭제합니다.")
+    @DeleteMapping("/temporary-notes")
+    public ApiResponse<Void> deleteAllTemporaryNotes(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        analysisService.deleteAllTemporaryNotes(userId);
+        return ApiResponse.onSuccess(null);
     }
 }

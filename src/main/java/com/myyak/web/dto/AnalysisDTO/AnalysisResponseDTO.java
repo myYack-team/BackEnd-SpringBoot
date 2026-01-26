@@ -113,17 +113,32 @@ public class AnalysisResponseDTO {
     }
 
     /**
-     * 분석 쿼터 정보 (주간)
+     * 분석 쿼터 정보 (월간)
      */
     @Getter
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
     public static class QuotaInfo {
-        private Integer weeklyLimit;
-        private Integer weeklyUsedCount;
-        private Integer weeklyRemainingCount;
-        private String weeklyResetDate;
+        private Integer monthlyLimit;
+        private Integer monthlyUsedCount;
+        private Integer monthlyRemainingCount;
+        private LocalDate monthlyResetDate;
+    }
+
+    /**
+     * 데이터 충분성 확인 결과
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DataSufficiencyCheck {
+        private Boolean isSufficient;
+        private Integer totalDataCount;
+        private Integer intakeCount;
+        private Integer healthNoteCount;
+        private Integer requiredMinimum;
     }
 
     // ===== 신규 기능: 음식 제안, 영양제 상호작용, 생활 팁 =====

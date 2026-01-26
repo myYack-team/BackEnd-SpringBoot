@@ -1,5 +1,6 @@
 package com.myyak.service.analysisService;
 
+import com.myyak.web.dto.AnalysisDTO.AnalysisRequestDTO;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 
 /**
@@ -42,4 +43,24 @@ public interface AnalysisService {
      * @return 쿼터 정보
      */
     AnalysisResponseDTO.QuotaInfo getQuotaInfo(Long userId);
+
+    /**
+     * AI 분석 데이터 충분성 확인
+     * @param userId 사용자 ID
+     * @return 데이터 충분성 정보
+     */
+    AnalysisResponseDTO.DataSufficiencyCheck checkDataSufficiency(Long userId);
+
+    /**
+     * 임시 건강 메모 저장
+     * @param userId 사용자 ID
+     * @param request 임시 메모 요청
+     */
+    void saveTemporaryNote(Long userId, AnalysisRequestDTO.TemporaryNoteRequest request);
+
+    /**
+     * 임시 건강 메모 일괄 삭제
+     * @param userId 사용자 ID
+     */
+    void deleteAllTemporaryNotes(Long userId);
 }

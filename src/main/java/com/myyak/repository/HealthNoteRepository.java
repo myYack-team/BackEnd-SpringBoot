@@ -56,4 +56,13 @@ public interface HealthNoteRepository extends JpaRepository<HealthNote, Long> {
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate
     );
+
+    /**
+     * 특정 사용자의 일정 날짜 이후 건강 메모 수 (데이터 충분성 확인용)
+     */
+    @Query("SELECT COUNT(hn) FROM HealthNote hn WHERE hn.user.id = :userId AND hn.noteDate > :afterDate")
+    int countByUserIdAndNoteDateAfter(
+            @Param("userId") Long userId,
+            @Param("afterDate") LocalDate afterDate
+    );
 }

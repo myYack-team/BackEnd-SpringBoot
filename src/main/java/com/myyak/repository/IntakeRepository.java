@@ -90,4 +90,16 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end
     );
+
+    /**
+     * 특정 사용자의 일정 시점 이후 복용 기록 수 (데이터 충분성 확인용)
+     */
+    @Query("SELECT COUNT(i) FROM Intake i " +
+           "WHERE ((i.userMedication IS NOT NULL AND i.userMedication.user.id = :userId) " +
+           "  OR (i.userSupplement IS NOT NULL AND i.userSupplement.user.id = :userId)) " +
+           "AND i.takenAt > :after")
+    int countByUserIdAndTakenAtAfter(
+            @Param("userId") Long userId,
+            @Param("after") LocalDateTime after
+    );
 }
