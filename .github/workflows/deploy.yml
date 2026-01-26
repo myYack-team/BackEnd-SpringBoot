@@ -7,9 +7,8 @@ on:
   workflow_dispatch:  # 수동 실행 허용
 
 jobs:
-  # ===== 빌드 단계 =====
-  build:
-    name: Build
+  build-and-deploy:
+    name: Build and Deploy
     runs-on: ubuntu-latest
 
     steps:
@@ -57,37 +56,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew bootJar --no-daemon
 
-      # 8. 빌드 결과물 업로드 (artifact) - 인증 파일은 JAR에 포함됨
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: |
-            build/libs/myyak-server-*.jar
-          retention-days: 7
-
-  # ===== 배포 단계 =====
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: build  # build job 성공 후 실행
-
-    steps:
-      # 1. 빌드 결과물 다운로드
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: ./artifacts
-
-      # 2. 다운로드 확인
-      - name: List artifacts
-        run: |
-          echo "=== Downloaded artifacts ==="
-          find ./artifacts -type f
-          ls -la ./artifacts/
-
-      # 3. SSH 키 설정
+      # 8. SSH 키 설정
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -95,7 +64,7 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      # 4. 기존 JAR 백업
+      # 9. 기존 JAR 백업
       - name: Backup existing JAR
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -107,15 +76,14 @@ jobs:
             fi
           ENDSSH
 
-      # 5. JAR 파일 전송 (인증 파일은 JAR에 포함됨)
+      # 10. JAR 파일 전송
       - name: Transfer JAR to server
         run: |
-          # JAR 파일 찾기 및 전송
-          JAR_FILE=$(find ./artifacts -name "myyak-server-*.jar" | head -1)
+          JAR_FILE=$(find ./build/libs -name "myyak-server-*.jar" | head -1)
           echo "Deploying: $JAR_FILE"
           scp "$JAR_FILE" ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/${{ secrets.EC2_USER }}/myyak-server.jar
 
-      # 6. Nginx 리버스 프록시 설정
+      # 11. Nginx 리버스 프록시 설정
       - name: Setup Nginx reverse proxy
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -163,7 +131,7 @@ jobs:
             echo "Nginx 리버스 프록시 설정 완료"
           ENDSSH
 
-      # 7. 서버 재시작
+      # 12. 서버 재시작
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -178,7 +146,7 @@ jobs:
             sudo systemctl status myyak
           ENDSSH
 
-      # 8. 헬스체크 (최대 90초 대기)
+      # 13. 헬스체크 (최대 90초 대기)
       - name: Health check
         id: healthcheck
         run: |
@@ -196,7 +164,7 @@ jobs:
           echo "Health check failed after 90 seconds"
           exit 1
 
-      # 9. 헬스체크 실패 시 롤백
+      # 14. 헬스체크 실패 시 롤백
       - name: Rollback on failure
         if: failure() && steps.healthcheck.outcome == 'failure'
         run: |
@@ -232,7 +200,7 @@ jobs:
             fi
           ENDSSH
 
-      # 10. 실패 시 로그 확인
+      # 15. 실패 시 로그 확인
       - name: Check logs on failure
         if: failure()
         run: |
