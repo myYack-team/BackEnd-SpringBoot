@@ -368,12 +368,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .build();
             userMedicationRepository.save(medication);
 
-            // 리마인더 생성 (커스텀 시간 사용)
+            // 리마인더 생성 (커스텀 시간 사용, 시간 기준으로 timing 재계산)
             for (PrescriptionRequestDTO.TimingWithTime twt : medInfo.getTimings()) {
-                MedicationTiming timing = twt.getTiming();
-                if (timing != MedicationTiming.AS_NEEDED && twt.getTime() != null) {
-                    Reminder reminder = ReminderConverter.toEntity(medication, timing, twt.getTime());
-                    reminderRepository.save(reminder);
+                if (twt.getTime() != null) {
+                    MedicationTiming timing = MedicationTiming.fromTime(twt.getTime());
+                    if (timing != MedicationTiming.AS_NEEDED) {
+                        Reminder reminder = ReminderConverter.toEntity(medication, timing, twt.getTime());
+                        reminderRepository.save(reminder);
+                    }
                 }
             }
 

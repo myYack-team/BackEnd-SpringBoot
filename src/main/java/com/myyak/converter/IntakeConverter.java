@@ -83,7 +83,7 @@ public class IntakeConverter {
             Map<Long, List<Intake>> intakesBySupplementId) {
 
         Map<MedicationTiming, List<Reminder>> remindersByTiming = reminders.stream()
-                .collect(Collectors.groupingBy(Reminder::getTiming));
+                .collect(Collectors.groupingBy(r -> MedicationTiming.fromTime(r.getTime())));
 
         List<IntakeResponseDTO.ScheduleItem> schedules = new ArrayList<>();
 

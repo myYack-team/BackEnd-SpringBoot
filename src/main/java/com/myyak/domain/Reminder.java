@@ -46,6 +46,7 @@ public class Reminder extends BaseEntity {
 
     public void updateTime(LocalTime time) {
         this.time = time;
+        this.timing = MedicationTiming.fromTime(time);
     }
 
     public void toggle() {

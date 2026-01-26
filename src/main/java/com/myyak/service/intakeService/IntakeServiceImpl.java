@@ -84,8 +84,11 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        // 약물 + 영양제 리마인더 통합 조회
-        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
+        // 약물 + 영양제 리마인더 통합 조회 (날짜 기준 필터링)
+        List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
+        List<Reminder> reminders = allReminders.stream()
+                .filter(r -> isReminderActiveOnDate(r, date))
+                .collect(Collectors.toList());
 
         // 약물 + 영양제 복용 기록 통합 조회
         List<Intake> intakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(userId, startOfDay, endOfDay);
