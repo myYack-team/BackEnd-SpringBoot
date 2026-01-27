@@ -1,5 +1,7 @@
 package com.myyak.util;
 
+import com.myyak.apiPayload.code.status.ErrorStatus;
+import com.myyak.apiPayload.exception.GeneralException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
@@ -125,6 +127,26 @@ public class JwtProvider {
      */
     public long getRefreshTokenExpiry() {
         return refreshTokenExpiry;
+    }
+
+    /**
+     * Refresh Token 전용 검증 - 만료된 토큰도 Claims 추출 가능
+     * 만료 여부는 DB의 expiresAt으로 판단하므로, JWT 만료는 별도 처리
+     */
+    public Claims validateAndParseRefreshToken(String token) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (ExpiredJwtException e) {
+            log.info("만료된 Refresh Token입니다. DB 만료 확인으로 진행합니다.");
+            return e.getClaims();
+        } catch (Exception e) {
+            log.warn("유효하지 않은 Refresh Token: {}", e.getMessage());
+            throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
+        }
     }
 
     private Claims parseClaims(String token) {

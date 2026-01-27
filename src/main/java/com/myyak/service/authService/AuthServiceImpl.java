@@ -11,6 +11,7 @@ import com.myyak.util.JwtProvider;
 import com.myyak.web.dto.AuthDTO.AuthRequestDTO;
 import com.myyak.web.dto.AuthDTO.AuthResponseDTO;
 import com.myyak.web.dto.AuthDTO.KakaoUserInfo;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -106,13 +107,11 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponseDTO.TokenResponse refreshToken(AuthRequestDTO.RefreshRequest request) {
         String refreshTokenValue = request.getRefreshToken();
 
-        // 1. Refresh Token 유효성 검증
-        if (!jwtProvider.validateToken(refreshTokenValue)) {
-            throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
-        }
+        // 1. Refresh Token 검증 및 Claims 추출 (만료된 토큰도 Claims 추출 가능)
+        Claims claims = jwtProvider.validateAndParseRefreshToken(refreshTokenValue);
 
         // 2. Refresh Token이 access 타입이 아닌지 확인
-        if (!"refresh".equals(jwtProvider.getTokenType(refreshTokenValue))) {
+        if (!"refresh".equals(claims.get("type", String.class))) {
             throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
         }
 
