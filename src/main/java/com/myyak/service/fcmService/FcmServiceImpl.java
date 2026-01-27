@@ -23,6 +23,7 @@ import java.util.List;
 public class FcmServiceImpl implements FcmService {
 
     private static final String NOTIFICATION_TITLE = "마이약";
+    private static final String ANDROID_CHANNEL_ID = "medication";
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final FirebaseMessaging firebaseMessaging;
@@ -71,6 +72,7 @@ public class FcmServiceImpl implements FcmService {
                     .setAndroidConfig(AndroidConfig.builder()
                             .setPriority(AndroidConfig.Priority.HIGH)
                             .setNotification(AndroidNotification.builder()
+                                    .setChannelId(ANDROID_CHANNEL_ID)
                                     .setSound("default")
                                     .setClickAction("OPEN_MEDICATION")
                                     .build())
@@ -186,6 +188,20 @@ public class FcmServiceImpl implements FcmService {
                     .setNotification(Notification.builder()
                             .setTitle(title)
                             .setBody(body)
+                            .build())
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .setNotification(AndroidNotification.builder()
+                                    .setChannelId(ANDROID_CHANNEL_ID)
+                                    .setSound("default")
+                                    .setClickAction("OPEN_MEDICATION")
+                                    .build())
+                            .build())
+                    .setApnsConfig(ApnsConfig.builder()
+                            .setAps(Aps.builder()
+                                    .setSound("default")
+                                    .setBadge(1)
+                                    .build())
                             .build())
                     .build();
 
