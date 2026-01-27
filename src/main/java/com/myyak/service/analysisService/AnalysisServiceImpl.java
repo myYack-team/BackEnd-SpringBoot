@@ -13,6 +13,7 @@ import com.myyak.web.dto.AnalysisDTO.AnalysisRequestDTO;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,9 @@ public class AnalysisServiceImpl implements AnalysisService {
     private final AnalysisTemporaryNoteRepository analysisTemporaryNoteRepository;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
+
+    @Value("${analysis.monthly-limit}")
+    private int monthlyLimit;
 
     private static final int PATTERN_ANALYSIS_DAYS = 30;  // 패턴 분석 기간 (30일)
 
@@ -284,7 +288,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         UserAnalysisQuota quota = getOrCreateQuota(user);
         checkAndResetMonthlyQuotaIfNeeded(quota);
 
-        if (!quota.canAnalyzeThisMonth()) {
+        if (!quota.canAnalyzeThisMonth(monthlyLimit)) {
             throw new GeneralException(ErrorStatus.ANALYSIS_MONTHLY_QUOTA_EXCEEDED);
         }
 
@@ -364,7 +368,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
                 userId, report.getId(), mechanismGroupCount, foodInteractionCount);
 
-        return AnalysisConverter.toAnalysisResult(report, quota);
+        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit);
     }
 
     @Override
@@ -389,7 +393,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         List<AnalysisResponseDTO.DailyCondition> dailyConditions = buildDailyConditions(
                 user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
 
-        return AnalysisConverter.toAnalysisResult(report, quota, dailyConditions);
+        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, dailyConditions);
     }
 
     @Override
@@ -409,7 +413,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     public AnalysisResponseDTO.QuotaInfo getQuotaInfo(Long userId) {
         User user = findUserById(userId);
         UserAnalysisQuota quota = userAnalysisQuotaRepository.findByUser(user).orElse(null);
-        return AnalysisConverter.toQuotaInfo(quota);
+        return AnalysisConverter.toQuotaInfo(quota, monthlyLimit);
     }
 
     @Override
@@ -466,23 +470,11 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .orElseGet(() -> {
                     UserAnalysisQuota newQuota = UserAnalysisQuota.builder()
                             .user(user)
-                            .weeklyLimit(3)
-                            .weeklyUsedCount(0)
-                            .weeklyResetDate(getNextMonday())
-                            .monthlyLimit(2)
                             .monthlyUsedCount(0)
                             .monthlyResetDate(getNextMonthFirstDay())
                             .build();
                     return userAnalysisQuotaRepository.save(newQuota);
                 });
-    }
-
-    private void checkAndResetWeeklyQuotaIfNeeded(UserAnalysisQuota quota) {
-        LocalDate today = LocalDate.now();
-        if (quota.needsWeeklyReset(today)) {
-            quota.resetWeeklyQuota(getNextMonday());
-            log.info("[Analysis] 주간 쿼터 리셋 - userId: {}", quota.getUser().getId());
-        }
     }
 
     private void checkAndResetMonthlyQuotaIfNeeded(UserAnalysisQuota quota) {
@@ -491,15 +483,6 @@ public class AnalysisServiceImpl implements AnalysisService {
             quota.resetMonthlyQuota(getNextMonthFirstDay());
             log.info("[Analysis] 월간 쿼터 리셋 - userId: {}", quota.getUser().getId());
         }
-    }
-
-    private LocalDate getNextMonday() {
-        LocalDate today = LocalDate.now();
-        int daysUntilMonday = (8 - today.getDayOfWeek().getValue()) % 7;
-        if (daysUntilMonday == 0) {
-            daysUntilMonday = 7;
-        }
-        return today.plusDays(daysUntilMonday);
     }
 
     /**

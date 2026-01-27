@@ -26,8 +26,9 @@ public class AnalysisConverter {
      */
     public static AnalysisResponseDTO.AnalysisResult toAnalysisResult(
             AnalysisReport report,
-            UserAnalysisQuota quota) {
-        return toAnalysisResult(report, quota, List.of());
+            UserAnalysisQuota quota,
+            int monthlyLimit) {
+        return toAnalysisResult(report, quota, monthlyLimit, List.of());
     }
 
     /**
@@ -36,6 +37,7 @@ public class AnalysisConverter {
     public static AnalysisResponseDTO.AnalysisResult toAnalysisResult(
             AnalysisReport report,
             UserAnalysisQuota quota,
+            int monthlyLimit,
             List<AnalysisResponseDTO.DailyCondition> dailyConditions) {
 
         String llmResponse = report.getLlmResponse();
@@ -62,7 +64,7 @@ public class AnalysisConverter {
                 .foodSuggestions(foodSuggestions)
                 .lifestyleTips(lifestyleTips)
                 .patternAnalysis(patternAnalysis)
-                .quota(toQuotaInfo(quota))
+                .quota(toQuotaInfo(quota, monthlyLimit))
                 .build();
     }
 
@@ -95,20 +97,20 @@ public class AnalysisConverter {
     /**
      * 쿼터 엔티티 → 쿼터 정보 DTO (월간)
      */
-    public static AnalysisResponseDTO.QuotaInfo toQuotaInfo(UserAnalysisQuota quota) {
+    public static AnalysisResponseDTO.QuotaInfo toQuotaInfo(UserAnalysisQuota quota, int monthlyLimit) {
         if (quota == null) {
             return AnalysisResponseDTO.QuotaInfo.builder()
-                    .monthlyLimit(2)
+                    .monthlyLimit(monthlyLimit)
                     .monthlyUsedCount(0)
-                    .monthlyRemainingCount(2)
+                    .monthlyRemainingCount(monthlyLimit)
                     .monthlyResetDate(null)
                     .build();
         }
 
         return AnalysisResponseDTO.QuotaInfo.builder()
-                .monthlyLimit(quota.getMonthlyLimit())
+                .monthlyLimit(monthlyLimit)
                 .monthlyUsedCount(quota.getMonthlyUsedCount())
-                .monthlyRemainingCount(quota.getMonthlyRemainingCount())
+                .monthlyRemainingCount(quota.getMonthlyRemainingCount(monthlyLimit))
                 .monthlyResetDate(quota.getMonthlyResetDate())
                 .build();
     }
