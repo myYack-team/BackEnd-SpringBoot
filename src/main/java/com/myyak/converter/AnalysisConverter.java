@@ -540,7 +540,7 @@ public class AnalysisConverter {
                         .occurrenceDates(c.get("occurrenceDates") != null ? (List<String>) c.get("occurrenceDates") : List.of())
                         .relatedMedications(c.get("relatedMedications") != null ? (List<String>) c.get("relatedMedications") : List.of())
                         .description((String) c.get("description"))
-                        .suggestion((String) c.get("suggestion"))
+                        .suggestion(formatParagraphs((String) c.get("suggestion")))
                         .build())
                 .toList();
     }
@@ -565,5 +565,25 @@ public class AnalysisConverter {
             return ((Number) value).intValue();
         }
         return null;
+    }
+
+    /**
+     * 문장 종결 부호 뒤에 줄바꿈을 추가하여 문단을 구분합니다.
+     * 예외: 숫자+점(3.5), 약어(Dr., Mr., etc.)
+     */
+    private static String formatParagraphs(String text) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+
+        // 문장 종결 패턴: 마침표, 물음표, 느낌표 뒤에 공백이 오고 다음 문장이 시작되는 경우
+        // 예외 처리: 숫자.숫자(소수점), 약어(Dr., Mr., Ms., etc.)
+        return text
+                // 마침표 뒤 공백+대문자/한글로 시작하는 경우 줄바꿈 추가
+                .replaceAll("(?<![0-9])\\. +(?=[A-Z가-힣])", ".\n\n")
+                // 물음표 뒤 공백+문자로 시작하는 경우 줄바꿈 추가
+                .replaceAll("\\? +(?=[A-Z가-힣])", "?\n\n")
+                // 느낌표 뒤 공백+문자로 시작하는 경우 줄바꿈 추가
+                .replaceAll("! +(?=[A-Z가-힣])", "!\n\n");
     }
 }
