@@ -234,6 +234,24 @@ public class AnalysisResponseDTO {
         private PatternSummary summary;                   // 요약
         private List<DailyCondition> dailyConditions;     // 일별 컨디션 (그래프용)
         private List<TimelineEvent> events;               // 타임라인 이벤트
+        private List<SymptomCluster> symptomClusters;     // 증상 클러스터
+    }
+
+    /**
+     * 증상 클러스터
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SymptomCluster {
+        private String clusterName;                  // 클러스터 이름
+        private String severity;                     // 심각도 (HIGH/MEDIUM/LOW)
+        private Integer occurrenceCount;             // 발생 횟수
+        private List<String> occurrenceDates;        // 발생 날짜 목록
+        private List<String> relatedMedications;     // 관련 약물 목록
+        private String description;                  // 클러스터 설명
+        private String suggestion;                   // 참고 사항
     }
 
     /**

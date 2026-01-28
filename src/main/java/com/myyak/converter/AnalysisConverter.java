@@ -367,6 +367,10 @@ public class AnalysisConverter {
             List<AnalysisResponseDTO.TimelineEvent> events = parseEvents(
                     (List<Map<String, Object>>) response.get("events"));
 
+            // 증상 클러스터
+            List<AnalysisResponseDTO.SymptomCluster> symptomClusters = parseSymptomClusters(
+                    (List<Map<String, Object>>) response.get("symptomClusters"));
+
             return AnalysisResponseDTO.PatternAnalysis.builder()
                     .analysisStartDate(startDate)
                     .analysisEndDate(endDate)
@@ -376,6 +380,7 @@ public class AnalysisConverter {
                     .summary(summary)
                     .dailyConditions(dailyConditions != null ? dailyConditions : List.of())
                     .events(events)
+                    .symptomClusters(symptomClusters)
                     .build();
 
         } catch (JsonProcessingException e) {
@@ -515,6 +520,28 @@ public class AnalysisConverter {
                             .description((String) e.get("description"))
                             .build();
                 })
+                .toList();
+    }
+
+    /**
+     * 증상 클러스터 파싱
+     */
+    @SuppressWarnings("unchecked")
+    private static List<AnalysisResponseDTO.SymptomCluster> parseSymptomClusters(List<Map<String, Object>> clusterList) {
+        if (clusterList == null) {
+            return List.of();
+        }
+
+        return clusterList.stream()
+                .map(c -> AnalysisResponseDTO.SymptomCluster.builder()
+                        .clusterName((String) c.get("clusterName"))
+                        .severity((String) c.get("severity"))
+                        .occurrenceCount(c.get("occurrenceCount") != null ? ((Number) c.get("occurrenceCount")).intValue() : null)
+                        .occurrenceDates(c.get("occurrenceDates") != null ? (List<String>) c.get("occurrenceDates") : List.of())
+                        .relatedMedications(c.get("relatedMedications") != null ? (List<String>) c.get("relatedMedications") : List.of())
+                        .description((String) c.get("description"))
+                        .suggestion((String) c.get("suggestion"))
+                        .build())
                 .toList();
     }
 
