@@ -3,6 +3,7 @@
  */
 document.addEventListener('DOMContentLoaded', () => {
     initHealthCheck();
+    initTestLogin();
 });
 
 /**
@@ -146,4 +147,82 @@ function showHealthError(message) {
     });
 
     document.getElementById('lastChecked').textContent = `오류: ${message}`;
+}
+
+/**
+ * 테스트 로그인 토글 초기화
+ */
+function initTestLogin() {
+    const toggleBtn = document.getElementById('test-login-toggle');
+    if (toggleBtn) {
+        loadTestLoginStatus();
+        toggleBtn.addEventListener('click', toggleTestLogin);
+    }
+}
+
+/**
+ * 테스트 로그인 상태 조회
+ */
+async function loadTestLoginStatus() {
+    const statusEl = document.getElementById('test-login-status');
+    try {
+        const response = await fetch('/api/admin/test-login/status');
+        const data = await response.json();
+        if (data.isSuccess && data.result) {
+            updateTestLoginUI(data.result.enabled);
+        } else {
+            statusEl.textContent = '조회 실패';
+            statusEl.style.color = '#ef4444';
+        }
+    } catch (error) {
+        console.error('테스트 로그인 상태 조회 실패:', error);
+        statusEl.textContent = '조회 실패';
+        statusEl.style.color = '#ef4444';
+    }
+}
+
+/**
+ * 테스트 로그인 토글
+ */
+async function toggleTestLogin(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const toggleBtn = document.getElementById('test-login-toggle');
+    toggleBtn.disabled = true;
+    toggleBtn.textContent = '처리 중...';
+
+    try {
+        const response = await fetch('/api/admin/test-login/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (data.isSuccess && data.result) {
+            updateTestLoginUI(data.result.enabled);
+            alert(data.result.enabled ? '테스트 로그인이 활성화되었습니다.' : '테스트 로그인이 비활성화되었습니다.');
+        } else {
+            alert('토글 실패: ' + (data.message || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('테스트 로그인 토글 실패:', error);
+        alert('토글 실패: ' + error.message);
+    } finally {
+        toggleBtn.disabled = false;
+        toggleBtn.textContent = '토글';
+    }
+}
+
+/**
+ * 테스트 로그인 UI 업데이트
+ */
+function updateTestLoginUI(enabled) {
+    const statusEl = document.getElementById('test-login-status');
+    if (enabled) {
+        statusEl.textContent = '활성화됨';
+        statusEl.style.color = '#22c55e';
+    } else {
+        statusEl.textContent = '비활성화됨';
+        statusEl.style.color = '#ef4444';
+    }
 }
