@@ -75,11 +75,21 @@ public class EncryptionUtil {
 
     /**
      * AES-256-GCM 암호문을 복호화
-     * @param encryptedText Base64 인코딩된 암호문
-     * @return 복호화된 평문
+     * 평문 데이터(암호화되지 않은 기존 데이터)는 그대로 반환하여 마이그레이션 호환성 유지
+     *
+     * @param encryptedText Base64 인코딩된 암호문 또는 평문
+     * @return 복호화된 평문 또는 원본 평문
      */
     public String decrypt(String encryptedText) {
         if (encryptedText == null || encryptedText.isEmpty()) {
+            return encryptedText;
+        }
+
+        // 암호화된 데이터는 항상 Base64 형식 (IV 12바이트 + 암호문)
+        // 최소 길이: 12(IV) + 16(tag) = 28바이트 → Base64로 약 40자 이상
+        // 평문 데이터인지 먼저 확인
+        if (!isLikelyEncrypted(encryptedText)) {
+            log.debug("평문 데이터 감지, 원본 반환");
             return encryptedText;
         }
 
@@ -103,9 +113,32 @@ public class EncryptionUtil {
             byte[] decryptedBytes = cipher.doFinal(cipherText);
             return new String(decryptedBytes, "UTF-8");
 
+        } catch (IllegalArgumentException e) {
+            // Base64 디코딩 실패 → 평문 데이터로 간주
+            log.warn("Base64 디코딩 실패, 평문으로 간주: {}", e.getMessage());
+            return encryptedText;
         } catch (Exception e) {
-            log.error("복호화 실패", e);
-            throw new RuntimeException("복호화 처리 중 오류가 발생했습니다.", e);
+            // 복호화 실패 → 평문 데이터일 가능성
+            log.warn("복호화 실패, 평문으로 간주: {}", e.getMessage());
+            return encryptedText;
         }
+    }
+
+    /**
+     * 데이터가 암호화된 형식인지 간단히 판별
+     * - 암호화된 데이터는 Base64 문자만 포함
+     * - 평문 이메일은 @ 또는 . 등의 특수문자 포함
+     */
+    private boolean isLikelyEncrypted(String data) {
+        // 너무 짧으면 암호화된 데이터가 아님 (최소 IV + tag = 28바이트 → Base64 약 40자)
+        if (data.length() < 40) {
+            return false;
+        }
+        // @ 포함 시 이메일 평문으로 간주
+        if (data.contains("@")) {
+            return false;
+        }
+        // Base64 문자셋 검증 (A-Z, a-z, 0-9, +, /, =)
+        return data.matches("^[A-Za-z0-9+/=]+$");
     }
 }
