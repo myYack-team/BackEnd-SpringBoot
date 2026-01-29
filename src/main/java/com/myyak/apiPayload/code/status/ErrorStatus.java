@@ -22,6 +22,7 @@ public enum ErrorStatus implements BaseErrorCode {
     AUTH_EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH402", "만료된 토큰입니다."),
     AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH403", "유효하지 않은 리프레시 토큰입니다."),
     AUTH_KAKAO_LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "AUTH404", "카카오 로그인에 실패했습니다."),
+    AUTH_TEST_LOGIN_DISABLED(HttpStatus.UNAUTHORIZED, "AUTH405", "테스트 로그인이 비활성화 상태입니다."),
     AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "AUTH406", "유효하지 않은 인증 코드입니다."),
 
     // 사용자 관련 에러

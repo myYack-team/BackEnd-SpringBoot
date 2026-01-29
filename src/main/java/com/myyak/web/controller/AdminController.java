@@ -175,4 +175,25 @@ public class AdminController {
         log.info("AI 모델 설정 변경 요청: model={}", request.getAnalysisModel());
         return ApiResponse.onSuccess(adminService.updateAiModelSetting(request));
     }
+
+    // ===== 테스트 로그인 관리 API =====
+
+    @Operation(
+            summary = "테스트 로그인 상태 조회",
+            description = "Google Play Store 심사용 테스트 로그인의 활성화 상태를 조회합니다."
+    )
+    @GetMapping("/test-login/status")
+    public ApiResponse<AdminResponseDTO.TestLoginStatus> getTestLoginStatus() {
+        return ApiResponse.onSuccess(adminService.getTestLoginStatus());
+    }
+
+    @Operation(
+            summary = "테스트 로그인 상태 토글",
+            description = "Google Play Store 심사용 테스트 로그인을 활성화/비활성화합니다."
+    )
+    @PostMapping("/test-login/toggle")
+    public ApiResponse<AdminResponseDTO.TestLoginStatus> toggleTestLogin() {
+        log.info("테스트 로그인 토글 요청");
+        return ApiResponse.onSuccess(adminService.toggleTestLogin());
+    }
 }

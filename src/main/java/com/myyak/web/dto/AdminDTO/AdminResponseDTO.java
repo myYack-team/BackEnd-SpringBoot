@@ -234,4 +234,14 @@ public class AdminResponseDTO {
         private List<String> availableModels;   // 선택 가능한 모델 목록
         private LocalDateTime updatedAt;
     }
+
+    /**
+     * 테스트 로그인 상태 응답
+     */
+    @Getter
+    @Builder
+    public static class TestLoginStatus {
+        private boolean enabled;
+        private LocalDateTime updatedAt;
+    }
 }

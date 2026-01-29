@@ -41,4 +41,5 @@ public class AppSetting extends BaseEntity {
     public static final String KEY_GEMINI_ANALYSIS_MODEL = "gemini.analysis.model";
     public static final String KEY_GEMINI_ANALYSIS_FALLBACK_MODEL = "gemini.analysis.fallback-model";
     public static final String KEY_GEMINI_FALLBACK_ENABLED = "gemini.analysis.fallback-enabled";
+    public static final String KEY_TEST_LOGIN_ENABLED = "test-login.enabled";
 }

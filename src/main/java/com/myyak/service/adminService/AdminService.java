@@ -70,4 +70,14 @@ public interface AdminService {
      * AI 모델 설정 변경
      */
     AdminResponseDTO.AiModelSetting updateAiModelSetting(AdminRequestDTO.AiModelSettingRequest request);
+
+    /**
+     * 테스트 로그인 상태 조회
+     */
+    AdminResponseDTO.TestLoginStatus getTestLoginStatus();
+
+    /**
+     * 테스트 로그인 토글
+     */
+    AdminResponseDTO.TestLoginStatus toggleTestLogin();
 }

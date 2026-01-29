@@ -48,4 +48,11 @@ public interface AuthService {
      * @param userId 사용자 ID
      */
     void logout(Long userId);
+
+    /**
+     * 테스트 로그인 (Google Play Store 심사용)
+     *
+     * @return 로그인 응답 (JWT 토큰 + 사용자 정보)
+     */
+    AuthResponseDTO.LoginResponse testLogin();
 }

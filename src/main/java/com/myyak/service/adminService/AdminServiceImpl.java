@@ -791,6 +791,45 @@ public class AdminServiceImpl implements AdminService {
         return getAiModelSetting();
     }
 
+    // ===== 테스트 로그인 관리 =====
+
+    @Override
+    public AdminResponseDTO.TestLoginStatus getTestLoginStatus() {
+        return appSettingRepository.findBySettingKey(AppSetting.KEY_TEST_LOGIN_ENABLED)
+                .map(setting -> AdminResponseDTO.TestLoginStatus.builder()
+                        .enabled(Boolean.parseBoolean(setting.getSettingValue()))
+                        .updatedAt(setting.getUpdatedAt())
+                        .build())
+                .orElse(AdminResponseDTO.TestLoginStatus.builder()
+                        .enabled(false)
+                        .updatedAt(null)
+                        .build());
+    }
+
+    @Override
+    @Transactional
+    public AdminResponseDTO.TestLoginStatus toggleTestLogin() {
+        AppSetting setting = appSettingRepository.findBySettingKey(AppSetting.KEY_TEST_LOGIN_ENABLED)
+                .orElse(AppSetting.builder()
+                        .settingKey(AppSetting.KEY_TEST_LOGIN_ENABLED)
+                        .settingValue("false")
+                        .description("테스트 로그인 활성화 여부 (Google Play Store 심사용)")
+                        .build());
+
+        boolean currentValue = Boolean.parseBoolean(setting.getSettingValue());
+        boolean newValue = !currentValue;
+
+        setting.updateValue(String.valueOf(newValue));
+        appSettingRepository.save(setting);
+
+        log.info("테스트 로그인 상태 변경: {} -> {}", currentValue, newValue);
+
+        return AdminResponseDTO.TestLoginStatus.builder()
+                .enabled(newValue)
+                .updatedAt(setting.getUpdatedAt())
+                .build();
+    }
+
     private void updateOrCreateSetting(String key, String value, String description) {
         AppSetting setting = appSettingRepository.findBySettingKey(key)
                 .orElse(AppSetting.builder()

@@ -2,8 +2,10 @@ package com.myyak.service.authService;
 
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.domain.AppSetting;
 import com.myyak.domain.RefreshToken;
 import com.myyak.domain.User;
+import com.myyak.repository.AppSettingRepository;
 import com.myyak.repository.RefreshTokenRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
@@ -29,10 +31,13 @@ import java.util.Optional;
 @Transactional
 public class AuthServiceImpl implements AuthService {
 
+    public static final String TEST_KAKAO_ID = "TEST_REVIEW_ACCOUNT";
+
     private final KakaoOAuthService kakaoOAuthService;
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProvider jwtProvider;
+    private final AppSettingRepository appSettingRepository;
 
     @Override
     public String getKakaoAuthorizationUrl(String baseUrl, String state) {
@@ -150,6 +155,63 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.deleteByUser(user);
         log.info("로그아웃 완료: userId={}", userId);
+    }
+
+    @Override
+    public AuthResponseDTO.LoginResponse testLogin() {
+        // 1. 테스트 로그인 활성화 여부 확인
+        boolean isEnabled = appSettingRepository.findBySettingKey(AppSetting.KEY_TEST_LOGIN_ENABLED)
+                .map(setting -> Boolean.parseBoolean(setting.getSettingValue()))
+                .orElse(false);
+
+        if (!isEnabled) {
+            log.warn("테스트 로그인 시도 - 비활성화 상태");
+            throw new GeneralException(ErrorStatus.AUTH_TEST_LOGIN_DISABLED);
+        }
+
+        // 2. 테스트 계정 조회 (없으면 에러)
+        User user = userRepository.findByKakaoId(TEST_KAKAO_ID)
+                .orElseThrow(() -> {
+                    log.error("테스트 계정 없음: kakaoId={}", TEST_KAKAO_ID);
+                    return new GeneralException(ErrorStatus.USER_NOT_FOUND);
+                });
+
+        // 3. 1년 만료 토큰 생성
+        String accessToken = jwtProvider.createTestAccessToken(user.getId());
+        String refreshToken = jwtProvider.createTestRefreshToken(user.getId());
+
+        // 4. Refresh Token 저장
+        saveTestRefreshToken(user, refreshToken);
+
+        log.info("테스트 로그인 성공: userId={}", user.getId());
+
+        // 5. 응답 생성
+        return AuthResponseDTO.LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .accessTokenExpiresIn(jwtProvider.getTestTokenExpiry())
+                .user(toUserInfo(user))
+                .isNewUser(false)
+                .termsAgreed(user.getTermsAgreed())
+                .privacyAgreed(user.getPrivacyAgreed())
+                .build();
+    }
+
+    private void saveTestRefreshToken(User user, String refreshToken) {
+        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getTestTokenExpiry() / 1000);
+
+        Optional<RefreshToken> existingToken = refreshTokenRepository.findByUser(user);
+
+        if (existingToken.isPresent()) {
+            existingToken.get().updateToken(refreshToken, expiresAt);
+        } else {
+            RefreshToken newToken = RefreshToken.builder()
+                    .user(user)
+                    .token(refreshToken)
+                    .expiresAt(expiresAt)
+                    .build();
+            refreshTokenRepository.save(newToken);
+        }
     }
 
     private User createNewUser(String kakaoId, KakaoUserInfo kakaoUserInfo) {

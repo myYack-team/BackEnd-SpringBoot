@@ -28,6 +28,9 @@ public class JwtProvider {
     @Value("${jwt.refresh-token-expiry}")
     private long refreshTokenExpiry;
 
+    // 1 year in milliseconds (테스트 계정용)
+    private static final long TEST_TOKEN_EXPIRY = 365L * 24 * 60 * 60 * 1000;
+
     private Key key;
 
     @PostConstruct
@@ -127,6 +130,43 @@ public class JwtProvider {
      */
     public long getRefreshTokenExpiry() {
         return refreshTokenExpiry;
+    }
+
+    /**
+     * 테스트용 Access Token 생성 (1년 만료)
+     */
+    public String createTestAccessToken(Long userId) {
+        return createToken(userId, TEST_TOKEN_EXPIRY, "access");
+    }
+
+    /**
+     * 테스트용 Refresh Token 생성 (1년 만료)
+     */
+    public String createTestRefreshToken(Long userId) {
+        return createToken(userId, TEST_TOKEN_EXPIRY, "refresh");
+    }
+
+    /**
+     * 테스트용 토큰 만료 시간 (밀리초)
+     */
+    public long getTestTokenExpiry() {
+        return TEST_TOKEN_EXPIRY;
+    }
+
+    /**
+     * 토큰 생성 공통 메서드
+     */
+    private String createToken(Long userId, long expiry, String type) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + expiry);
+
+        return Jwts.builder()
+                .setSubject(String.valueOf(userId))
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
+                .claim("type", type)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
     }
 
     /**

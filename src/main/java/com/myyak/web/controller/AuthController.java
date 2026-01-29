@@ -213,4 +213,11 @@ public class AuthController {
         return ApiResponse.onSuccess(null);
     }
 
+    @Operation(summary = "테스트 로그인", description = "Google Play Store 심사용 테스트 계정으로 로그인합니다.")
+    @PostMapping("/test-login")
+    public ApiResponse<AuthResponseDTO.LoginResponse> testLogin() {
+        log.info("테스트 로그인 요청");
+        return ApiResponse.onSuccess(authService.testLogin());
+    }
+
 }
