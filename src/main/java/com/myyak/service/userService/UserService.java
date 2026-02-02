@@ -55,4 +55,9 @@ public interface UserService {
      * 서비스 이용 동의 제출 (이용약관 + 개인정보 처리방침)
      */
     UserResponseDTO.ConsentStatus submitConsent(Long userId, UserRequestDTO.ConsentRequest request);
+
+    /**
+     * 전화번호 등록/수정
+     */
+    UserResponseDTO.PhoneUpdateResult updatePhone(Long userId, UserRequestDTO.UpdatePhoneRequest request);
 }

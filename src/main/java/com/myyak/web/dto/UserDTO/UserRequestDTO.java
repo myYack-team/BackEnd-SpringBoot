@@ -3,8 +3,10 @@ package com.myyak.web.dto.UserDTO;
 import com.myyak.domain.enums.FontSize;
 import com.myyak.domain.enums.Gender;
 import com.myyak.domain.enums.SignupPurpose;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -61,5 +63,16 @@ public class UserRequestDTO {
         private Boolean privacyAgreed;
 
         private String consentVersion;
+    }
+
+    /**
+     * 전화번호 등록/수정 요청
+     */
+    @Getter
+    @NoArgsConstructor
+    public static class UpdatePhoneRequest {
+        @NotBlank(message = "전화번호는 필수입니다")
+        @Pattern(regexp = "^01[0-9]{8,9}$", message = "올바른 전화번호 형식이 아닙니다 (예: 01012345678)")
+        private String phone;
     }
 }

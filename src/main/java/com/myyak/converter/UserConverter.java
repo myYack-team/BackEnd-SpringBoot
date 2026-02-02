@@ -12,6 +12,7 @@ public class UserConverter {
                 .name(user.getName())
                 .email(user.getEmail())
                 .profileImage(user.getProfileImage())
+                .phone(user.getPhone())
                 .fontSize(user.getFontSize())
                 .createdAt(user.getCreatedAt())
                 .build();

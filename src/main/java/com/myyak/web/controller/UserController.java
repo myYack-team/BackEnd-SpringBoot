@@ -99,4 +99,13 @@ public class UserController {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.submitConsent(userId, request));
     }
+
+    @Operation(summary = "전화번호 등록/수정", description = "현재 로그인한 사용자의 전화번호를 등록하거나 수정합니다. 가족 연동 기능에 사용됩니다.")
+    @PatchMapping("/me/phone")
+    public ApiResponse<UserResponseDTO.PhoneUpdateResult> updatePhone(
+            Authentication authentication,
+            @Valid @RequestBody UserRequestDTO.UpdatePhoneRequest request) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(userService.updatePhone(userId, request));
+    }
 }

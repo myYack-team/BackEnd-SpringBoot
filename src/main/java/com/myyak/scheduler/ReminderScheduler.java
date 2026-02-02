@@ -1,8 +1,10 @@
 package com.myyak.scheduler;
 
 import com.myyak.config.NotificationConstants;
+import com.myyak.domain.FamilyLink;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.User;
+import com.myyak.repository.FamilyLinkRepository;
 import com.myyak.repository.IntakeRepository;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.service.fcmService.FcmService;
@@ -27,6 +29,7 @@ public class ReminderScheduler {
     private final ReminderRepository reminderRepository;
     private final IntakeRepository intakeRepository;
     private final FcmService fcmService;
+    private final FamilyLinkRepository familyLinkRepository;
 
     /**
      * 매 분마다 알림 체크 및 발송
@@ -105,14 +108,48 @@ public class ReminderScheduler {
             List<Reminder> userReminders = entry.getValue();
 
             try {
+                // 본인에게 미복용 리마인더 발송
                 fcmService.sendMissedMedicationReminder(user, userReminders, originalTime);
                 log.debug("미복용 리마인더 발송 - userId: {}, 약 개수: {}", user.getId(), userReminders.size());
+
+                // 보호자에게도 미복용 알림 발송
+                sendFamilyMissedReminders(user, userReminders, originalTime);
             } catch (Exception e) {
                 log.error("미복용 리마인더 발송 실패 - userId: {}, error: {}", user.getId(), e.getMessage());
             }
         }
 
         log.info("미복용 리마인더 발송 완료 - 원래 시간: {}, 사용자 수: {}", originalTime, remindersByUser.size());
+    }
+
+    /**
+     * 피보호자의 보호자들에게 미복용 알림 발송
+     * 보호자의 familyNotificationEnabled 설정에 따라 알림 수신 여부 결정
+     */
+    private void sendFamilyMissedReminders(User protectedUser, List<Reminder> reminders, LocalTime originalTime) {
+        // 이 사용자를 피보호자로 등록한 보호자들 조회
+        List<FamilyLink> guardianLinks = familyLinkRepository.findByProtectedUserId(protectedUser.getId());
+
+        if (guardianLinks.isEmpty()) {
+            return;
+        }
+
+        for (FamilyLink link : guardianLinks) {
+            User guardian = link.getGuardian();
+
+            // 보호자의 가족 알림 수신 설정이 꺼져있으면 발송하지 않음
+            if (!guardian.getFamilyNotificationEnabled()) {
+                log.debug("보호자 가족 알림 설정이 꺼져있어 알림 발송 안함 - guardianId: {}", guardian.getId());
+                continue;
+            }
+
+            try {
+                fcmService.sendFamilyMissedMedicationReminder(guardian, protectedUser, reminders, originalTime);
+            } catch (Exception e) {
+                log.error("보호자 미복용 알림 발송 실패 - guardianId: {}, protectedUserId: {}, error: {}",
+                        guardian.getId(), protectedUser.getId(), e.getMessage());
+            }
+        }
     }
 
     /**

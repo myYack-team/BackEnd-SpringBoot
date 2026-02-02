@@ -40,6 +40,12 @@ public class User extends BaseEntity {
 
     private String signupPurposes;
 
+    @Convert(converter = EncryptedStringConverter.class)
+    private String phone;
+
+    @Column(unique = true)
+    private String phoneHash;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -51,6 +57,10 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     @Builder.Default
     private Boolean notificationEnabled = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean familyNotificationEnabled = true;
 
     // 약관 동의 관련 필드
     @Column(nullable = false)
@@ -115,5 +125,14 @@ public class User extends BaseEntity {
             this.consentVersion = consentVersion;
         }
         this.consentedAt = LocalDateTime.now();
+    }
+
+    public void updatePhone(String phone, String phoneHash) {
+        this.phone = phone;
+        this.phoneHash = phoneHash;
+    }
+
+    public void updateFamilyNotificationEnabled(Boolean familyNotificationEnabled) {
+        this.familyNotificationEnabled = familyNotificationEnabled;
     }
 }

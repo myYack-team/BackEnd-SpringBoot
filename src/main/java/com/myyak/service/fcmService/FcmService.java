@@ -38,4 +38,9 @@ public interface FcmService {
      * 다건 푸시 알림 발송
      */
     void sendNotifications(List<String> fcmTokens, String title, String body);
+
+    /**
+     * 보호자에게 피보호자 미복용 알림 발송
+     */
+    void sendFamilyMissedMedicationReminder(User guardian, User protectedUser, List<Reminder> reminders, LocalTime originalTime);
 }

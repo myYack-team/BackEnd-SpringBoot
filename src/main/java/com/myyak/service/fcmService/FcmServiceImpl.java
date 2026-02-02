@@ -211,4 +211,39 @@ public class FcmServiceImpl implements FcmService {
             log.error("FCM 다건 알림 발송 실패: {}", e.getMessage());
         }
     }
+
+    @Override
+    public void sendFamilyMissedMedicationReminder(User guardian, User protectedUser, List<Reminder> reminders, LocalTime originalTime) {
+        if (reminders == null || reminders.isEmpty()) {
+            return;
+        }
+
+        // 보호자 알림 설정 확인
+        if (!guardian.getNotificationEnabled()) {
+            log.debug("보호자 알림 설정이 꺼져있어 발송하지 않음 - guardianId: {}", guardian.getId());
+            return;
+        }
+
+        // 피보호자 가족 알림 설정 확인
+        if (!protectedUser.getFamilyNotificationEnabled()) {
+            log.debug("피보호자 가족 알림 설정이 꺼져있어 발송하지 않음 - protectedUserId: {}", protectedUser.getId());
+            return;
+        }
+
+        String timeStr = originalTime.format(TIME_FORMATTER);
+        String firstDrugName = getDrugName(reminders.get(0));
+        String body;
+
+        if (reminders.size() == 1) {
+            body = String.format("%s님의 %s - %s이(가) 복용처리되지 않았습니다.",
+                    protectedUser.getName(), timeStr, firstDrugName);
+        } else {
+            body = String.format("%s님의 %s - %s 외 %d개가 복용처리되지 않았습니다.",
+                    protectedUser.getName(), timeStr, firstDrugName, reminders.size() - 1);
+        }
+
+        sendNotification(guardian.getFcmToken(), NOTIFICATION_TITLE, body);
+        log.info("가족 미복용 알림 발송 - guardianId: {}, protectedUserId: {}, reminders: {}",
+                guardian.getId(), protectedUser.getId(), reminders.size());
+    }
 }

@@ -8,6 +8,7 @@ import com.myyak.domain.UserMedication;
 import com.myyak.domain.UserSupplement;
 import com.myyak.repository.*;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
+import com.myyak.util.PhoneHashUtil;
 import com.myyak.web.dto.UserDTO.UserRequestDTO;
 import com.myyak.web.dto.UserDTO.UserResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class UserServiceImpl implements UserService {
     private final PrescriptionRepository prescriptionRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final KakaoOAuthService kakaoOAuthService;
+    private final PhoneHashUtil phoneHashUtil;
 
     @Override
     public User findById(Long userId) {
@@ -201,5 +203,39 @@ public class UserServiceImpl implements UserService {
         log.info("서비스 이용 동의 제출 - userId: {}, termsAgreed: {}, privacyAgreed: {}, consentVersion: {}",
                 userId, request.getTermsAgreed(), request.getPrivacyAgreed(), request.getConsentVersion());
         return UserConverter.toConsentStatus(user);
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO.PhoneUpdateResult updatePhone(Long userId, UserRequestDTO.UpdatePhoneRequest request) {
+        User user = findById(userId);
+
+        // 전화번호 해시 생성
+        String phoneHash = phoneHashUtil.hash(request.getPhone());
+
+        // 이미 다른 사용자가 사용 중인 전화번호인지 확인 (해시로 검색)
+        userRepository.findByPhoneHash(phoneHash).ifPresent(existingUser -> {
+            if (!existingUser.getId().equals(userId)) {
+                throw new GeneralException(ErrorStatus.FAMILY_PHONE_ALREADY_EXISTS);
+            }
+        });
+
+        user.updatePhone(request.getPhone(), phoneHash);
+        log.info("전화번호 수정 - userId: {}, phone: {}", userId, maskPhone(request.getPhone()));
+
+        return UserResponseDTO.PhoneUpdateResult.builder()
+                .id(user.getId())
+                .phone(user.getPhone())
+                .build();
+    }
+
+    /**
+     * 전화번호 마스킹 (로깅용)
+     */
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 10) {
+            return phone;
+        }
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
     }
 }

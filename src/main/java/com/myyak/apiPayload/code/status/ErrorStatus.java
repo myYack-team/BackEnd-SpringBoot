@@ -66,7 +66,19 @@ public enum ErrorStatus implements BaseErrorCode {
 
     // 건강 메모 관련 에러
     HEALTH_NOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "HNOTE404", "건강 메모를 찾을 수 없습니다."),
-    HEALTH_NOTE_ALREADY_EXISTS(HttpStatus.CONFLICT, "HNOTE409", "해당 날짜에 이미 건강 메모가 존재합니다.");
+    HEALTH_NOTE_ALREADY_EXISTS(HttpStatus.CONFLICT, "HNOTE409", "해당 날짜에 이미 건강 메모가 존재합니다."),
+
+    // 가족 연동 관련 에러
+    FAMILY_PHONE_NOT_REGISTERED(HttpStatus.BAD_REQUEST, "FAMILY400", "전화번호가 등록되지 않은 사용자입니다."),
+    FAMILY_USER_NOT_FOUND(HttpStatus.NOT_FOUND, "FAMILY404", "해당 전화번호로 등록된 사용자를 찾을 수 없습니다."),
+    FAMILY_ALREADY_LINKED(HttpStatus.CONFLICT, "FAMILY409_1", "이미 연동된 가족입니다."),
+    FAMILY_REQUEST_ALREADY_SENT(HttpStatus.CONFLICT, "FAMILY409_2", "이미 연동 요청을 보낸 사용자입니다."),
+    FAMILY_LINK_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "FAMILY400_1", "가족 연동 최대 수를 초과했습니다."),
+    FAMILY_LINK_NOT_FOUND(HttpStatus.NOT_FOUND, "FAMILY404_1", "가족 연동을 찾을 수 없습니다."),
+    FAMILY_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "FAMILY404_2", "연동 요청을 찾을 수 없습니다."),
+    FAMILY_CANNOT_LINK_SELF(HttpStatus.BAD_REQUEST, "FAMILY400_2", "자기 자신과 연동할 수 없습니다."),
+    FAMILY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "FAMILY403", "해당 가족 정보에 대한 접근 권한이 없습니다."),
+    FAMILY_PHONE_ALREADY_EXISTS(HttpStatus.CONFLICT, "FAMILY409_3", "이미 등록된 전화번호입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

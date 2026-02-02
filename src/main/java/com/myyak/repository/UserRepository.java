@@ -33,4 +33,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("UPDATE User u SET u.termsAgreed = true, u.privacyAgreed = true " +
             "WHERE u.termsAgreed = false AND u.privacyAgreed = false")
     int updateConsentForExistingUsers();
+
+    /**
+     * 전화번호 해시로 사용자 조회
+     * (암호화된 phone 필드 대신 phoneHash 사용)
+     */
+    Optional<User> findByPhoneHash(String phoneHash);
+
+    /**
+     * 전화번호 해시 존재 여부 확인
+     */
+    boolean existsByPhoneHash(String phoneHash);
 }

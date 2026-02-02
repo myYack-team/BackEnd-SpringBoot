@@ -23,6 +23,7 @@ public class UserResponseDTO {
         private String name;
         private String email;
         private String profileImage;
+        private String phone;
         private FontSize fontSize;
         private LocalDateTime createdAt;
     }
@@ -78,5 +79,17 @@ public class UserResponseDTO {
         private Boolean privacyAgreed;
         private LocalDateTime consentedAt;
         private String consentVersion;
+    }
+
+    /**
+     * 전화번호 수정 결과
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PhoneUpdateResult {
+        private Long id;
+        private String phone;
     }
 }
