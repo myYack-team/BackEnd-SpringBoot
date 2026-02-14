@@ -9,6 +9,7 @@ import com.myyak.web.dto.SupplementDTO.SupplementRequestDTO;
 import com.myyak.web.dto.SupplementDTO.SupplementResponseDTO;
 import org.springframework.data.domain.Page;
 
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -222,6 +223,18 @@ public class SupplementConverter {
                 .userSupplement(userSupplement)
                 .timing(timing)
                 .time(timing.getDefaultTime())
+                .enabled(true)
+                .build();
+    }
+
+    /**
+     * 커스텀 시간을 사용하여 영양제 Reminder 생성
+     */
+    public static Reminder toReminderEntity(UserSupplement userSupplement, MedicationTiming timing, LocalTime customTime) {
+        return Reminder.builder()
+                .userSupplement(userSupplement)
+                .timing(timing)
+                .time(customTime)
                 .enabled(true)
                 .build();
     }

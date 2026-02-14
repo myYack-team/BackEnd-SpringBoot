@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -187,9 +190,11 @@ public class SupplementServiceImpl implements SupplementService {
 
         // 리마인더 생성
         List<MedicationTiming> timings = request.getTimings();
-        for (MedicationTiming timing : timings) {
+        List<String> reminderTimes = request.getReminderTimes();
+        for (int i = 0; i < timings.size(); i++) {
+            MedicationTiming timing = timings.get(i);
             if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
                 reminderRepository.save(reminder);
             }
         }
@@ -238,17 +243,21 @@ public class SupplementServiceImpl implements SupplementService {
 
         String dosage = request.getDosage() != null ? request.getDosage() : userSupplement.getDosage();
         Integer frequency = request.getFrequency() != null ? request.getFrequency() : userSupplement.getFrequency();
+        LocalDate endDate = request.getEndDate() != null ? request.getEndDate() : userSupplement.getEndDate();
+        String memo = request.getMemo() != null ? request.getMemo() : userSupplement.getMemo();
 
-        userSupplement.update(dosage, frequency, request.getEndDate(), request.getMemo());
+        userSupplement.update(dosage, frequency, endDate, memo);
 
         List<MedicationTiming> timings;
         if (request.getTimings() != null) {
             // 기존 리마인더 삭제 후 새로 생성
             reminderRepository.deleteByUserSupplement(userSupplement);
 
-            for (MedicationTiming timing : request.getTimings()) {
+            List<String> reminderTimes = request.getReminderTimes();
+            for (int i = 0; i < request.getTimings().size(); i++) {
+                MedicationTiming timing = request.getTimings().get(i);
                 if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                    Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
                     reminderRepository.save(reminder);
                 }
             }
@@ -270,6 +279,12 @@ public class SupplementServiceImpl implements SupplementService {
         UserSupplement userSupplement = findUserSupplementById(userSupplementId);
 
         validateUserSupplementOwner(userSupplement, user);
+
+        // 연관 리마인더 비활성화
+        List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
+        for (Reminder reminder : reminders) {
+            reminder.disable();
+        }
 
         // 선택 횟수 감소
         Supplement supplement = userSupplement.getSupplement();
@@ -300,6 +315,12 @@ public class SupplementServiceImpl implements SupplementService {
 
         // 삭제 처리
         for (UserSupplement userSupplement : userSupplements) {
+            // 연관 리마인더 비활성화
+            List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
+            for (Reminder reminder : reminders) {
+                reminder.disable();
+            }
+
             // selectionCount 감소
             Supplement supplement = userSupplement.getSupplement();
             supplement.decrementSelectionCount();
@@ -331,5 +352,19 @@ public class SupplementServiceImpl implements SupplementService {
         if (!userSupplement.getUser().getId().equals(user.getId())) {
             throw new GeneralException(ErrorStatus.SUPPLEMENT_ACCESS_DENIED);
         }
+    }
+
+    private Reminder createReminderForSupplement(UserSupplement userSupplement, MedicationTiming timing,
+                                                  List<String> reminderTimes, int index) {
+        if (reminderTimes != null && index < reminderTimes.size() && reminderTimes.get(index) != null
+                && !reminderTimes.get(index).isEmpty()) {
+            try {
+                LocalTime customTime = LocalTime.parse(reminderTimes.get(index), DateTimeFormatter.ofPattern("HH:mm"));
+                return SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
+            } catch (java.time.format.DateTimeParseException e) {
+                return SupplementConverter.toReminderEntity(userSupplement, timing);
+            }
+        }
+        return SupplementConverter.toReminderEntity(userSupplement, timing);
     }
 }
