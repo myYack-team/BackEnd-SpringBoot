@@ -160,7 +160,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     public UserSupplement findUserSupplementById(Long userSupplementId) {
-        return userSupplementRepository.findById(userSupplementId)
+        return userSupplementRepository.findByIdAndIsActiveTrue(userSupplementId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.USER_SUPPLEMENT_NOT_FOUND));
     }
 

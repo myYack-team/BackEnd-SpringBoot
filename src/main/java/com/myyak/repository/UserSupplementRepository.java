@@ -21,6 +21,9 @@ public interface UserSupplementRepository extends JpaRepository<UserSupplement, 
     // 사용자의 특정 영양제
     Optional<UserSupplement> findByIdAndUser(Long id, User user);
 
+    // ID로 활성 영양제 조회
+    Optional<UserSupplement> findByIdAndIsActiveTrue(Long id);
+
     // 사용자 ID로 활성 영양제 조회
     @Query("SELECT us FROM UserSupplement us WHERE us.user.id = :userId AND us.isActive = true")
     List<UserSupplement> findActiveByUserId(@Param("userId") Long userId);
