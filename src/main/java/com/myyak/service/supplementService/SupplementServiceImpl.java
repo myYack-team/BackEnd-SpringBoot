@@ -66,7 +66,12 @@ public class SupplementServiceImpl implements SupplementService {
         User user = userService.findById(userId);
 
         // 태그 문자열을 enum으로 변환
-        SupplementTag tag = SupplementTag.valueOf(tagStr);
+        SupplementTag tag;
+        try {
+            tag = SupplementTag.valueOf(tagStr);
+        } catch (IllegalArgumentException e) {
+            throw new GeneralException(ErrorStatus.INVALID_SUPPLEMENT_TAG);
+        }
 
         // 이미지 업로드
         String imageUrl = null;
