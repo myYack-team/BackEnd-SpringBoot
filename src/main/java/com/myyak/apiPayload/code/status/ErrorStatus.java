@@ -36,6 +36,7 @@ public enum ErrorStatus implements BaseErrorCode {
     // 영양제 관련 에러
     SUPPLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "SUPP404", "영양제를 찾을 수 없습니다."),
     SUPPLEMENT_ACCESS_DENIED(HttpStatus.FORBIDDEN, "SUPP403", "해당 영양제에 대한 접근 권한이 없습니다."),
+    INVALID_SUPPLEMENT_TAG(HttpStatus.BAD_REQUEST, "SUPP400", "유효하지 않은 영양제 태그입니다."),
     USER_SUPPLEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "USUPP404", "사용자 영양제를 찾을 수 없습니다."),
     USER_SUPPLEMENT_ALREADY_EXISTS(HttpStatus.CONFLICT, "USUPP409", "이미 등록된 영양제입니다."),
 

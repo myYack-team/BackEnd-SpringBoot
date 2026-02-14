@@ -68,6 +68,8 @@ public class SupplementRequestDTO {
         private LocalDate endDate;  // null이면 계속 복용
 
         private String memo;
+
+        private List<String> reminderTimes;  // "HH:mm" 형식, timings와 1:1 대응. null이면 기본 시간 사용
     }
 
     /**
@@ -81,6 +83,7 @@ public class SupplementRequestDTO {
         private List<MedicationTiming> timings;
         private LocalDate endDate;
         private String memo;
+        private List<String> reminderTimes;  // "HH:mm" 형식, timings와 1:1 대응. null이면 기본 시간 사용
     }
 
     /**
