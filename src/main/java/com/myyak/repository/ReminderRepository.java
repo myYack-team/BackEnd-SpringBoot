@@ -24,10 +24,19 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     void deleteByUserMedication(UserMedication userMedication);
 
-    @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE um.user.id = :userId AND um.isActive = true")
+    @Query("SELECT r FROM Reminder r " +
+           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
+           "WHERE ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findByUserId(@Param("userId") Long userId);
 
-    @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE um.user.id = :userId AND r.enabled = true AND um.isActive = true")
+    @Query("SELECT r FROM Reminder r " +
+           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
+           "WHERE r.enabled = true " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findEnabledByUserId(@Param("userId") Long userId);
 
     // N+1 방지: UserMedication을 함께 조회
