@@ -61,9 +61,6 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findAllEnabledByUserIdWithDetails(@Param("userId") Long userId);
 
-    @Query("SELECT r FROM Reminder r JOIN r.userMedication um WHERE r.time = :time AND r.enabled = true AND um.isActive = true")
-    List<Reminder> findByTimeAndEnabledTrue(@Param("time") LocalTime time);
-
     Optional<Reminder> findByUserMedicationAndTiming(UserMedication userMedication, MedicationTiming timing);
 
     // ============ UserSupplement 관련 ============

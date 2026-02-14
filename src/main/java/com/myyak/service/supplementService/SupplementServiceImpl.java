@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -193,13 +194,7 @@ public class SupplementServiceImpl implements SupplementService {
         for (int i = 0; i < timings.size(); i++) {
             MedicationTiming timing = timings.get(i);
             if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                Reminder reminder;
-                if (reminderTimes != null && i < reminderTimes.size() && reminderTimes.get(i) != null) {
-                    LocalTime customTime = LocalTime.parse(reminderTimes.get(i), DateTimeFormatter.ofPattern("HH:mm"));
-                    reminder = SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
-                } else {
-                    reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
-                }
+                Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
                 reminderRepository.save(reminder);
             }
         }
@@ -248,8 +243,10 @@ public class SupplementServiceImpl implements SupplementService {
 
         String dosage = request.getDosage() != null ? request.getDosage() : userSupplement.getDosage();
         Integer frequency = request.getFrequency() != null ? request.getFrequency() : userSupplement.getFrequency();
+        LocalDate endDate = request.getEndDate() != null ? request.getEndDate() : userSupplement.getEndDate();
+        String memo = request.getMemo() != null ? request.getMemo() : userSupplement.getMemo();
 
-        userSupplement.update(dosage, frequency, request.getEndDate(), request.getMemo());
+        userSupplement.update(dosage, frequency, endDate, memo);
 
         List<MedicationTiming> timings;
         if (request.getTimings() != null) {
@@ -260,13 +257,7 @@ public class SupplementServiceImpl implements SupplementService {
             for (int i = 0; i < request.getTimings().size(); i++) {
                 MedicationTiming timing = request.getTimings().get(i);
                 if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder;
-                    if (reminderTimes != null && i < reminderTimes.size() && reminderTimes.get(i) != null) {
-                        LocalTime customTime = LocalTime.parse(reminderTimes.get(i), DateTimeFormatter.ofPattern("HH:mm"));
-                        reminder = SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
-                    } else {
-                        reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
-                    }
+                    Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
                     reminderRepository.save(reminder);
                 }
             }
@@ -361,5 +352,19 @@ public class SupplementServiceImpl implements SupplementService {
         if (!userSupplement.getUser().getId().equals(user.getId())) {
             throw new GeneralException(ErrorStatus.SUPPLEMENT_ACCESS_DENIED);
         }
+    }
+
+    private Reminder createReminderForSupplement(UserSupplement userSupplement, MedicationTiming timing,
+                                                  List<String> reminderTimes, int index) {
+        if (reminderTimes != null && index < reminderTimes.size() && reminderTimes.get(index) != null
+                && !reminderTimes.get(index).isEmpty()) {
+            try {
+                LocalTime customTime = LocalTime.parse(reminderTimes.get(index), DateTimeFormatter.ofPattern("HH:mm"));
+                return SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
+            } catch (java.time.format.DateTimeParseException e) {
+                return SupplementConverter.toReminderEntity(userSupplement, timing);
+            }
+        }
+        return SupplementConverter.toReminderEntity(userSupplement, timing);
     }
 }
