@@ -90,7 +90,7 @@ public class SupplementController {
             Authentication authentication,
             @Parameter(description = "영양제 ID")
             @PathVariable Long supplementId,
-            @RequestBody SupplementRequestDTO.UpdateSupplementRequest request) {
+            @Valid @RequestBody SupplementRequestDTO.UpdateSupplementRequest request) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.of(SuccessStatus.SUPPLEMENT_UPDATED, supplementService.updateSupplement(userId, supplementId, request));
     }
@@ -140,7 +140,7 @@ public class SupplementController {
             Authentication authentication,
             @Parameter(description = "사용자 영양제 ID")
             @PathVariable Long userSupplementId,
-            @RequestBody SupplementRequestDTO.UpdateUserSupplementRequest request) {
+            @Valid @RequestBody SupplementRequestDTO.UpdateUserSupplementRequest request) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.of(SuccessStatus.USER_SUPPLEMENT_UPDATED, supplementService.updateUserSupplement(userId, userSupplementId, request));
     }
