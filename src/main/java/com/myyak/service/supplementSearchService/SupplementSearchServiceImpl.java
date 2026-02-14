@@ -60,7 +60,7 @@ public class SupplementSearchServiceImpl implements SupplementSearchService {
         log.info("영양제 캐시 초기화 시작...");
         long startTime = System.currentTimeMillis();
 
-        List<Supplement> allSupplements = supplementRepository.findAll();
+        List<Supplement> allSupplements = supplementRepository.findAllWithCreatedBy();
         for (Supplement supplement : allSupplements) {
             supplementCache.put(supplement.getId(), supplement);
         }

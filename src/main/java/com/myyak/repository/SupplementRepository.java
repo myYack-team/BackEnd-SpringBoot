@@ -36,4 +36,8 @@ public interface SupplementRepository extends JpaRepository<Supplement, Long> {
 
     // 특정 사용자가 등록한 영양제 목록 (페이징)
     Page<Supplement> findByCreatedBy(User user, Pageable pageable);
+
+    // 캐시 초기화용: createdBy를 함께 로딩
+    @Query("SELECT s FROM Supplement s JOIN FETCH s.createdBy")
+    List<Supplement> findAllWithCreatedBy();
 }
