@@ -22,6 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -187,9 +189,17 @@ public class SupplementServiceImpl implements SupplementService {
 
         // 리마인더 생성
         List<MedicationTiming> timings = request.getTimings();
-        for (MedicationTiming timing : timings) {
+        List<String> reminderTimes = request.getReminderTimes();
+        for (int i = 0; i < timings.size(); i++) {
+            MedicationTiming timing = timings.get(i);
             if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                Reminder reminder;
+                if (reminderTimes != null && i < reminderTimes.size() && reminderTimes.get(i) != null) {
+                    LocalTime customTime = LocalTime.parse(reminderTimes.get(i), DateTimeFormatter.ofPattern("HH:mm"));
+                    reminder = SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
+                } else {
+                    reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                }
                 reminderRepository.save(reminder);
             }
         }
@@ -246,9 +256,17 @@ public class SupplementServiceImpl implements SupplementService {
             // 기존 리마인더 삭제 후 새로 생성
             reminderRepository.deleteByUserSupplement(userSupplement);
 
-            for (MedicationTiming timing : request.getTimings()) {
+            List<String> reminderTimes = request.getReminderTimes();
+            for (int i = 0; i < request.getTimings().size(); i++) {
+                MedicationTiming timing = request.getTimings().get(i);
                 if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                    Reminder reminder;
+                    if (reminderTimes != null && i < reminderTimes.size() && reminderTimes.get(i) != null) {
+                        LocalTime customTime = LocalTime.parse(reminderTimes.get(i), DateTimeFormatter.ofPattern("HH:mm"));
+                        reminder = SupplementConverter.toReminderEntity(userSupplement, timing, customTime);
+                    } else {
+                        reminder = SupplementConverter.toReminderEntity(userSupplement, timing);
+                    }
                     reminderRepository.save(reminder);
                 }
             }
