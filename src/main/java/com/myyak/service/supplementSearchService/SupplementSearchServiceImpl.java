@@ -6,6 +6,7 @@ import com.myyak.domain.Supplement;
 import com.myyak.domain.enums.SupplementTag;
 import com.myyak.repository.SupplementRepository;
 import jakarta.annotation.PostConstruct;
+import org.hibernate.Hibernate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -128,6 +129,8 @@ public class SupplementSearchServiceImpl implements SupplementSearchService {
 
     @Override
     public void addOrUpdateCache(Supplement supplement) {
+        // LAZY 프록시 강제 초기화 (트랜잭션 내에서 호출되므로 안전)
+        Hibernate.initialize(supplement.getCreatedBy());
         supplementCache.put(supplement.getId(), supplement);
         // 검색 결과 캐시 무효화 (데이터 변경됨)
         searchResultCache.invalidateAll();
