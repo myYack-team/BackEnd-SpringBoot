@@ -111,6 +111,7 @@ public class AnalysisResponseDTO {
         private LocalDateTime analysisDate;
         private Integer mechanismGroupCount;     // 약물 효과 개수
         private Integer foodInteractionCount;    // 주의 음식 개수
+        private Boolean isPreview;               // 테스트 분석 여부
     }
 
     /**

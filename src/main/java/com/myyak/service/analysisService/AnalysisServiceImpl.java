@@ -383,6 +383,7 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .patternAnalysis(patternAnalysisJson)
                 .analysisStartDate(startDate)
                 .analysisEndDate(endDate)
+                .isPreviewData(false)
                 .build();
 
         analysisReportRepository.save(report);

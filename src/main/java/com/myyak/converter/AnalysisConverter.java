@@ -65,7 +65,7 @@ public class AnalysisConverter {
                 .lifestyleTips(lifestyleTips)
                 .patternAnalysis(patternAnalysis)
                 .quota(toQuotaInfo(quota, monthlyLimit))
-                .isPreview(report.getIsPreviewData())
+                .isPreview(Boolean.TRUE.equals(report.getIsPreviewData()))
                 .build();
     }
 
@@ -78,6 +78,7 @@ public class AnalysisConverter {
                 .analysisDate(report.getAnalysisDate())
                 .mechanismGroupCount(report.getMechanismGroupCount())
                 .foodInteractionCount(report.getFoodInteractionCount())
+                .isPreview(Boolean.TRUE.equals(report.getIsPreviewData()))
                 .build();
     }
 
