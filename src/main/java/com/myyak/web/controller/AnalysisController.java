@@ -79,6 +79,14 @@ public class AnalysisController {
         return ApiResponse.onSuccess(analysisService.checkDataSufficiency(userId));
     }
 
+    @Operation(summary = "테스트 분석 요청",
+            description = "데이터가 부족한 사용자가 Mock 데이터로 AI 분석을 체험할 수 있습니다.")
+    @PostMapping("/test-request")
+    public ApiResponse<AnalysisResponseDTO.AnalysisResult> requestTestAnalysis(Authentication authentication) {
+        Long userId = (Long) authentication.getPrincipal();
+        return ApiResponse.onSuccess(analysisService.requestTestAnalysis(userId));
+    }
+
     @Operation(summary = "임시 건강 메모 저장",
             description = "AI 분석 요청 전 추가 컨디션/증상 정보를 임시로 저장합니다.")
     @PostMapping("/temporary-notes")

@@ -27,6 +27,7 @@ public class AnalysisResponseDTO {
         private List<LifestyleTip> lifestyleTips;
         private PatternAnalysis patternAnalysis;  // 패턴 분석 결과
         private QuotaInfo quota;
+        private Boolean isPreview;  // 테스트 분석(Mock 데이터) 여부
     }
 
     /**
@@ -110,6 +111,7 @@ public class AnalysisResponseDTO {
         private LocalDateTime analysisDate;
         private Integer mechanismGroupCount;     // 약물 효과 개수
         private Integer foodInteractionCount;    // 주의 음식 개수
+        private Boolean isPreview;               // 테스트 분석 여부
     }
 
     /**

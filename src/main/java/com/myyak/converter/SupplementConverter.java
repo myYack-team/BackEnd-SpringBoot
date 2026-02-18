@@ -52,6 +52,7 @@ public class SupplementConverter {
                 .imageUrl(supplement.getImageUrl())
                 .selectionCount(supplement.getSelectionCount())
                 .createdByName(supplement.getCreatedBy().getName())
+                .createdById(supplement.getCreatedBy().getId())
                 .build();
     }
 

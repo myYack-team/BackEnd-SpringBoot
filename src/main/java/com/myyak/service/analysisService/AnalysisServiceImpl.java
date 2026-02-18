@@ -1,6 +1,7 @@
 package com.myyak.service.analysisService;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
@@ -8,6 +9,8 @@ import com.myyak.converter.AnalysisConverter;
 import com.myyak.domain.*;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.repository.*;
+import com.myyak.util.TestAnalysisScenario;
+import com.myyak.util.TestDataScenarios;
 import com.myyak.service.llm.LlmClient;
 import com.myyak.web.dto.AnalysisDTO.AnalysisRequestDTO;
 import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
@@ -380,6 +383,7 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .patternAnalysis(patternAnalysisJson)
                 .analysisStartDate(startDate)
                 .analysisEndDate(endDate)
+                .isPreviewData(false)
                 .build();
 
         analysisReportRepository.save(report);
@@ -411,9 +415,17 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         UserAnalysisQuota quota = userAnalysisQuotaRepository.findByUser(user).orElse(null);
 
-        // dailyConditions 조회 (분석 기간 내 건강 메모에서)
-        List<AnalysisResponseDTO.DailyCondition> dailyConditions = buildDailyConditions(
-                user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
+        List<AnalysisResponseDTO.DailyCondition> dailyConditions;
+        if (Boolean.TRUE.equals(report.getIsPreviewData())) {
+            // 테스트 분석: DB에 실제 기록이 없으므로 mock 시나리오에서 생성
+            List<String> symptoms = extractSymptomsFromTempNotes(user);
+            TestAnalysisScenario scenario = TestDataScenarios.getScenarioForSymptoms(symptoms);
+            dailyConditions = scenario.buildDailyConditions();
+        } else {
+            // 정상 분석: DB 건강 메모에서 조회
+            dailyConditions = buildDailyConditions(
+                    user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
+        }
 
         return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, dailyConditions);
     }
@@ -480,7 +492,134 @@ public class AnalysisServiceImpl implements AnalysisService {
         log.info("[Analysis] 임시 메모 일괄 삭제 - userId: {}", userId);
     }
 
+    @Override
+    public AnalysisResponseDTO.AnalysisResult requestTestAnalysis(Long userId) {
+        User user = findUserById(userId);
+
+        // 1. 월간 쿼터 확인
+        UserAnalysisQuota quota = getOrCreateQuota(user);
+        checkAndResetMonthlyQuotaIfNeeded(quota);
+        if (!quota.canAnalyzeThisMonth(monthlyLimit)) {
+            throw new GeneralException(ErrorStatus.ANALYSIS_MONTHLY_QUOTA_EXCEEDED);
+        }
+
+        // 2. 임시 메모에서 증상 추출 → 시나리오 선택
+        List<String> symptoms = extractSymptomsFromTempNotes(user);
+        TestAnalysisScenario scenario = TestDataScenarios.getScenarioForSymptoms(symptoms);
+
+        // 3. 임시 메모 JSON 생성
+        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
+        String tempNotesJson = buildTempNotesJsonForTest(tempNotes);
+
+        // 5. LLM 호출 1: 기본 분석 (작용 기전, 음식 상호작용)
+        String llmResponse;
+        try {
+            llmResponse = llmClient.generate(SYSTEM_PROMPT, scenario.getUserPromptJson());
+            log.info("[TestAnalysis] 기본 LLM 응답 길이: {}", llmResponse.length());
+        } catch (Exception e) {
+            log.error("[TestAnalysis] 기본 LLM 호출 실패: ", e);
+            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
+        }
+        String cleanedResponse = extractJsonFromResponse(llmResponse);
+
+        // 6. LLM 호출 2: 패턴 분석
+        String patternPrompt = scenario.getPatternPromptJson(tempNotesJson);
+        String patternResponse;
+        try {
+            patternResponse = llmClient.generate(PATTERN_ANALYSIS_SYSTEM_PROMPT, patternPrompt);
+            log.info("[TestAnalysis] 패턴 LLM 응답 길이: {}", patternResponse.length());
+        } catch (Exception e) {
+            log.error("[TestAnalysis] 패턴 LLM 호출 실패: ", e);
+            patternResponse = null;
+        }
+        String patternAnalysisJson = patternResponse != null ? extractJsonFromResponse(patternResponse) : null;
+
+        // 7. 레포트 저장 (isPreviewData = true)
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
+        String medicationSnapshot = buildTestMedicationSnapshot(scenario);
+
+        int mechanismGroupCount = countMechanismGroups(cleanedResponse);
+        int foodInteractionCount = countFoodInteractions(cleanedResponse);
+
+        AnalysisReport report = AnalysisReport.builder()
+                .user(user)
+                .analysisDate(LocalDateTime.now())
+                .mechanismGroupCount(mechanismGroupCount)
+                .foodInteractionCount(foodInteractionCount)
+                .medicationSnapshot(medicationSnapshot)
+                .llmResponse(cleanedResponse)
+                .patternAnalysis(patternAnalysisJson)
+                .analysisStartDate(startDate)
+                .analysisEndDate(endDate)
+                .isPreviewData(true)
+                .build();
+
+        analysisReportRepository.save(report);
+
+        // 8. 월간 쿼터 사용량 증가
+        quota.incrementMonthlyUsedCount();
+
+        log.info("[TestAnalysis] 테스트 분석 완료 - userId: {}, reportId: {}", userId, report.getId());
+
+        // 9. Mock dailyConditions 생성 (DB에 실제 기록이 없으므로 시나리오에서 직접 생성)
+        List<AnalysisResponseDTO.DailyCondition> mockDailyConditions = scenario.buildDailyConditions();
+
+        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, mockDailyConditions);
+    }
+
     // ===== Private Methods =====
+
+    private String buildTempNotesJsonForTest(List<AnalysisTemporaryNote> tempNotes) {
+        if (tempNotes == null || tempNotes.isEmpty()) return "[]";
+        try {
+            List<Map<String, Object>> notes = tempNotes.stream().map(note -> {
+                Map<String, Object> noteInfo = new LinkedHashMap<>();
+                noteInfo.put("date", note.getNoteDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
+                noteInfo.put("condition_score", note.getConditionScore());
+                noteInfo.put("symptoms", note.getSymptoms());
+                noteInfo.put("additional_note", note.getAdditionalNote());
+                return noteInfo;
+            }).toList();
+            return objectMapper.writeValueAsString(notes);
+        } catch (Exception e) {
+            log.warn("[TestAnalysis] 임시 메모 JSON 생성 실패: ", e);
+            return "[]";
+        }
+    }
+
+    private List<String> extractSymptomsFromTempNotes(User user) {
+        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
+        List<String> symptoms = new ArrayList<>();
+        if (tempNotes != null && !tempNotes.isEmpty()) {
+            for (AnalysisTemporaryNote note : tempNotes) {
+                if (note.getSymptoms() != null) {
+                    try {
+                        List<String> noteSymptoms = objectMapper.readValue(note.getSymptoms(), new TypeReference<List<String>>() {});
+                        symptoms.addAll(noteSymptoms);
+                    } catch (Exception e) {
+                        log.warn("[TestAnalysis] 증상 파싱 실패: {}", note.getSymptoms());
+                    }
+                }
+            }
+        }
+        return symptoms;
+    }
+
+    private String buildTestMedicationSnapshot(TestAnalysisScenario scenario) {
+        try {
+            List<Map<String, Object>> snapshot = scenario.getMedications().stream().map(med -> {
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("name", med.getName());
+                info.put("ingredient", med.getIngredient());
+                return info;
+            }).toList();
+            return objectMapper.writeValueAsString(snapshot);
+        } catch (Exception e) {
+            log.warn("[TestAnalysis] 스냅샷 JSON 생성 실패: ", e);
+            return "[]";
+        }
+    }
 
     private User findUserById(Long userId) {
         return userRepository.findById(userId)
