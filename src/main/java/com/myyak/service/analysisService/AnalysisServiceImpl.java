@@ -415,9 +415,17 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         UserAnalysisQuota quota = userAnalysisQuotaRepository.findByUser(user).orElse(null);
 
-        // dailyConditions 조회 (분석 기간 내 건강 메모에서)
-        List<AnalysisResponseDTO.DailyCondition> dailyConditions = buildDailyConditions(
-                user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
+        List<AnalysisResponseDTO.DailyCondition> dailyConditions;
+        if (Boolean.TRUE.equals(report.getIsPreviewData())) {
+            // 테스트 분석: DB에 실제 기록이 없으므로 mock 시나리오에서 생성
+            List<String> symptoms = extractSymptomsFromTempNotes(user);
+            TestAnalysisScenario scenario = TestDataScenarios.getScenarioForSymptoms(symptoms);
+            dailyConditions = scenario.buildDailyConditions();
+        } else {
+            // 정상 분석: DB 건강 메모에서 조회
+            dailyConditions = buildDailyConditions(
+                    user, report.getAnalysisStartDate(), report.getAnalysisEndDate());
+        }
 
         return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, dailyConditions);
     }
@@ -495,26 +503,12 @@ public class AnalysisServiceImpl implements AnalysisService {
             throw new GeneralException(ErrorStatus.ANALYSIS_MONTHLY_QUOTA_EXCEEDED);
         }
 
-        // 2. 임시 메모에서 증상 추출
-        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
-        List<String> symptoms = new ArrayList<>();
-        if (tempNotes != null && !tempNotes.isEmpty()) {
-            for (AnalysisTemporaryNote note : tempNotes) {
-                if (note.getSymptoms() != null) {
-                    try {
-                        List<String> noteSymptoms = objectMapper.readValue(note.getSymptoms(), new TypeReference<List<String>>() {});
-                        symptoms.addAll(noteSymptoms);
-                    } catch (Exception e) {
-                        log.warn("[TestAnalysis] 증상 파싱 실패: {}", note.getSymptoms());
-                    }
-                }
-            }
-        }
-
-        // 3. 증상에 맞는 시나리오 선택
+        // 2. 임시 메모에서 증상 추출 → 시나리오 선택
+        List<String> symptoms = extractSymptomsFromTempNotes(user);
         TestAnalysisScenario scenario = TestDataScenarios.getScenarioForSymptoms(symptoms);
 
-        // 4. 임시 메모 JSON 생성
+        // 3. 임시 메모 JSON 생성
+        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
         String tempNotesJson = buildTempNotesJsonForTest(tempNotes);
 
         // 5. LLM 호출 1: 기본 분석 (작용 기전, 음식 상호작용)
@@ -568,7 +562,10 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         log.info("[TestAnalysis] 테스트 분석 완료 - userId: {}, reportId: {}", userId, report.getId());
 
-        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit);
+        // 9. Mock dailyConditions 생성 (DB에 실제 기록이 없으므로 시나리오에서 직접 생성)
+        List<AnalysisResponseDTO.DailyCondition> mockDailyConditions = scenario.buildDailyConditions();
+
+        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, mockDailyConditions);
     }
 
     // ===== Private Methods =====
@@ -589,6 +586,24 @@ public class AnalysisServiceImpl implements AnalysisService {
             log.warn("[TestAnalysis] 임시 메모 JSON 생성 실패: ", e);
             return "[]";
         }
+    }
+
+    private List<String> extractSymptomsFromTempNotes(User user) {
+        List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
+        List<String> symptoms = new ArrayList<>();
+        if (tempNotes != null && !tempNotes.isEmpty()) {
+            for (AnalysisTemporaryNote note : tempNotes) {
+                if (note.getSymptoms() != null) {
+                    try {
+                        List<String> noteSymptoms = objectMapper.readValue(note.getSymptoms(), new TypeReference<List<String>>() {});
+                        symptoms.addAll(noteSymptoms);
+                    } catch (Exception e) {
+                        log.warn("[TestAnalysis] 증상 파싱 실패: {}", note.getSymptoms());
+                    }
+                }
+            }
+        }
+        return symptoms;
     }
 
     private String buildTestMedicationSnapshot(TestAnalysisScenario scenario) {

@@ -1,5 +1,7 @@
 package com.myyak.util;
 
+import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -107,6 +109,7 @@ public class TestDataScenarios {
                 .medications(meds)
                 .userPromptJson(userPrompt)
                 .patternPromptJsonSupplier(tempNotesJson -> buildPatternPromptJson(meds, notes, tempNotesJson))
+                .dailyConditionsSupplier(() -> buildMockDailyConditions(meds, notes))
                 .build();
     }
 
@@ -161,6 +164,7 @@ public class TestDataScenarios {
                 .medications(meds)
                 .userPromptJson(userPrompt)
                 .patternPromptJsonSupplier(tempNotesJson -> buildPatternPromptJson(meds, notes, tempNotesJson))
+                .dailyConditionsSupplier(() -> buildMockDailyConditions(meds, notes))
                 .build();
     }
 
@@ -216,6 +220,7 @@ public class TestDataScenarios {
                 .medications(meds)
                 .userPromptJson(userPrompt)
                 .patternPromptJsonSupplier(tempNotesJson -> buildPatternPromptJson(meds, notes, tempNotesJson))
+                .dailyConditionsSupplier(() -> buildMockDailyConditions(meds, notes))
                 .build();
     }
 
@@ -271,6 +276,7 @@ public class TestDataScenarios {
                 .medications(meds)
                 .userPromptJson(userPrompt)
                 .patternPromptJsonSupplier(tempNotesJson -> buildPatternPromptJson(meds, notes, tempNotesJson))
+                .dailyConditionsSupplier(() -> buildMockDailyConditions(meds, notes))
                 .build();
     }
 
@@ -494,5 +500,78 @@ public class TestDataScenarios {
         sb.append("}");
 
         return sb.toString();
+    }
+
+    /**
+     * Mock dailyConditions 데이터를 직접 생성합니다.
+     * buildPatternPromptJson과 동일한 로직으로 condition_score, adherence_rate, note_content를 계산합니다.
+     */
+    private static List<AnalysisResponseDTO.DailyCondition> buildMockDailyConditions(
+            List<TestAnalysisScenario.MockMedication> meds, String[] healthNotes) {
+
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(29);
+
+        Set<Integer> missedDayClusters = Set.of(8, 9, 10, 21, 22, 23);
+        Set<Integer> weekendMissedSomeDays = Set.of(5, 6, 12, 13, 19, 20, 26, 27);
+        Set<Integer> noteDays = Set.of(1, 3, 5, 8, 9, 11, 14, 17, 20, 22, 25, 28);
+
+        List<AnalysisResponseDTO.DailyCondition> result = new ArrayList<>();
+        int noteIdx = 0;
+
+        for (int dayOffset = 0; dayOffset < 30; dayOffset++) {
+            LocalDate date = startDate.plusDays(dayOffset);
+            DayOfWeek dow = date.getDayOfWeek();
+            boolean isWeekend = dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+            boolean isMissedCluster = missedDayClusters.contains(dayOffset);
+
+            // adherenceRate 계산 (buildPatternPromptJson과 동일 로직)
+            int dayTaken = 0;
+            int dayTotal = 0;
+            for (TestAnalysisScenario.MockMedication med : meds) {
+                for (String timing : med.getTimings()) {
+                    dayTotal++;
+                    boolean taken;
+                    if (isMissedCluster) {
+                        taken = timing.equals("MORNING") && dayOffset != 9;
+                    } else if (isWeekend && weekendMissedSomeDays.contains(dayOffset)) {
+                        taken = !timing.equals("DINNER") && !timing.equals("BEDTIME");
+                    } else {
+                        taken = !(timing.equals("DINNER") && dayOffset % 7 == 4);
+                    }
+                    if (taken) dayTaken++;
+                }
+            }
+            double adherenceRate = dayTotal > 0 ? Math.round((double) dayTaken / dayTotal * 100.0) : 0;
+
+            // conditionScore 계산 (buildPatternPromptJson과 동일 로직)
+            Integer conditionScore = null;
+            if (isMissedCluster) {
+                conditionScore = 3 + (dayOffset % 2);
+            } else if (dayOffset > 0 && missedDayClusters.contains(dayOffset - 1)) {
+                conditionScore = 4 + (dayOffset % 2);
+            } else if (noteDays.contains(dayOffset) || dayOffset % 5 == 0) {
+                conditionScore = 6 + (dayOffset % 3);
+            }
+
+            // noteContent
+            String noteContent = null;
+            boolean hasNote = false;
+            if (noteDays.contains(dayOffset) && noteIdx < healthNotes.length) {
+                noteContent = healthNotes[noteIdx];
+                hasNote = true;
+                noteIdx++;
+            }
+
+            result.add(AnalysisResponseDTO.DailyCondition.builder()
+                    .date(date)
+                    .conditionScore(conditionScore)
+                    .adherenceRate(adherenceRate)
+                    .hasNote(hasNote)
+                    .content(noteContent)
+                    .build());
+        }
+
+        return result;
     }
 }

@@ -1,5 +1,6 @@
 package com.myyak.util;
 
+import com.myyak.web.dto.AnalysisDTO.AnalysisResponseDTO;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -28,11 +29,25 @@ public class TestAnalysisScenario {
     }
 
     /**
+     * Mock dailyConditions 데이터를 생성합니다.
+     * LLM에 의존하지 않고 시나리오 데이터에서 직접 생성합니다.
+     */
+    public List<AnalysisResponseDTO.DailyCondition> buildDailyConditions() {
+        return dailyConditionsSupplier.get();
+    }
+
+    /**
      * 패턴 분석 프롬프트 생성 함수
      * 날짜를 동적으로 생성하기 위해 함수형 인터페이스를 사용합니다.
      */
     @Builder.Default
     private final java.util.function.Function<String, String> patternPromptJsonSupplier = (notes) -> "{}";
+
+    /**
+     * Mock dailyConditions 생성 함수
+     */
+    @Builder.Default
+    private final java.util.function.Supplier<List<AnalysisResponseDTO.DailyCondition>> dailyConditionsSupplier = List::of;
 
     @Getter
     @Builder
