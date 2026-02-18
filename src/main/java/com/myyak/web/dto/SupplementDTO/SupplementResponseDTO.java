@@ -29,6 +29,7 @@ public class SupplementResponseDTO {
         private String imageUrl;
         private Integer selectionCount;  // 인기도
         private String createdByName;  // 등록자 닉네임
+        private Long createdById;  // 등록자 ID
     }
 
     /**
