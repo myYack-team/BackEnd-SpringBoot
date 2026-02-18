@@ -63,4 +63,12 @@ public interface AnalysisService {
      * @param userId 사용자 ID
      */
     void deleteAllTemporaryNotes(Long userId);
+
+    /**
+     * 테스트 분석 요청 (Mock 데이터 사용)
+     * 데이터가 부족한 사용자가 AI 분석을 체험할 수 있도록 합니다.
+     * @param userId 사용자 ID
+     * @return 분석 결과
+     */
+    AnalysisResponseDTO.AnalysisResult requestTestAnalysis(Long userId);
 }

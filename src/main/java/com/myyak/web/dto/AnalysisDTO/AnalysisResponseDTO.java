@@ -27,6 +27,7 @@ public class AnalysisResponseDTO {
         private List<LifestyleTip> lifestyleTips;
         private PatternAnalysis patternAnalysis;  // 패턴 분석 결과
         private QuotaInfo quota;
+        private Boolean isPreview;  // 테스트 분석(Mock 데이터) 여부
     }
 
     /**

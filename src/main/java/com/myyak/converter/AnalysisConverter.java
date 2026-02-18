@@ -65,6 +65,7 @@ public class AnalysisConverter {
                 .lifestyleTips(lifestyleTips)
                 .patternAnalysis(patternAnalysis)
                 .quota(toQuotaInfo(quota, monthlyLimit))
+                .isPreview(report.getIsPreviewData())
                 .build();
     }
 

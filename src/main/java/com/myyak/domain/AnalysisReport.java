@@ -74,4 +74,7 @@ public class AnalysisReport extends BaseEntity {
 
     @Column
     private LocalDate analysisEndDate;      // 패턴 분석 종료 날짜 (분석 당일)
+
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isPreviewData;          // 테스트 분석 여부 (Mock 데이터 사용)
 }
