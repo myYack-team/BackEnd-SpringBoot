@@ -52,7 +52,15 @@ public class UserServiceImpl implements UserService {
         User user = findById(userId);
 
         if (request.getName() != null) {
-            user.updateProfile(request.getName(), user.getProfileImage());
+            String trimmedName = request.getName().trim();
+            if (trimmedName.isEmpty()) {
+                throw new GeneralException(ErrorStatus.INVALID_NICKNAME);
+            }
+            // 본인 ID를 제외하고 중복 검사 (대소문자 collation 고려)
+            if (userRepository.existsByNameAndIdNot(trimmedName, userId)) {
+                throw new GeneralException(ErrorStatus.NICKNAME_ALREADY_EXISTS);
+            }
+            user.updateProfile(trimmedName, user.getProfileImage());
         }
         if (request.getFontSize() != null) {
             user.updateFontSize(request.getFontSize());

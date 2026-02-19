@@ -28,6 +28,8 @@ public enum ErrorStatus implements BaseErrorCode {
     // 사용자 관련 에러
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER404", "사용자를 찾을 수 없습니다."),
     USER_ALREADY_EXISTS(HttpStatus.CONFLICT, "USER409", "이미 존재하는 사용자입니다."),
+    INVALID_NICKNAME(HttpStatus.BAD_REQUEST, "USER400", "이름은 2~20자의 한글, 영문, 숫자만 사용 가능합니다."),
+    NICKNAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "USER409_1", "이미 사용 중인 이름입니다."),
 
     // 약 관련 에러
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "MED404", "약을 찾을 수 없습니다."),

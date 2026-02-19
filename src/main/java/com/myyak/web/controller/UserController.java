@@ -30,7 +30,7 @@ public class UserController {
     @PatchMapping("/me")
     public ApiResponse<UserResponseDTO.UpdateResult> updateMyInfo(
             Authentication authentication,
-            @RequestBody UserRequestDTO.UpdateRequest request) {
+            @Valid @RequestBody UserRequestDTO.UpdateRequest request) {
         Long userId = (Long) authentication.getPrincipal();
         return ApiResponse.onSuccess(userService.updateMyInfo(userId, request));
     }
