@@ -85,7 +85,7 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
         // 약물 + 영양제 리마인더 통합 조회 (날짜 기준 필터링)
-        List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
+        List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetailsIncludingInactive(userId);
         List<Reminder> reminders = allReminders.stream()
                 .filter(r -> isReminderActiveOnDate(r, date))
                 .collect(Collectors.toList());
@@ -116,7 +116,7 @@ public class IntakeServiceImpl implements IntakeService {
         LocalDate today = LocalDate.now();
 
         // 약물 + 영양제 리마인더 통합 조회
-        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
+        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetailsIncludingInactive(userId);
 
         // 해당 월의 모든 복약 기록 가져오기 (약물 + 영양제)
         LocalDateTime monthStart = startDate.atStartOfDay();
@@ -172,13 +172,11 @@ public class IntakeServiceImpl implements IntakeService {
     private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
         if (reminder.isMedicationReminder()) {
             UserMedication um = reminder.getUserMedication();
-            if (!um.getIsActive()) return false;
             LocalDate startDate = um.getStartDate();
             LocalDate endDate = um.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
         } else if (reminder.isSupplementReminder()) {
             UserSupplement us = reminder.getUserSupplement();
-            if (!us.getIsActive()) return false;
             LocalDate startDate = us.getStartDate();
             LocalDate endDate = us.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
