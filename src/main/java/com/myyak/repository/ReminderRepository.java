@@ -61,6 +61,18 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findAllEnabledByUserIdWithDetails(@Param("userId") Long userId);
 
+    /**
+     * 약물 + 영양제 리마인더 통합 조회 (비활성 포함, 캘린더/히스토리용)
+     * isActive 필터 없이 모든 enabled 리마인더 조회 → 날짜 범위로 필터링
+     */
+    @Query("SELECT r FROM Reminder r " +
+           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
+           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
+           "WHERE r.enabled = true " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId))")
+    List<Reminder> findAllEnabledByUserIdWithDetailsIncludingInactive(@Param("userId") Long userId);
+
     Optional<Reminder> findByUserMedicationAndTiming(UserMedication userMedication, MedicationTiming timing);
 
     // ============ UserSupplement 관련 ============
