@@ -90,9 +90,10 @@ public class FcmServiceImpl implements FcmService {
 
         } catch (FirebaseMessagingException e) {
             MessagingErrorCode errorCode = e.getMessagingErrorCode();
-            if (errorCode == MessagingErrorCode.UNREGISTERED || errorCode == MessagingErrorCode.INVALID_ARGUMENT) {
+            if (errorCode == MessagingErrorCode.UNREGISTERED) {
                 log.warn("무효한 FCM 토큰 감지, 토큰 삭제 - userId: {}", user.getId());
                 user.updateFcmToken(null);
+                userRepository.save(user);
             } else {
                 log.error("FCM 알림 발송 실패 - userId: {}, errorCode: {}, message: {}",
                         user.getId(), errorCode, e.getMessage());
