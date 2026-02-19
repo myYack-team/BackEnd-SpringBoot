@@ -39,6 +39,7 @@ out/
 ### 추가
 /src/main/resources/*.yml
 /src/main/resources/*.yaml
+/application-prod.yaml
 /src/main/resources/keystore.p12
 
 # Google Cloud credentials
