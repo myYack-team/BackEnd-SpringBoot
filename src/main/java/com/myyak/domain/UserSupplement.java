@@ -74,6 +74,10 @@ public class UserSupplement extends BaseEntity {
 
     public void deactivate() {
         this.isActive = false;
+        LocalDate yesterday = LocalDate.now().minusDays(1);
+        if (this.endDate == null || this.endDate.isAfter(yesterday)) {
+            this.endDate = yesterday;
+        }
     }
 
     public void activate() {

@@ -16,7 +16,7 @@ public interface FcmService {
     /**
      * 단건 푸시 알림 발송
      */
-    void sendNotification(String fcmToken, String title, String body);
+    void sendNotification(User user, String title, String body);
 
     /**
      * 복약 알림 발송 (단건) - deprecated, sendGroupedMedicationReminder 사용 권장

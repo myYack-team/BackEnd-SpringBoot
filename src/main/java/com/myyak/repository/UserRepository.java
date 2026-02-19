@@ -16,6 +16,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByKakaoId(String kakaoId);
 
+    boolean existsByNameAndIdNot(String name, Long id);
+
     /**
      * 이름, 이메일, 카카오ID로 검색
      */
