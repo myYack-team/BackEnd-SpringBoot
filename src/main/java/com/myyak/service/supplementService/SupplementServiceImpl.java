@@ -280,12 +280,6 @@ public class SupplementServiceImpl implements SupplementService {
 
         validateUserSupplementOwner(userSupplement, user);
 
-        // 연관 리마인더 비활성화
-        List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
-        for (Reminder reminder : reminders) {
-            reminder.disable();
-        }
-
         // 선택 횟수 감소
         Supplement supplement = userSupplement.getSupplement();
         supplement.decrementSelectionCount();
@@ -315,12 +309,6 @@ public class SupplementServiceImpl implements SupplementService {
 
         // 삭제 처리
         for (UserSupplement userSupplement : userSupplements) {
-            // 연관 리마인더 비활성화
-            List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
-            for (Reminder reminder : reminders) {
-                reminder.disable();
-            }
-
             // selectionCount 감소
             Supplement supplement = userSupplement.getSupplement();
             supplement.decrementSelectionCount();
