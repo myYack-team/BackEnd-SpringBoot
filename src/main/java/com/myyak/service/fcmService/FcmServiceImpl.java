@@ -51,12 +51,13 @@ public class FcmServiceImpl implements FcmService {
     }
 
     @Override
-    public void sendNotification(String fcmToken, String title, String body) {
+    public void sendNotification(User user, String title, String body) {
         if (firebaseMessaging == null) {
             log.warn("Firebase가 초기화되지 않아 알림을 발송할 수 없습니다.");
             return;
         }
 
+        String fcmToken = user.getFcmToken();
         if (fcmToken == null || fcmToken.isBlank()) {
             log.warn("FCM 토큰이 없어 알림을 발송할 수 없습니다.");
             return;
@@ -88,7 +89,14 @@ public class FcmServiceImpl implements FcmService {
             log.info("FCM 알림 발송 성공 - response: {}", response);
 
         } catch (FirebaseMessagingException e) {
-            log.error("FCM 알림 발송 실패: {}", e.getMessage());
+            MessagingErrorCode errorCode = e.getMessagingErrorCode();
+            if (errorCode == MessagingErrorCode.UNREGISTERED || errorCode == MessagingErrorCode.INVALID_ARGUMENT) {
+                log.warn("무효한 FCM 토큰 감지, 토큰 삭제 - userId: {}", user.getId());
+                user.updateFcmToken(null);
+            } else {
+                log.error("FCM 알림 발송 실패 - userId: {}, errorCode: {}, message: {}",
+                        user.getId(), errorCode, e.getMessage());
+            }
         }
     }
 
@@ -100,7 +108,7 @@ public class FcmServiceImpl implements FcmService {
         String title = NOTIFICATION_TITLE;
         String body = String.format("%s 복용시간입니다.", medication.getDrugName());
 
-        sendNotification(user.getFcmToken(), title, body);
+        sendNotification(user, title, body);
     }
 
     @Override
@@ -116,7 +124,7 @@ public class FcmServiceImpl implements FcmService {
         }
 
         String body = buildMedicationReminderBody(reminders);
-        sendNotification(user.getFcmToken(), NOTIFICATION_TITLE, body);
+        sendNotification(user, NOTIFICATION_TITLE, body);
     }
 
     @Override
@@ -134,7 +142,7 @@ public class FcmServiceImpl implements FcmService {
         String timeStr = originalTime.format(TIME_FORMATTER);
         String body = String.format("%s의 약 %d개를 아직 먹지 않았습니다.", timeStr, reminders.size());
 
-        sendNotification(user.getFcmToken(), NOTIFICATION_TITLE, body);
+        sendNotification(user, NOTIFICATION_TITLE, body);
     }
 
     /**
@@ -242,7 +250,7 @@ public class FcmServiceImpl implements FcmService {
                     protectedUser.getName(), timeStr, firstDrugName, reminders.size() - 1);
         }
 
-        sendNotification(guardian.getFcmToken(), NOTIFICATION_TITLE, body);
+        sendNotification(guardian, NOTIFICATION_TITLE, body);
         log.info("가족 미복용 알림 발송 - guardianId: {}, protectedUserId: {}, reminders: {}",
                 guardian.getId(), protectedUser.getId(), reminders.size());
     }
