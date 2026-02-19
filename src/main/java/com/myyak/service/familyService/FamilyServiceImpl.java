@@ -244,8 +244,8 @@ public class FamilyServiceImpl implements FamilyService {
         LocalDate endDate = yearMonth.atEndOfMonth();
         LocalDate today = LocalDate.now();
 
-        // 리마인더 조회
-        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetails(protectedUserId);
+        // 리마인더 조회 (비활성 포함 - 과거 캘린더 기록 보존)
+        List<Reminder> reminders = reminderRepository.findAllEnabledByUserIdWithDetailsIncludingInactive(protectedUserId);
 
         // 해당 월의 모든 복약 기록
         LocalDateTime monthStart = startDate.atStartOfDay();
@@ -381,13 +381,15 @@ public class FamilyServiceImpl implements FamilyService {
     private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
         if (reminder.isMedicationReminder()) {
             UserMedication um = reminder.getUserMedication();
-            if (!um.getIsActive()) return false;
+            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
+            if (!um.getIsActive() && um.getEndDate() == null) return false;
             LocalDate startDate = um.getStartDate();
             LocalDate endDate = um.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
         } else if (reminder.isSupplementReminder()) {
             UserSupplement us = reminder.getUserSupplement();
-            if (!us.getIsActive()) return false;
+            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
+            if (!us.getIsActive() && us.getEndDate() == null) return false;
             LocalDate startDate = us.getStartDate();
             LocalDate endDate = us.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));

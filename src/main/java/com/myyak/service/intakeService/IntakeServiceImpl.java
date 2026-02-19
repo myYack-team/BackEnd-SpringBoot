@@ -172,11 +172,15 @@ public class IntakeServiceImpl implements IntakeService {
     private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
         if (reminder.isMedicationReminder()) {
             UserMedication um = reminder.getUserMedication();
+            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
+            if (!um.getIsActive() && um.getEndDate() == null) return false;
             LocalDate startDate = um.getStartDate();
             LocalDate endDate = um.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
         } else if (reminder.isSupplementReminder()) {
             UserSupplement us = reminder.getUserSupplement();
+            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
+            if (!us.getIsActive() && us.getEndDate() == null) return false;
             LocalDate startDate = us.getStartDate();
             LocalDate endDate = us.getEndDate();
             return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
