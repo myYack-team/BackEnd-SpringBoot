@@ -430,15 +430,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .filter(url -> url != null && !url.isBlank())
                 .toList();
 
-        // 각 처방전에 대해 삭제 처리
-        for (Prescription prescription : prescriptions) {
-            // 연결된 약품들의 prescriptionId를 null로 설정
-            List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescription.getId());
-            medications.forEach(m -> m.setPrescriptionId(null));
+        List<Long> prescriptionIdList = prescriptions.stream()
+                .map(Prescription::getId)
+                .toList();
 
-            // 처방전 삭제 (DB 먼저)
-            prescriptionRepository.delete(prescription);
-        }
+        // 한 번에 모든 연관 약물 조회 (N+1 방지)
+        List<UserMedication> allMedications =
+                userMedicationRepository.findByPrescriptionIdIn(prescriptionIdList);
+        allMedications.forEach(m -> m.setPrescriptionId(null));
+
+        // 처방전 일괄 삭제
+        prescriptionRepository.deleteAll(prescriptions);
 
         // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
         fileUploadUtil.deleteFilesAsync(imageUrls);
