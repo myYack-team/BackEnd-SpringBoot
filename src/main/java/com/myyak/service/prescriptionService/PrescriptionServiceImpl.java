@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -430,18 +432,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .filter(url -> url != null && !url.isBlank())
                 .toList();
 
-        // 각 처방전에 대해 삭제 처리
-        for (Prescription prescription : prescriptions) {
-            // 연결된 약품들의 prescriptionId를 null로 설정
-            List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescription.getId());
-            medications.forEach(m -> m.setPrescriptionId(null));
+        List<Long> prescriptionIdList = prescriptions.stream()
+                .map(Prescription::getId)
+                .toList();
 
-            // 처방전 삭제 (DB 먼저)
-            prescriptionRepository.delete(prescription);
+        // 한 번에 모든 연관 약물 조회 (N+1 방지, DrugInfo join 제외 - prescriptionId 초기화 목적이므로 불필요)
+        List<UserMedication> allMedications =
+                userMedicationRepository.findByPrescriptionIdInLight(prescriptionIdList);
+        allMedications.forEach(m -> m.setPrescriptionId(null));
+
+        // 처방전 벌크 삭제 (단일 SQL DELETE IN 구문 - deleteAll 대비 N개의 쿼리 대신 1개)
+        prescriptionRepository.deleteAllInBatch(prescriptions);
+
+        // 이미지 파일 삭제 (트랜잭션 커밋 후 비동기 실행 - 롤백 시 파일 삭제 방지)
+        if (!imageUrls.isEmpty()) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        fileUploadUtil.deleteFilesAsync(imageUrls);
+                    }
+                });
+            } else {
+                // 트랜잭션 컨텍스트 밖에서 호출되는 경우 (테스트 등) 즉시 실행
+                fileUploadUtil.deleteFilesAsync(imageUrls);
+            }
         }
-
-        // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
-        fileUploadUtil.deleteFilesAsync(imageUrls);
 
         // 삭제된 ID 목록
         List<Long> deletedIds = prescriptions.stream()
