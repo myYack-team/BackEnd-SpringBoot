@@ -436,9 +436,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .map(Prescription::getId)
                 .toList();
 
-        // 한 번에 모든 연관 약물 조회 (N+1 방지)
+        // 한 번에 모든 연관 약물 조회 (N+1 방지, DrugInfo join 제외 - prescriptionId 초기화 목적이므로 불필요)
         List<UserMedication> allMedications =
-                userMedicationRepository.findByPrescriptionIdIn(prescriptionIdList);
+                userMedicationRepository.findByPrescriptionIdInLight(prescriptionIdList);
         allMedications.forEach(m -> m.setPrescriptionId(null));
 
         // 처방전 일괄 삭제
