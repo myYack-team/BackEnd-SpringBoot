@@ -22,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -442,8 +444,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // 처방전 일괄 삭제
         prescriptionRepository.deleteAll(prescriptions);
 
-        // 이미지 파일 삭제 (비동기 - 백그라운드에서 처리)
-        fileUploadUtil.deleteFilesAsync(imageUrls);
+        // 이미지 파일 삭제 (트랜잭션 커밋 후 비동기 실행 - 롤백 시 파일 삭제 방지)
+        if (!imageUrls.isEmpty()) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        fileUploadUtil.deleteFilesAsync(imageUrls);
+                    }
+                });
+            } else {
+                // 트랜잭션 컨텍스트 밖에서 호출되는 경우 (테스트 등) 즉시 실행
+                fileUploadUtil.deleteFilesAsync(imageUrls);
+            }
+        }
 
         // 삭제된 ID 목록
         List<Long> deletedIds = prescriptions.stream()
