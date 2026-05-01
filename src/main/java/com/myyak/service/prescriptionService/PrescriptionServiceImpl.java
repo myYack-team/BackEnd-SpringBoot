@@ -441,8 +441,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 userMedicationRepository.findByPrescriptionIdInLight(prescriptionIdList);
         allMedications.forEach(m -> m.setPrescriptionId(null));
 
-        // 처방전 일괄 삭제
-        prescriptionRepository.deleteAll(prescriptions);
+        // 처방전 벌크 삭제 (단일 SQL DELETE IN 구문 - deleteAll 대비 N개의 쿼리 대신 1개)
+        prescriptionRepository.deleteAllInBatch(prescriptions);
 
         // 이미지 파일 삭제 (트랜잭션 커밋 후 비동기 실행 - 롤백 시 파일 삭제 방지)
         if (!imageUrls.isEmpty()) {
