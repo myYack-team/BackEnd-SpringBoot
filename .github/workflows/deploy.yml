@@ -16,37 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-# === 신규: Client_ControlPage 체크아웃 + React 빌드 ===
-      - name: Checkout Client_ControlPage
-        uses: actions/checkout@v4
-        with:
-          repository: JS-KETI/Client_ControlPage
-          ref: main
-          path: client-controlpage
-          token: ${{ secrets.CONTROLPAGE_TOKEN }} # github 계정 액세스 토큰
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: client-controlpage/package-lock.json
-
-      - name: Build React 관제 페이지
-        working-directory: client-controlpage
-        run: |
-          npm ci
-          npm run build
-          ls -la dist/
-
-      - name: Copy 관제 dist → Spring static
-        run: |
-          rm -rf src/main/resources/static
-          mkdir -p src/main/resources/static
-          cp -r client-controlpage/dist/* src/main/resources/static/
-          ls -la src/main/resources/static/
-
-
       # 2. JDK 21 설정
       - name: Set up JDK 21
         uses: actions/setup-java@v4
