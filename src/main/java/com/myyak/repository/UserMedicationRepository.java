@@ -21,23 +21,44 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     Optional<UserMedication> findByIdAndUser(Long id, User user);
 
     // 재고가 있는 활성 약물
-    @Query("SELECT um FROM UserMedication um WHERE um.user = :user AND um.isActive = true AND um.remainingCount > 0")
+    @Query("SELECT um FROM UserMedication um " +
+            "WHERE um.user = :user " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     List<UserMedication> findActiveMedicationsWithStock(@Param("user") User user);
 
     // 사용자 ID로 활성 약물 조회
-    @Query("SELECT um FROM UserMedication um WHERE um.user.id = :userId AND um.isActive = true")
+    @Query("SELECT um FROM UserMedication um " +
+            "WHERE um.user.id = :userId " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     List<UserMedication> findActiveByUserId(@Param("userId") Long userId);
 
     // DrugInfo와 함께 조회 (N+1 방지) - 전체 필드 (상세 조회용)
-    @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo WHERE um.user = :user AND um.isActive = true")
+    @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo " +
+            "WHERE um.user = :user " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     List<UserMedication> findByUserWithDrugInfo(@Param("user") User user);
 
     // DrugInfo 없이 조회 (목록용) - DrugInfo는 별도 경량 쿼리로 조회
-    @Query("SELECT um FROM UserMedication um WHERE um.user = :user AND um.isActive = true")
+    @Query("SELECT um FROM UserMedication um " +
+            "WHERE um.user = :user " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     List<UserMedication> findByUserActiveOnly(@Param("user") User user);
 
     // 특정 DrugInfo를 사용하는 사용자의 약물
-    @Query("SELECT um FROM UserMedication um WHERE um.user = :user AND um.drugInfo.itemSeq = :itemSeq AND um.isActive = true")
+    @Query("SELECT um FROM UserMedication um " +
+            "WHERE um.user = :user " +
+            "AND um.drugInfo.itemSeq = :itemSeq " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     Optional<UserMedication> findByUserAndDrugItemSeq(@Param("user") User user, @Param("itemSeq") String itemSeq);
 
     // 처방전 ID로 약물 목록 조회

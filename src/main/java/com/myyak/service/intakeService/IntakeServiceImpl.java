@@ -67,6 +67,9 @@ public class IntakeServiceImpl implements IntakeService {
                 String dosageStr = medication.getDosage().replaceAll("[^0-9]", "");
                 int dosage = dosageStr.isEmpty() ? 1 : Integer.parseInt(dosageStr);
                 medication.decreaseRemainingCount(dosage);
+                if (medication.getRemainingCount() <= 0) {
+                    medication.completeOn(request.getTakenAt().toLocalDate());
+                }
             }
             medications.add(medication);
         }
@@ -176,7 +179,9 @@ public class IntakeServiceImpl implements IntakeService {
             if (!um.getIsActive() && um.getEndDate() == null) return false;
             LocalDate startDate = um.getStartDate();
             LocalDate endDate = um.getEndDate();
-            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
+            if (date.isBefore(startDate)) return false;
+            if (endDate == null) return um.getIsActive();
+            return um.getIsActive() ? date.isBefore(endDate) : !date.isAfter(endDate);
         } else if (reminder.isSupplementReminder()) {
             UserSupplement us = reminder.getUserSupplement();
             // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
