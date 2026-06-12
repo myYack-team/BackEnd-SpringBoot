@@ -112,6 +112,13 @@ public class UserMedication extends BaseEntity {
         }
     }
 
+    public void completeOn(LocalDate completionDate) {
+        this.isActive = false;
+        if (completionDate != null && (this.endDate == null || this.endDate.isAfter(completionDate))) {
+            this.endDate = completionDate;
+        }
+    }
+
     public boolean isLowStock() {
         int dailyDose = calculateDailyDose();
         return this.remainingCount <= dailyDose * 3;

@@ -27,7 +27,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
     @Query("SELECT r FROM Reminder r " +
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
-           "WHERE ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "WHERE ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
            "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findByUserId(@Param("userId") Long userId);
 
@@ -35,12 +36,18 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
            "WHERE r.enabled = true " +
-           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
            "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findEnabledByUserId(@Param("userId") Long userId);
 
     // N+1 방지: UserMedication을 함께 조회
-    @Query("SELECT r FROM Reminder r JOIN FETCH r.userMedication um WHERE um.user.id = :userId AND r.enabled = true AND um.isActive = true")
+    @Query("SELECT r FROM Reminder r JOIN FETCH r.userMedication um " +
+            "WHERE um.user.id = :userId " +
+            "AND r.enabled = true " +
+            "AND um.isActive = true " +
+            "AND um.remainingCount > 0 " +
+            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
     List<Reminder> findEnabledByUserIdWithMedication(@Param("userId") Long userId);
 
     // N+1 방지: UserSupplement를 함께 조회
@@ -57,7 +64,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
            "WHERE r.enabled = true " +
-           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true) " +
+           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
            "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
     List<Reminder> findAllEnabledByUserIdWithDetails(@Param("userId") Long userId);
 
@@ -103,6 +111,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.user LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.user LEFT JOIN FETCH us.supplement " +
            "WHERE r.time = :time AND r.enabled = true " +
-           "AND ((um IS NOT NULL AND um.isActive = true) OR (us IS NOT NULL AND us.isActive = true))")
+           "AND ((um IS NOT NULL AND um.isActive = true " +
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
+           "  OR (us IS NOT NULL AND us.isActive = true))")
     List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time);
 }

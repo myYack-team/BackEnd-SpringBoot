@@ -68,7 +68,7 @@ public class TodayServiceImpl implements TodayService {
             if (!um.getIsActive()) return false;
             LocalDate startDate = um.getStartDate();
             LocalDate endDate = um.getEndDate();
-            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
+            return !date.isBefore(startDate) && (endDate == null || date.isBefore(endDate));
         } else if (reminder.isSupplementReminder()) {
             UserSupplement us = reminder.getUserSupplement();
             if (!us.getIsActive()) return false;
