@@ -99,35 +99,7 @@ flowchart LR
 
 ## 시스템 아키텍처
 
-```mermaid
-flowchart TB
-    subgraph Client["📱 클라이언트 (React Native / Expo)"]
-        APP["Expo Router 57개 화면<br/>Zustand 상태관리 · 낙관적 업데이트 · 5분 TTL 캐시"]
-    end
-
-    subgraph Server["🖥️ 서버 (Spring Boot 3.5 / Java 21)"]
-        API["REST API 110+ 엔드포인트<br/>Spring Security + JWT"]
-        SCHED["ReminderScheduler<br/>(FCM 발송)"]
-        subgraph Adapter["어댑터 계층 (교체 가능한 외부 모듈)"]
-            LLM["LlmClient<br/>Gemini ⇄ OpenAI 폴백"]
-            OCR["OcrClient<br/>Google Vision"]
-            STORAGE["StorageClient<br/>AWS S3"]
-        end
-    end
-
-    subgraph Infra["☁️ AWS (GitHub Actions CI/CD 자동 배포)"]
-        EC2["EC2"] --- RDS["RDS MySQL 8"] --- S3["S3"]
-    end
-
-    EXT["식약처 공공데이터<br/>(e약은요 API)"]
-    FCM["Firebase FCM"]
-
-    APP <--> API
-    API --> Adapter
-    SCHED --> FCM --> APP
-    API <--> EXT
-    Server --- Infra
-```
+<img src="docs/images/architecture.png" alt="마이약 시스템 아키텍처" width="100%" />
 
 ### 기술 스택
 
