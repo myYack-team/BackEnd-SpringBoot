@@ -56,14 +56,15 @@ ai:
   gemini:
     api-key: ${GEMINI_API_KEY:YOUR_GEMINI_API_KEY}
     # === 용도별 모델 설정 ===
-    model: gemini-2.5-flash-lite     # 기본 모델 (처방전 스캔)
-    analysis-model: gemini-3-pro-preview  # AI 약물 분석용 모델 (Gemini 3 Pro)
-    # === Gemini 모델 옵션 ===
-    # gemini-2.5-flash-lite  : 최고속, 최저가 (thinking 비활성화)
-    # gemini-2.0-flash       : 빠름, thinking 토큰 없음
-    # gemini-2.5-flash       : thinking 모델 - maxOutputTokens에 thinking 토큰 포함
-    # gemini-2.5-pro         : 복잡한 추론, thinking 모델
-    # gemini-3-pro-preview   : Gemini 3 Pro (최신, 고성능)
+    model: gemini-3.1-flash-lite     # 기본 모델 (처방전 스캔)
+    analysis-model: gemini-3.1-pro-preview  # AI 약물 분석용 모델 (Gemini 3.1 Pro)
+    # === Gemini 모델 옵션 (2026-07 기준) ===
+    # gemini-3.1-flash-lite  : 최고속, 최저가 (GA)
+    # gemini-3.5-flash       : 빠름, 균형 (GA)
+    # gemini-3.1-pro-preview : 복잡한 추론, 고성능
+    # gemini-2.5-flash-lite  : 2026-10-16 지원 종료 예정
+    # gemini-2.5-flash       : 2026-10-16 지원 종료 예정
+    # (지원 종료됨: gemini-2.0-flash, gemini-2.5-pro, gemini-3-pro-preview)
   openai:
     api-key: ${OPENAI_API_KEY:YOUR_OPENAI_API_KEY}
     # === 용도별 모델 설정 ===

@@ -49,7 +49,7 @@ public class ScanServiceImpl implements ScanService {
     @Value("${ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${ai.gemini.model:gemini-3-pro-preview}")
+    @Value("${ai.gemini.model:gemini-3.1-pro-preview}")
     private String geminiModel;
 
     @Value("${app.debug.save-scan-images:false}")
