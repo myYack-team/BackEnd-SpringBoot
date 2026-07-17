@@ -133,12 +133,12 @@ flowchart TB
 
 | 영역 | 기술 |
 |------|------|
-| **Backend** | Spring Boot 3.5, Java 21, Spring Data JPA, Spring Security + JWT, SpringDoc (Swagger) |
+| **Backend** | Spring Boot 3.5, Java 21, Spring Data JPA, Spring Security + JWT |
 | **Client** | React Native (Expo SDK 54), TypeScript, Expo Router, Zustand, Axios |
 | **Database** | MySQL 8 (AWS RDS), Caffeine (인메모리 캐시) |
 | **AI** | Gemini API (기본) · OpenAI API (폴백), Google Vision OCR |
-| **Infra** | AWS EC2 · S3, GitHub Actions CI/CD, EAS Build (Play Store 자동 제출) |
-| **Push** | Firebase Admin SDK (FCM) |
+| **Infra** | AWS EC2 · S3, GitHub Actions CI/CD, EAS Build |
+| **Push 알림** | Firebase Admin SDK (FCM) |
 
 ---
 
