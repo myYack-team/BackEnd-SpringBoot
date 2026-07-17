@@ -48,7 +48,7 @@ public class OcrLlmScanService implements ScanService {
     @Value("${ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${ai.gemini.model:gemini-2.0-flash}")
+    @Value("${ai.gemini.model:gemini-3.1-flash-lite}")
     private String geminiModel;
 
     @Value("${ai.openai.api-key:}")

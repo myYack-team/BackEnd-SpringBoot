@@ -29,7 +29,7 @@ public class GeminiOcrAdapter implements OcrClient {
     @Value("${ai.gemini.api-key:}")
     private String geminiApiKey;
 
-    @Value("${ai.gemini.model:gemini-2.0-flash}")
+    @Value("${ai.gemini.model:gemini-3.1-flash-lite}")
     private String geminiModel;
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";

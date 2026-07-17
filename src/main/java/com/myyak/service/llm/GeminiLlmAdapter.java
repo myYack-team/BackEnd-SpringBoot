@@ -33,14 +33,14 @@ public class GeminiLlmAdapter implements LlmClient {
     @Value("${ai.gemini.api-key:}")
     private String apiKey;
 
-    @Value("${ai.gemini.model:gemini-2.0-flash}")
+    @Value("${ai.gemini.model:gemini-3.5-flash}")
     private String defaultModel;
 
-    @Value("${ai.gemini.analysis-model:gemini-2.5-pro}")
+    @Value("${ai.gemini.analysis-model:gemini-3.1-pro-preview}")
     private String configAnalysisModel;
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
-    private static final String DEFAULT_FALLBACK_MODEL = "gemini-3-flash-preview";
+    private static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash";
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
@@ -72,12 +72,18 @@ public class GeminiLlmAdapter implements LlmClient {
         if (e instanceof WebClientResponseException.ServiceUnavailable) {
             return true;
         }
-        // RuntimeException 메시지에 503 또는 overloaded 포함
+        // 404 Not Found (모델 지원 종료)
+        if (e instanceof WebClientResponseException.NotFound) {
+            return true;
+        }
+        // RuntimeException 메시지에 503/404 또는 overloaded 포함
         String message = e.getMessage();
         if (message != null) {
             return message.contains("503") ||
+                    message.contains("404") ||
                     message.toLowerCase().contains("overload") ||
-                    message.toLowerCase().contains("unavailable");
+                    message.toLowerCase().contains("unavailable") ||
+                    message.toLowerCase().contains("not found");
         }
         return false;
     }

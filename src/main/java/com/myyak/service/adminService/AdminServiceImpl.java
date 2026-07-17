@@ -713,15 +713,17 @@ public class AdminServiceImpl implements AdminService {
 
     // ===== AI 모델 설정 관련 =====
 
-    @Value("${ai.gemini.analysis-model:gemini-2.5-pro}")
+    @Value("${ai.gemini.analysis-model:gemini-3.1-pro-preview}")
     private String configAnalysisModel;
 
+    // 2026-07-17 실호출 검증 기준 사용 가능 모델 (2.5 계열은 2026-10-16 지원 종료 예정)
     private static final List<String> AVAILABLE_MODELS = List.of(
-            "gemini-3-pro-preview",
+            "gemini-3.1-pro-preview",
+            "gemini-3.5-flash",
+            "gemini-3.1-flash-lite",
             "gemini-3-flash-preview",
-            "gemini-2.5-pro",
             "gemini-2.5-flash",
-            "gemini-2.0-flash"
+            "gemini-2.5-flash-lite"
     );
 
     @Override
@@ -733,7 +735,7 @@ public class AdminServiceImpl implements AdminService {
 
         String fallbackModel = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL)
                 .map(AppSetting::getSettingValue)
-                .orElse("gemini-3-flash-preview");
+                .orElse("gemini-3.5-flash");
 
         boolean fallbackEnabled = appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_FALLBACK_ENABLED)
                 .map(s -> Boolean.parseBoolean(s.getSettingValue()))
