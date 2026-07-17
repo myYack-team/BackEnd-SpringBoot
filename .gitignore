@@ -65,3 +65,9 @@ firebase-service-account.json
 .env
 .env.local
 .env.prod
+
+# 업로드 파일 (개인 의료정보 포함 가능)
+/uploads/
+
+# 시크릿 문서 (실제 자격증명 값 포함)
+.github/GITHUB_SECRETS.md
