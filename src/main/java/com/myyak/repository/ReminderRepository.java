@@ -5,6 +5,7 @@ import com.myyak.domain.UserMedication;
 import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.MedicationTiming;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -57,19 +58,6 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
     List<Reminder> findEnabledByUserIdWithSupplement(@Param("userId") Long userId);
 
     /**
-     * 약물 + 영양제 리마인더 통합 조회 (오늘의 복약, 복용 달력에서 사용)
-     * UserMedication, UserSupplement, DrugInfo, Supplement 모두 Fetch Join
-     */
-    @Query("SELECT r FROM Reminder r " +
-           "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
-           "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
-           "WHERE r.enabled = true " +
-           "AND ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
-           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
-           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
-    List<Reminder> findAllEnabledByUserIdWithDetails(@Param("userId") Long userId);
-
-    /**
      * 약물 + 영양제 리마인더 통합 조회 (비활성 포함, 캘린더/히스토리용)
      * isActive 필터 없이 모든 enabled 리마인더 조회 → 날짜 범위로 필터링
      */
@@ -115,4 +103,13 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
            "  OR (us IS NOT NULL AND us.isActive = true))")
     List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time);
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 리마인더 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM Reminder r " +
+           "WHERE r.userMedication.id IN (SELECT m.id FROM UserMedication m WHERE m.user.id = :userId) " +
+           "OR r.userSupplement.id IN (SELECT s.id FROM UserSupplement s WHERE s.user.id = :userId)")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

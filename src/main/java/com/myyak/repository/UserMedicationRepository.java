@@ -3,6 +3,7 @@ package com.myyak.repository;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -83,4 +84,15 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
             "AND um.user.id = :userId " +
             "AND um.isActive = true")
     List<UserMedication> findActiveByIdInAndUserId(@Param("ids") List<Long> ids, @Param("userId") Long userId);
+
+    // 여러 사용자의 약물 수 한 번에 집계 (N+1 방지)
+    @Query("SELECT um.user.id, COUNT(um) FROM UserMedication um WHERE um.user.id IN :userIds GROUP BY um.user.id")
+    List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 약물 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM UserMedication m WHERE m.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

@@ -5,6 +5,7 @@ import com.myyak.domain.enums.MedicationTiming;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -95,5 +96,18 @@ public class Reminder extends BaseEntity {
      */
     public boolean isSupplementReminder() {
         return userSupplement != null;
+    }
+
+    /**
+     * 해당 날짜에 복용 예정인 리마인더인지 확인
+     */
+    public boolean isScheduledOn(LocalDate date) {
+        if (isMedicationReminder()) {
+            return userMedication.isScheduledOn(date);
+        }
+        if (isSupplementReminder()) {
+            return userSupplement.isScheduledOn(date);
+        }
+        return false;
     }
 }
