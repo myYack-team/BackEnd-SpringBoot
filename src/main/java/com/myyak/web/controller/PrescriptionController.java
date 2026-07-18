@@ -42,14 +42,14 @@ public class PrescriptionController {
 
     @Operation(summary = "처방전 + 약물 일괄 등록", description = "처방전 이미지와 약물 정보를 한번에 등록합니다. 실패 시 전체 롤백됩니다.")
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<PrescriptionResponseDTO.RegisterResult> registerPrescription(
+    public ApiResponse<PrescriptionResponseDTO.RegisterResult> createPrescription(
             Authentication authentication,
             @Parameter(description = "처방전 이미지") @RequestPart("file") MultipartFile file,
             @Parameter(description = "처방전 및 약물 정보 (JSON 문자열)") @RequestPart("data") String dataJson) {
         Long userId = (Long) authentication.getPrincipal();
         try {
             PrescriptionRequestDTO.RegisterRequest request = objectMapper.readValue(dataJson, PrescriptionRequestDTO.RegisterRequest.class);
-            PrescriptionResponseDTO.RegisterResult result = prescriptionService.registerPrescription(userId, file, request);
+            PrescriptionResponseDTO.RegisterResult result = prescriptionService.createPrescription(userId, file, request);
             return ApiResponse.onSuccess(result);
         } catch (Exception e) {
             throw new GeneralException(ErrorStatus._BAD_REQUEST);

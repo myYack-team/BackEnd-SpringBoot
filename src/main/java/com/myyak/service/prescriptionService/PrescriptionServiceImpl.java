@@ -2,6 +2,7 @@ package com.myyak.service.prescriptionService;
 
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.PrescriptionConverter;
 import com.myyak.converter.ReminderConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.Prescription;
@@ -9,6 +10,7 @@ import com.myyak.domain.Reminder;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
 import com.myyak.domain.enums.MedicationTiming;
+import com.myyak.domain.enums.PrescriptionStatus;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.repository.PrescriptionRepository;
 import com.myyak.repository.ReminderRepository;
@@ -27,7 +29,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class PrescriptionServiceImpl implements PrescriptionService {
 
     private final PrescriptionRepository prescriptionRepository;
@@ -46,9 +47,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final ReminderRepository reminderRepository;
     private final FileUploadUtil fileUploadUtil;
 
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
-
     @Override
+    @Transactional
     public PrescriptionResponseDTO.UploadResult uploadPrescription(Long userId, MultipartFile file, LocalDate prescriptionDate) {
         User user = findUserById(userId);
 
@@ -64,23 +64,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         log.info("Prescription uploaded: userId={}, prescriptionId={}", userId, prescription.getId());
 
-        return PrescriptionResponseDTO.UploadResult.builder()
-                .prescriptionId(prescription.getId())
-                .imageUrl(imageUrl)
-                .prescriptionDate(date)
-                .build();
+        return PrescriptionConverter.toUploadResult(prescription);
     }
 
     @Override
-    @Transactional(readOnly = true)
     public PrescriptionResponseDTO.PrescriptionList getPrescriptionList(Long userId) {
         List<Prescription> prescriptions = prescriptionRepository.findByUserId(userId);
 
         if (prescriptions.isEmpty()) {
-            return PrescriptionResponseDTO.PrescriptionList.builder()
-                    .prescriptions(List.of())
-                    .totalCount(0)
-                    .build();
+            return PrescriptionConverter.toPrescriptionList(List.of());
         }
 
         // N+1 방지: 모든 처방전의 약물을 한 번에 조회 (DrugInfo 제외 - 성능 최적화)
@@ -97,54 +89,36 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .map(p -> {
                     // 그룹화된 맵에서 약물 목록 조회 (추가 쿼리 없음)
                     List<UserMedication> medications = medicationsMap.getOrDefault(p.getId(), List.of());
-                    int medicationCount = medications.size();
 
                     // 연결된 약물 중 최대 복용일수를 기준으로 복용 상태 계산
-                    String status = calculateStatus(p.getPrescriptionDate(), medications);
+                    PrescriptionStatus status = calculateStatus(p.getPrescriptionDate(), medications);
 
-                    return PrescriptionResponseDTO.PrescriptionInfo.builder()
-                            .id(p.getId())
-                            .imageUrl(p.getImageUrl())
-                            .prescriptionDate(p.getPrescriptionDate())
-                            .patientName(p.getPatientName())
-                            .hospitalName(p.getHospitalName())
-                            .doctorName(p.getDoctorName())
-                            .diagnosis(p.getDiagnosis())
-                            .durationDays(p.getDurationDays())
-                            .endDate(p.getEndDate())
-                            .status(status)
-                            .notes(p.getNotes())
-                            .medicationCount(medicationCount)
-                            .createdAt(p.getCreatedAt())
-                            .build();
+                    return PrescriptionConverter.toPrescriptionInfo(p, medications.size(), status);
                 })
                 .collect(Collectors.toList());
 
-        return PrescriptionResponseDTO.PrescriptionList.builder()
-                .prescriptions(prescriptionInfos)
-                .totalCount(prescriptionInfos.size())
-                .build();
+        return PrescriptionConverter.toPrescriptionList(prescriptionInfos);
     }
 
     /**
      * 처방전의 복용 상태 계산
      * 연결된 약물 중 최대 복용일수를 기준으로 판단
      */
-    private String calculateStatus(LocalDate prescriptionDate, List<UserMedication> medications) {
+    private PrescriptionStatus calculateStatus(LocalDate prescriptionDate, List<UserMedication> medications) {
         if (prescriptionDate == null) {
-            return "IN_PROGRESS";
+            return PrescriptionStatus.IN_PROGRESS;
         }
 
         LocalDate today = LocalDate.now();
 
         // 처방일이 미래인 경우
         if (today.isBefore(prescriptionDate)) {
-            return "UPCOMING";
+            return PrescriptionStatus.UPCOMING;
         }
 
         // 연결된 약물이 없으면 처방전 자체의 durationDays 사용 불가 → 복용 중으로 처리
         if (medications.isEmpty()) {
-            return "IN_PROGRESS";
+            return PrescriptionStatus.IN_PROGRESS;
         }
 
         // 연결된 약물 중 최대 복용일수
@@ -155,21 +129,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 .orElse(0);
 
         if (maxDurationDays == 0) {
-            return "IN_PROGRESS";
+            return PrescriptionStatus.IN_PROGRESS;
         }
 
         // 복용 종료일 = 처방일 + 최대 복용일수 - 1
         LocalDate endDate = prescriptionDate.plusDays(maxDurationDays - 1);
 
         if (today.isAfter(endDate)) {
-            return "COMPLETED";
+            return PrescriptionStatus.COMPLETED;
         }
 
-        return "IN_PROGRESS";
+        return PrescriptionStatus.IN_PROGRESS;
     }
 
     @Override
-    @Transactional(readOnly = true)
     public PrescriptionResponseDTO.PrescriptionDetail getPrescriptionDetail(Long userId, Long prescriptionId) {
         Prescription prescription = findPrescriptionByIdAndUser(prescriptionId, userId);
 
@@ -204,20 +177,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<PrescriptionResponseDTO.MedicationSummary> medicationSummaries = medications.stream()
                 .map(m -> {
                     List<Reminder> reminders = remindersMap.getOrDefault(m.getId(), List.of());
-                    List<PrescriptionResponseDTO.ReminderInfo> reminderInfos = reminders.stream()
-                            .map(r -> PrescriptionResponseDTO.ReminderInfo.builder()
-                                    .id(r.getId())
-                                    .time(r.getTime().format(TIME_FORMATTER))
-                                    .enabled(r.getEnabled())
-                                    .build())
-                            .collect(Collectors.toList());
 
                     // 남은 복용 일수 계산
                     int daysLeft = MedicationCalculator.calculateDaysLeft(
                             m.getRemainingCount(), m.getFrequency(), m.getDosage());
 
-                    // displayName과 imageUrl: 경량 DrugInfo 맵에서 조회
-                    String displayName = m.getDrugName();
+                    // imageUrl: 경량 DrugInfo 맵에서 조회
                     String imageUrl = null;
                     if (m.getDrugInfo() != null) {
                         Object[] summary = finalDrugInfoMap.get(m.getDrugInfo().getItemSeq());
@@ -227,43 +192,19 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                         }
                     }
 
-                    return PrescriptionResponseDTO.MedicationSummary.builder()
-                            .id(m.getId())
-                            .drugName(m.getDrugName())
-                            .displayName(displayName)
-                            .imageUrl(imageUrl)
-                            .dosage(m.getDosage())
-                            .frequency(m.getFrequency())
-                            .durationDays(m.getDurationDays())
-                            .remainingCount(m.getRemainingCount())
-                            .daysLeft(daysLeft)
-                            .reminders(reminderInfos)
-                            .build();
+                    return PrescriptionConverter.toMedicationSummary(m, reminders, imageUrl, daysLeft);
                 })
                 .collect(Collectors.toList());
 
         // 복용 상태 계산
-        String status = calculateStatus(prescription.getPrescriptionDate(), medications);
+        PrescriptionStatus status = calculateStatus(prescription.getPrescriptionDate(), medications);
 
-        return PrescriptionResponseDTO.PrescriptionDetail.builder()
-                .id(prescription.getId())
-                .imageUrl(prescription.getImageUrl())
-                .prescriptionDate(prescription.getPrescriptionDate())
-                .patientName(prescription.getPatientName())
-                .hospitalName(prescription.getHospitalName())
-                .doctorName(prescription.getDoctorName())
-                .diagnosis(prescription.getDiagnosis())
-                .durationDays(prescription.getDurationDays())
-                .endDate(prescription.getEndDate())
-                .status(status)
-                .notes(prescription.getNotes())
-                .medications(medicationSummaries)
-                .createdAt(prescription.getCreatedAt())
-                .build();
+        return PrescriptionConverter.toPrescriptionDetail(prescription, status, medicationSummaries);
     }
 
 
     @Override
+    @Transactional
     public PrescriptionResponseDTO.PrescriptionInfo updatePrescription(Long userId, Long prescriptionId, PrescriptionRequestDTO.UpdateRequest request) {
         Prescription prescription = findPrescriptionByIdAndUser(prescriptionId, userId);
 
@@ -279,26 +220,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // 연결된 약물 목록 조회하여 상태 계산
         List<UserMedication> medications = userMedicationRepository.findByPrescriptionId(prescriptionId);
-        String status = calculateStatus(prescription.getPrescriptionDate(), medications);
+        PrescriptionStatus status = calculateStatus(prescription.getPrescriptionDate(), medications);
 
-        return PrescriptionResponseDTO.PrescriptionInfo.builder()
-                .id(prescription.getId())
-                .imageUrl(prescription.getImageUrl())
-                .prescriptionDate(prescription.getPrescriptionDate())
-                .patientName(prescription.getPatientName())
-                .hospitalName(prescription.getHospitalName())
-                .doctorName(prescription.getDoctorName())
-                .diagnosis(prescription.getDiagnosis())
-                .durationDays(prescription.getDurationDays())
-                .endDate(prescription.getEndDate())
-                .status(status)
-                .notes(prescription.getNotes())
-                .medicationCount(medications.size())
-                .createdAt(prescription.getCreatedAt())
-                .build();
+        return PrescriptionConverter.toPrescriptionInfo(prescription, medications.size(), status);
     }
 
     @Override
+    @Transactional
     public void deletePrescription(Long userId, Long prescriptionId) {
         Prescription prescription = findPrescriptionByIdAndUser(prescriptionId, userId);
 
@@ -319,7 +247,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     @Override
-    public PrescriptionResponseDTO.RegisterResult registerPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request) {
+    @Transactional
+    public PrescriptionResponseDTO.RegisterResult createPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request) {
         User user = findUserById(userId);
 
         // 1. 파일 업로드
@@ -342,10 +271,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         );
         prescriptionRepository.save(prescription);
 
-        // 4. 약물들 일괄 등록
-        List<PrescriptionResponseDTO.RegisteredMedication> registeredMedications = new ArrayList<>();
+        // 4. 약물 엔티티 일괄 생성 후 saveAll (개별 save 대신 일괄 저장)
+        List<PrescriptionRequestDTO.MedicationInfo> medicationInfos = request.getMedications();
+        List<UserMedication> medications = new ArrayList<>();
 
-        for (PrescriptionRequestDTO.MedicationInfo medInfo : request.getMedications()) {
+        for (PrescriptionRequestDTO.MedicationInfo medInfo : medicationInfos) {
             // DrugInfo 조회
             DrugInfo drugInfo = null;
             if (medInfo.getDrugItemSeq() != null && !medInfo.getDrugItemSeq().isEmpty()) {
@@ -353,7 +283,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             }
 
             // UserMedication 생성
-            UserMedication medication = UserMedication.builder()
+            medications.add(UserMedication.builder()
                     .user(user)
                     .drugInfo(drugInfo)
                     .customDrugName(drugInfo == null ? medInfo.getCustomDrugName() : null)
@@ -367,40 +297,35 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .isActive(true)
                     .memo(medInfo.getMemo())
                     .prescriptionId(prescription.getId())
-                    .build();
-            userMedicationRepository.save(medication);
+                    .build());
+        }
+        userMedicationRepository.saveAll(medications);
 
-            // 리마인더 생성 (커스텀 시간 사용, 시간 기준으로 timing 재계산)
-            for (PrescriptionRequestDTO.TimingWithTime twt : medInfo.getTimings()) {
+        // 5. 리마인더 일괄 생성 (약물 저장 이후 생성 - 연관관계 보장, 커스텀 시간 기준으로 timing 재계산)
+        List<Reminder> reminders = new ArrayList<>();
+        for (int i = 0; i < medications.size(); i++) {
+            UserMedication medication = medications.get(i);
+            for (PrescriptionRequestDTO.TimingWithTime twt : medicationInfos.get(i).getTimings()) {
                 if (twt.getTime() != null) {
                     MedicationTiming timing = MedicationTiming.fromTime(twt.getTime());
                     if (timing != MedicationTiming.AS_NEEDED) {
-                        Reminder reminder = ReminderConverter.toEntity(medication, timing, twt.getTime());
-                        reminderRepository.save(reminder);
+                        reminders.add(ReminderConverter.toEntity(medication, timing, twt.getTime()));
                     }
                 }
             }
+        }
+        reminderRepository.saveAll(reminders);
 
-            // 결과 DTO 생성
-            registeredMedications.add(PrescriptionResponseDTO.RegisteredMedication.builder()
-                    .id(medication.getId())
-                    .drugName(medication.getDrugName())
-                    .dosage(medInfo.getDosage())
-                    .frequency(medInfo.getFrequency())
-                    .durationDays(medInfo.getDurationDays())
-                    .build());
+        // 6. 결과 DTO 생성
+        List<PrescriptionResponseDTO.RegisteredMedication> registeredMedications = new ArrayList<>();
+        for (int i = 0; i < medications.size(); i++) {
+            registeredMedications.add(PrescriptionConverter.toRegisteredMedication(medications.get(i), medicationInfos.get(i)));
         }
 
         log.info("Prescription registered: userId={}, prescriptionId={}, medicationCount={}",
                 userId, prescription.getId(), registeredMedications.size());
 
-        return PrescriptionResponseDTO.RegisterResult.builder()
-                .prescriptionId(prescription.getId())
-                .imageUrl(imageUrl)
-                .prescriptionDate(prescriptionDate)
-                .medications(registeredMedications)
-                .totalMedicationCount(registeredMedications.size())
-                .build();
+        return PrescriptionConverter.toRegisterResult(prescription, imageUrl, prescriptionDate, registeredMedications);
     }
 
     private User findUserById(Long userId) {
@@ -420,11 +345,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     @Override
+    @Transactional
     public PrescriptionResponseDTO.BatchDeleteResult deletePrescriptionsBatch(Long userId, List<Long> ids) {
-        // 사용자 소유의 처방전만 필터링
-        List<Prescription> prescriptions = prescriptionRepository.findAllById(ids).stream()
-                .filter(p -> p.getUser().getId().equals(userId))
-                .toList();
+        // 사용자 소유의 처방전만 조회 (소유권 검증을 쿼리 조건으로 수행)
+        List<Prescription> prescriptions = prescriptionRepository.findByIdInAndUserId(ids, userId);
 
         // 파일 URL 목록 수집 (DB 삭제 전에 추출)
         List<String> imageUrls = prescriptions.stream()
@@ -459,24 +383,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             }
         }
 
-        // 삭제된 ID 목록
-        List<Long> deletedIds = prescriptions.stream()
-                .map(Prescription::getId)
-                .toList();
-
         // 삭제 실패한 ID 목록 (요청 ID 중 삭제되지 않은 것)
         List<Long> failedIds = ids.stream()
-                .filter(id -> !deletedIds.contains(id))
+                .filter(id -> !prescriptionIdList.contains(id))
                 .toList();
 
         log.info("Prescriptions batch deleted: userId={}, requestedCount={}, deletedCount={}, failedCount={}",
                 userId, ids.size(), prescriptions.size(), failedIds.size());
 
-        return PrescriptionResponseDTO.BatchDeleteResult.builder()
-                .requestedCount(ids.size())
-                .deletedCount(prescriptions.size())
-                .failedCount(failedIds.size())
-                .failedIds(failedIds.isEmpty() ? null : failedIds)
-                .build();
+        return PrescriptionConverter.toBatchDeleteResult(ids.size(), prescriptions.size(), failedIds);
     }
 }
