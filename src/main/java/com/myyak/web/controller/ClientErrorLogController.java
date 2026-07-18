@@ -1,15 +1,12 @@
 package com.myyak.web.controller;
 
 import com.myyak.apiPayload.ApiResponse;
-import com.myyak.service.errorLogService.ClientErrorLogService;
+import com.myyak.service.clientErrorLogService.ClientErrorLogService;
+import com.myyak.web.dto.ClientErrorLogDTO.ClientErrorLogRequestDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -31,7 +28,7 @@ public class ClientErrorLogController {
     @Operation(summary = "에러 로그 전송", description = "클라이언트에서 발생한 에러를 서버에 기록합니다.")
     @PostMapping
     public ApiResponse<Void> reportError(
-            @Valid @RequestBody ErrorLogRequest request,
+            @Valid @RequestBody ClientErrorLogRequestDTO.ErrorLogRequest request,
             Authentication authentication) {
 
         Long userId = null;
@@ -69,36 +66,5 @@ public class ClientErrorLogController {
             @Parameter(description = "조회할 날짜 (yyyy-MM-dd)")
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
         return ApiResponse.onSuccess(clientErrorLogService.getLogFileContent(date));
-    }
-
-    @Getter
-    @NoArgsConstructor
-    public static class ErrorLogRequest {
-        @NotBlank(message = "에러 레벨은 필수입니다")
-        @Size(max = 20)
-        private String level;
-
-        @NotBlank(message = "에러 메시지는 필수입니다")
-        @Size(max = 500)
-        private String message;
-
-        private String stackTrace;
-
-        @Size(max = 100)
-        private String screen;
-
-        @Size(max = 50)
-        private String appVersion;
-
-        @Size(max = 20)
-        private String platform;
-
-        @Size(max = 50)
-        private String osVersion;
-
-        @Size(max = 100)
-        private String deviceModel;
-
-        private String additionalInfo;
     }
 }
