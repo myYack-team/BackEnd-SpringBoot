@@ -37,7 +37,7 @@ public class DrugNameParser {
      * 약물명에서 표시용 이름 추출
      * 첫 번째 괄호 이전까지의 텍스트 반환
      */
-    public static String extractDisplayName(String itemName) {
+    private static String extractDisplayName(String itemName) {
         if (itemName == null || itemName.isBlank()) {
             return null;
         }
@@ -67,7 +67,7 @@ public class DrugNameParser {
      * 3. 쉼표가 있으면 쉼표 앞부분만 사용
      * 4. 한글이 포함되어야 함
      */
-    public static String extractIngredientKr(String itemName) {
+    private static String extractIngredientKr(String itemName) {
         if (itemName == null || itemName.isBlank()) {
             return null;
         }
