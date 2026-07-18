@@ -3,7 +3,6 @@ package com.myyak.web.dto.AdminDTO;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.util.List;
 
@@ -13,7 +12,6 @@ public class AdminRequestDTO {
      * 영양제 목록 조회 요청
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class SupplementListRequest {
         private int page = 0;
@@ -26,7 +24,6 @@ public class AdminRequestDTO {
      * AI 채팅 요청
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class ChatRequest {
         @NotNull(message = "에러 로그 정보는 필수입니다")
@@ -41,7 +38,6 @@ public class AdminRequestDTO {
      * 에러 로그 컨텍스트 (채팅에 포함되는 에러 정보)
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class ErrorLogContext {
         private String timestamp;
@@ -55,7 +51,6 @@ public class AdminRequestDTO {
      * 채팅 메시지
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class ChatMessage {
         private String role;  // "user" or "assistant"
@@ -66,7 +61,6 @@ public class AdminRequestDTO {
      * 사용자 일괄 탈퇴 요청
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class BatchDeleteUsersRequest {
         @NotNull(message = "삭제할 사용자 ID 목록은 필수입니다")
@@ -77,7 +71,6 @@ public class AdminRequestDTO {
      * AI 모델 설정 변경 요청
      */
     @Getter
-    @Setter
     @NoArgsConstructor
     public static class AiModelSettingRequest {
         @NotNull(message = "분석 모델은 필수입니다")
