@@ -83,4 +83,13 @@ public class UserSupplement extends BaseEntity {
     public void activate() {
         this.isActive = true;
     }
+
+    /**
+     * 해당 날짜에 복용이 예정되어 있는지 확인
+     * 중단된 영양제도 종료일까지는 일정에 포함하여 조회 화면 간 기준을 일치시킨다
+     */
+    public boolean isScheduledOn(LocalDate date) {
+        if (!isActive && endDate == null) return false;
+        return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
+    }
 }

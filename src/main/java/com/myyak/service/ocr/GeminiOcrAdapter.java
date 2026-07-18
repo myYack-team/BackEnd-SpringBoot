@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -33,6 +34,7 @@ public class GeminiOcrAdapter implements OcrClient {
     private String geminiModel;
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final Duration OCR_API_TIMEOUT = Duration.ofSeconds(120);
 
     // 텍스트 추출 전용 프롬프트 (간단하고 빠름)
     private static final String OCR_PROMPT = """
@@ -73,7 +75,7 @@ public class GeminiOcrAdapter implements OcrClient {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(OCR_API_TIMEOUT);
 
             String extractedText = parseGeminiResponse(response);
 

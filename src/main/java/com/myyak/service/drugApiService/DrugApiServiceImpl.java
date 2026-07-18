@@ -16,6 +16,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.myyak.util.DrugNameParser;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -40,6 +41,7 @@ public class DrugApiServiceImpl implements DrugApiService {
     private static final String PERMIT_API_URL = "http://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnInq07";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter PERMIT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final Duration DRUG_API_TIMEOUT = Duration.ofSeconds(30);
 
     /** 공공데이터 API 레이트리밋 대기 시간 (ms) */
     private static final long API_RATE_LIMIT_DELAY_MS = 1000;
@@ -61,7 +63,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(EasyDrugApiResponse.class)
-                    .block();
+                    .block(DRUG_API_TIMEOUT);
 
             if (response == null || response.getBody() == null || response.getBody().getItems() == null) {
                 log.warn("API 응답이 비어있습니다: itemName={}", itemName);
@@ -93,7 +95,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(EasyDrugApiResponse.class)
-                    .block();
+                    .block(DRUG_API_TIMEOUT);
 
             if (response == null || response.getBody() == null ||
                     response.getBody().getItems() == null || response.getBody().getItems().isEmpty()) {
@@ -171,7 +173,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                         .uri(url)
                         .retrieve()
                         .bodyToMono(EasyDrugApiResponse.class)
-                        .block();
+                        .block(DRUG_API_TIMEOUT);
 
                 if (response == null || response.getBody() == null ||
                         response.getBody().getItems() == null || response.getBody().getItems().isEmpty()) {
@@ -260,7 +262,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(DrugPermitApiResponse.class)
-                    .block();
+                    .block(DRUG_API_TIMEOUT);
 
             if (response == null || response.getBody() == null || response.getBody().getItems() == null) {
                 log.warn("허가정보 API 응답이 비어있습니다: itemName={}", itemName);
@@ -302,7 +304,7 @@ public class DrugApiServiceImpl implements DrugApiService {
                         .uri(url)
                         .retrieve()
                         .bodyToMono(DrugPermitApiResponse.class)
-                        .block();
+                        .block(DRUG_API_TIMEOUT);
 
                 if (response == null || response.getBody() == null ||
                         response.getBody().getItems() == null || response.getBody().getItems().isEmpty()) {

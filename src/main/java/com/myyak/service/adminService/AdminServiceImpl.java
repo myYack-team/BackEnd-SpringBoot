@@ -2,6 +2,7 @@ package com.myyak.service.adminService;
 
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.apiPayload.code.status.ErrorStatus;
+import com.myyak.converter.AdminConverter;
 import com.myyak.domain.Supplement;
 import com.myyak.domain.User;
 import com.myyak.domain.enums.Gender;
@@ -95,129 +96,131 @@ public class AdminServiceImpl implements AdminService {
     public AdminResponseDTO.SupplementList getRecentSupplements(int page, int size, Integer days, String search) {
         PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
+        // days 필터링 (쿼리 조건으로 처리)
+        LocalDateTime cutoffDate = days != null ? LocalDateTime.now().minusDays(days) : null;
+
         Page<Supplement> supplementPage;
 
         if (search != null && !search.isBlank()) {
-            supplementPage = supplementRepository.searchByKeyword(search.trim(), pageRequest);
+            String keyword = search.trim();
+            supplementPage = cutoffDate != null
+                    ? supplementRepository.searchByKeywordAndCreatedAtAfter(keyword, cutoffDate, pageRequest)
+                    : supplementRepository.searchByKeyword(keyword, pageRequest);
         } else {
-            supplementPage = supplementRepository.findAll(pageRequest);
+            supplementPage = cutoffDate != null
+                    ? supplementRepository.findByCreatedAtAfter(cutoffDate, pageRequest)
+                    : supplementRepository.findAll(pageRequest);
         }
 
-        // days 필터링 (메모리에서 처리 - 단순화를 위해)
-        LocalDateTime cutoffDate = days != null ? LocalDateTime.now().minusDays(days) : null;
-
-        List<AdminResponseDTO.SupplementItem> items = supplementPage.getContent().stream()
-                .filter(s -> cutoffDate == null || s.getCreatedAt().isAfter(cutoffDate))
-                .map(this::toSupplementItem)
-                .collect(Collectors.toList());
-
-        return AdminResponseDTO.SupplementList.builder()
-                .supplements(items)
-                .page(page)
-                .size(size)
-                .totalPages(supplementPage.getTotalPages())
-                .totalElements(supplementPage.getTotalElements())
-                .build();
+        return AdminConverter.toSupplementList(supplementPage, page, size);
     }
 
     @Override
     public AdminResponseDTO.SupplementTagStats getSupplementTagStats() {
-        List<Supplement> allSupplements = supplementRepository.findAll();
+        // 태그별 개수 DB 집계
+        Map<SupplementTag, Long> tagCounts = new LinkedHashMap<>();
+        long totalCount = 0;
 
-        Map<SupplementTag, Long> tagCounts = allSupplements.stream()
-                .collect(Collectors.groupingBy(Supplement::getTag, Collectors.counting()));
+        for (Object[] row : supplementRepository.countGroupByTag()) {
+            SupplementTag tag = (SupplementTag) row[0];
+            long count = (Long) row[1];
+            tagCounts.put(tag, count);
+            totalCount += count;
+        }
 
-        return AdminResponseDTO.SupplementTagStats.builder()
-                .tagCounts(tagCounts)
-                .totalCount(allSupplements.size())
-                .build();
+        return AdminConverter.toSupplementTagStats(tagCounts, totalCount);
     }
 
     @Override
     public AdminResponseDTO.UserStats getUserStats() {
-        var allUsers = userRepository.findAll();
-        long total = allUsers.size();
+        long total = userRepository.count();
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime todayStart = now.toLocalDate().atStartOfDay();
         LocalDateTime weekStart = now.minusDays(7);
         LocalDateTime monthStart = now.minusDays(30);
 
-        long today = allUsers.stream()
-                .filter(u -> u.getCreatedAt() != null && u.getCreatedAt().isAfter(todayStart))
-                .count();
+        long today = userRepository.countByCreatedAtAfter(todayStart);
+        long week = userRepository.countByCreatedAtAfter(weekStart);
+        long month = userRepository.countByCreatedAtAfter(monthStart);
 
-        long week = allUsers.stream()
-                .filter(u -> u.getCreatedAt() != null && u.getCreatedAt().isAfter(weekStart))
-                .count();
-
-        long month = allUsers.stream()
-                .filter(u -> u.getCreatedAt() != null && u.getCreatedAt().isAfter(monthStart))
-                .count();
-
-        // 성별 분포
+        // 성별 분포 (DB 집계)
         Map<String, Long> byGender = new LinkedHashMap<>();
-        byGender.put("MALE", allUsers.stream().filter(u -> u.getGender() == Gender.MALE).count());
-        byGender.put("FEMALE", allUsers.stream().filter(u -> u.getGender() == Gender.FEMALE).count());
-        byGender.put("UNKNOWN", allUsers.stream().filter(u -> u.getGender() == null).count());
+        byGender.put("MALE", 0L);
+        byGender.put("FEMALE", 0L);
+        byGender.put("UNKNOWN", 0L);
+        for (Object[] row : userRepository.countGroupByGender()) {
+            Gender gender = (Gender) row[0];
+            long count = (Long) row[1];
+            byGender.put(gender != null ? gender.name() : "UNKNOWN", count);
+        }
 
-        // 연령대 분포 (ageRange 문자열 기반)
+        // 연령대 분포 (DB 집계, ageRange 문자열 기반)
+        Map<String, Long> ageRangeCounts = new HashMap<>();
+        long unknownAgeCount = 0;
+        for (Object[] row : userRepository.countGroupByAgeRange()) {
+            String ageRange = (String) row[0];
+            long count = (Long) row[1];
+            if (ageRange == null) {
+                unknownAgeCount += count;
+            } else {
+                ageRangeCounts.put(ageRange, count);
+            }
+        }
+
         Map<String, Long> byAgeGroup = new LinkedHashMap<>();
-        byAgeGroup.put("10s", countByAgeRange(allUsers, "10대"));
-        byAgeGroup.put("20s", countByAgeRange(allUsers, "20대"));
-        byAgeGroup.put("30s", countByAgeRange(allUsers, "30대"));
-        byAgeGroup.put("40s", countByAgeRange(allUsers, "40대"));
-        byAgeGroup.put("50s", countByAgeRange(allUsers, "50대"));
-        byAgeGroup.put("60+", countByAgeRange(allUsers, "60대 이상"));
-        byAgeGroup.put("UNKNOWN", allUsers.stream().filter(u -> u.getAgeRange() == null).count());
+        byAgeGroup.put("10s", ageRangeCounts.getOrDefault("10대", 0L));
+        byAgeGroup.put("20s", ageRangeCounts.getOrDefault("20대", 0L));
+        byAgeGroup.put("30s", ageRangeCounts.getOrDefault("30대", 0L));
+        byAgeGroup.put("40s", ageRangeCounts.getOrDefault("40대", 0L));
+        byAgeGroup.put("50s", ageRangeCounts.getOrDefault("50대", 0L));
+        byAgeGroup.put("60+", ageRangeCounts.getOrDefault("60대 이상", 0L));
+        byAgeGroup.put("UNKNOWN", unknownAgeCount);
 
-        // 가입목적 분포
+        // 가입목적 분포 (콤마 구분 문자열이라 해당 컬럼만 조회 후 메모리 집계)
+        List<String> allSignupPurposes = userRepository.findAllSignupPurposes();
         Map<String, Long> bySignupPurpose = new LinkedHashMap<>();
         for (SignupPurpose purpose : SignupPurpose.values()) {
-            long count = allUsers.stream()
-                    .filter(u -> u.getSignupPurposes() != null && u.getSignupPurposes().contains(purpose.name()))
+            long count = allSignupPurposes.stream()
+                    .filter(purposes -> purposes.contains(purpose.name()))
                     .count();
             bySignupPurpose.put(purpose.name(), count);
         }
 
-        return AdminResponseDTO.UserStats.builder()
-                .total(total)
-                .today(today)
-                .week(week)
-                .month(month)
-                .byGender(byGender)
-                .byAgeGroup(byAgeGroup)
-                .bySignupPurpose(bySignupPurpose)
-                .build();
+        return AdminConverter.toUserStats(total, today, week, month, byGender, byAgeGroup, bySignupPurpose);
     }
 
     @Override
     public AdminResponseDTO.DailySignups getDailySignups(int days) {
-        var allUsers = userRepository.findAll();
         LocalDate today = LocalDate.now();
+        LocalDateTime since = today.minusDays(days - 1).atStartOfDay();
 
-        List<AdminResponseDTO.DailyCount> dailyCounts = new ArrayList<>();
-
-        for (int i = days - 1; i >= 0; i--) {
-            LocalDate date = today.minusDays(i);
-            LocalDateTime startOfDay = date.atStartOfDay();
-            LocalDateTime endOfDay = date.plusDays(1).atStartOfDay();
-
-            long count = allUsers.stream()
-                    .filter(u -> u.getCreatedAt() != null &&
-                            u.getCreatedAt().isAfter(startOfDay) &&
-                            u.getCreatedAt().isBefore(endOfDay))
-                    .count();
-
-            dailyCounts.add(AdminResponseDTO.DailyCount.builder()
-                    .date(date)
-                    .count(count)
-                    .build());
+        // 일자별 가입자 수 DB 집계 (GROUP BY DATE)
+        Map<LocalDate, Long> countsByDate = new HashMap<>();
+        for (Object[] row : userRepository.countDailySignups(since)) {
+            countsByDate.put(toLocalDate(row[0]), ((Number) row[1]).longValue());
         }
 
-        return AdminResponseDTO.DailySignups.builder()
-                .dailyCounts(dailyCounts)
-                .build();
+        List<AdminResponseDTO.DailyCount> dailyCounts = new ArrayList<>();
+        for (int i = days - 1; i >= 0; i--) {
+            LocalDate date = today.minusDays(i);
+            dailyCounts.add(AdminConverter.toDailyCount(date, countsByDate.getOrDefault(date, 0L)));
+        }
+
+        return AdminConverter.toDailySignups(dailyCounts);
+    }
+
+    /**
+     * Native Query의 DATE() 결과를 LocalDate로 변환 (드라이버별 반환 타입 대응)
+     */
+    private LocalDate toLocalDate(Object value) {
+        if (value instanceof java.sql.Date date) {
+            return date.toLocalDate();
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        return LocalDate.parse(value.toString());
     }
 
     @Override
@@ -226,43 +229,15 @@ public class AdminServiceImpl implements AdminService {
         Supplement supplement = supplementRepository.findById(supplementId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus._NOT_FOUND));
 
-        // 해당 영양제를 선택한 UserSupplement 수 조회
-        var userSupplements = userSupplementRepository.findAll().stream()
-                .filter(us -> us.getSupplement().getId().equals(supplementId))
-                .collect(Collectors.toList());
-
-        int deletedUserSupplementCount = userSupplements.size();
-
-        // UserSupplement 삭제
-        userSupplementRepository.deleteAll(userSupplements);
+        // 해당 영양제를 선택한 UserSupplement 일괄 삭제 (삭제된 수 반환)
+        int deletedUserSupplementCount = userSupplementRepository.deleteBySupplement(supplement);
 
         // Supplement 삭제
         supplementRepository.delete(supplement);
 
         log.info("영양제 삭제 완료: id={}, 삭제된 UserSupplement 수={}", supplementId, deletedUserSupplementCount);
 
-        return AdminResponseDTO.SupplementDeleteResult.builder()
-                .deletedSupplementId(supplementId)
-                .deletedUserSupplementCount(deletedUserSupplementCount)
-                .build();
-    }
-
-    private AdminResponseDTO.SupplementItem toSupplementItem(Supplement supplement) {
-        return AdminResponseDTO.SupplementItem.builder()
-                .id(supplement.getId())
-                .name(supplement.getName())
-                .tag(supplement.getTag())
-                .tagDescription(supplement.getTag().getDescription())
-                .selectionCount(supplement.getSelectionCount())
-                .createdAt(supplement.getCreatedAt())
-                .createdByName(supplement.getCreatedBy() != null ? supplement.getCreatedBy().getName() : "알 수 없음")
-                .build();
-    }
-
-    private long countByAgeRange(List<User> users, String ageRange) {
-        return users.stream()
-                .filter(u -> ageRange.equals(u.getAgeRange()))
-                .count();
+        return AdminConverter.toSupplementDeleteResult(supplementId, deletedUserSupplementCount);
     }
 
     @Override
@@ -631,7 +606,7 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception e) {
             log.error("AI 채팅 오류: {}", e.getMessage(), e);
             return AdminResponseDTO.ChatResponse.builder()
-                    .response("AI 응답 생성 중 오류가 발생했습니다: " + e.getMessage())
+                    .response("AI 응답 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
                     .timestamp(LocalDateTime.now())
                     .build();
         }
@@ -649,17 +624,30 @@ public class AdminServiceImpl implements AdminService {
             userPage = userRepository.findAll(pageRequest);
         }
 
-        List<AdminResponseDTO.UserItem> items = userPage.getContent().stream()
-                .map(this::toUserItem)
+        // 페이지 내 사용자들의 약물/영양제 수를 집계 쿼리 2회로 한 번에 조회 (N+1 방지)
+        List<Long> userIds = userPage.getContent().stream()
+                .map(User::getId)
                 .collect(Collectors.toList());
 
-        return AdminResponseDTO.UserList.builder()
-                .users(items)
-                .page(page)
-                .size(size)
-                .totalPages(userPage.getTotalPages())
-                .totalElements(userPage.getTotalElements())
-                .build();
+        Map<Long, Long> medicationCounts = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : toCountMap(userMedicationRepository.countByUserIds(userIds));
+        Map<Long, Long> supplementCounts = userIds.isEmpty()
+                ? Collections.emptyMap()
+                : toCountMap(userSupplementRepository.countByUserIds(userIds));
+
+        return AdminConverter.toUserList(userPage, medicationCounts, supplementCounts, page, size);
+    }
+
+    /**
+     * (userId, count) 집계 결과를 Map으로 변환
+     */
+    private Map<Long, Long> toCountMap(List<Object[]> rows) {
+        Map<Long, Long> countMap = new HashMap<>();
+        for (Object[] row : rows) {
+            countMap.put((Long) row[0], (Long) row[1]);
+        }
+        return countMap;
     }
 
     @Override
@@ -685,30 +673,7 @@ public class AdminServiceImpl implements AdminService {
         log.info("일괄 탈퇴 완료: 요청={}, 성공={}, 실패={}",
                 userIds.size(), deletedUserIds.size(), failedUserIds.size());
 
-        return AdminResponseDTO.BatchDeleteUsersResult.builder()
-                .requestedCount(userIds.size())
-                .deletedCount(deletedUserIds.size())
-                .deletedUserIds(deletedUserIds)
-                .failedUserIds(failedUserIds)
-                .build();
-    }
-
-    private AdminResponseDTO.UserItem toUserItem(User user) {
-        int medicationCount = userMedicationRepository.findByUser(user).size();
-        int supplementCount = userSupplementRepository.findByUser(user).size();
-
-        return AdminResponseDTO.UserItem.builder()
-                .id(user.getId())
-                .kakaoId(user.getKakaoId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .gender(user.getGender() != null ? user.getGender().name() : null)
-                .ageRange(user.getAgeRange())
-                .medicationCount(medicationCount)
-                .supplementCount(supplementCount)
-                .createdAt(user.getCreatedAt())
-                .lastLoginAt(user.getUpdatedAt())
-                .build();
+        return AdminConverter.toBatchDeleteUsersResult(userIds.size(), deletedUserIds, failedUserIds);
     }
 
     // ===== AI 모델 설정 관련 =====
