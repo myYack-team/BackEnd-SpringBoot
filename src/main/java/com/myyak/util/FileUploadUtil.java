@@ -63,7 +63,7 @@ public class FileUploadUtil {
      * 파일 삭제 (동기)
      * @param fileUrl 파일 URL
      */
-    public void deleteFile(String fileUrl) {
+    private void deleteFile(String fileUrl) {
         storageClient.delete(fileUrl);
     }
 

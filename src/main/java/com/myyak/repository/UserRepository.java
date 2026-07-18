@@ -16,8 +16,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByKakaoId(String kakaoId);
 
-    boolean existsByKakaoId(String kakaoId);
-
     boolean existsByNameAndIdNot(String name, Long id);
 
     /**
@@ -43,11 +41,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * (암호화된 phone 필드 대신 phoneHash 사용)
      */
     Optional<User> findByPhoneHash(String phoneHash);
-
-    /**
-     * 전화번호 해시 존재 여부 확인
-     */
-    boolean existsByPhoneHash(String phoneHash);
 
     /**
      * 특정 시점 이후 가입한 사용자 수 조회

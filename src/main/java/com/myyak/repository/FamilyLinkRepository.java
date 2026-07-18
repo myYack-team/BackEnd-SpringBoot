@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
-import java.util.Optional;
 
 public interface FamilyLinkRepository extends JpaRepository<FamilyLink, Long> {
 
@@ -32,17 +31,6 @@ public interface FamilyLinkRepository extends JpaRepository<FamilyLink, Long> {
      * 보호자가 연결한 피보호자 수
      */
     long countByGuardianId(Long guardianId);
-
-    /**
-     * 특정 보호자-피보호자 연결 조회
-     */
-    Optional<FamilyLink> findByGuardianIdAndProtectedUserId(Long guardianId, Long protectedUserId);
-
-    /**
-     * 보호자 또는 피보호자 ID로 연결 조회
-     */
-    @Query("SELECT fl FROM FamilyLink fl WHERE fl.guardian.id = :userId OR fl.protectedUser.id = :userId")
-    List<FamilyLink> findByGuardianIdOrProtectedUserId(@Param("userId") Long userId);
 
     /**
      * 회원 탈퇴 시 보호자/피보호자로 연결된 모든 가족 링크 일괄 삭제

@@ -6,11 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
-
 public interface QnAReplyRepository extends JpaRepository<QnAReply, Long> {
-
-    List<QnAReply> findByQnaIdOrderByCreatedAtAsc(Long qnaId);
 
     /**
      * 회원 탈퇴 시 사용자의 문의에 달린 답변 일괄 삭제

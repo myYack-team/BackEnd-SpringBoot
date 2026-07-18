@@ -13,21 +13,11 @@ import java.util.Optional;
 
 public interface UserSupplementRepository extends JpaRepository<UserSupplement, Long> {
 
-    // 사용자의 활성 영양제 목록
-    List<UserSupplement> findByUserAndIsActiveTrue(User user);
-
     // 사용자의 모든 영양제 목록
     List<UserSupplement> findByUser(User user);
 
-    // 사용자의 특정 영양제
-    Optional<UserSupplement> findByIdAndUser(Long id, User user);
-
     // ID로 활성 영양제 조회
     Optional<UserSupplement> findByIdAndIsActiveTrue(Long id);
-
-    // 사용자 ID로 활성 영양제 조회
-    @Query("SELECT us FROM UserSupplement us WHERE us.user.id = :userId AND us.isActive = true")
-    List<UserSupplement> findActiveByUserId(@Param("userId") Long userId);
 
     // Supplement와 함께 조회 (N+1 방지)
     @Query("SELECT us FROM UserSupplement us LEFT JOIN FETCH us.supplement WHERE us.user = :user AND us.isActive = true")

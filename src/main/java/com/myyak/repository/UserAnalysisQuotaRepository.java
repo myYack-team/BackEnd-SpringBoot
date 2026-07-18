@@ -17,11 +17,6 @@ public interface UserAnalysisQuotaRepository extends JpaRepository<UserAnalysisQ
     Optional<UserAnalysisQuota> findByUser(User user);
 
     /**
-     * 사용자 ID로 분석 쿼터 조회
-     */
-    Optional<UserAnalysisQuota> findByUserId(Long userId);
-
-    /**
      * 회원 탈퇴 시 사용자의 분석 쿼터 일괄 삭제
      */
     @Modifying

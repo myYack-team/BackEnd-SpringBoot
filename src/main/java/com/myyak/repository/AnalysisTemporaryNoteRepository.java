@@ -22,11 +22,6 @@ public interface AnalysisTemporaryNoteRepository extends JpaRepository<AnalysisT
     void deleteByUser(User user);
 
     /**
-     * 사용자의 임시 메모 개수 조회
-     */
-    int countByUser(User user);
-
-    /**
      * 회원 탈퇴 시 사용자의 모든 임시 메모 일괄 삭제
      */
     @Modifying

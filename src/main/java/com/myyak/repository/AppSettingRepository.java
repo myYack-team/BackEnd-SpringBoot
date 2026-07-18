@@ -13,7 +13,5 @@ public interface AppSettingRepository extends JpaRepository<AppSetting, Long> {
 
     Optional<AppSetting> findBySettingKey(String settingKey);
 
-    boolean existsBySettingKey(String settingKey);
-
     List<AppSetting> findBySettingKeyIn(Collection<String> settingKeys);
 }
