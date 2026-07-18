@@ -26,11 +26,11 @@ public class IntakeController {
 
     @Operation(summary = "복약 기록", description = "복약 완료를 기록합니다.")
     @PostMapping
-    public ApiResponse<IntakeResponseDTO.CreateResult> recordIntake(
+    public ApiResponse<IntakeResponseDTO.CreateResult> createIntake(
             Authentication authentication,
             @Valid @RequestBody IntakeRequestDTO.CreateRequest request) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.of(SuccessStatus.INTAKE_RECORDED, intakeService.recordIntake(userId, request));
+        return ApiResponse.of(SuccessStatus.INTAKE_RECORDED, intakeService.createIntake(userId, request));
     }
 
     @Operation(summary = "복약 기록 조회", description = "특정 날짜의 복약 기록을 조회합니다.")

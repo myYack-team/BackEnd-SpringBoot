@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.ScanConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.repository.DrugInfoRepository;
@@ -22,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -60,6 +62,7 @@ public class ScanServiceImpl implements ScanService {
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
@@ -217,7 +220,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseOpenAIResponse(response);
         } catch (GeneralException e) {
@@ -253,7 +256,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("Gemini API 응답 시간: {}ms ({}초)", elapsed, elapsed / 1000.0);
@@ -438,57 +441,36 @@ public class ScanServiceImpl implements ScanService {
 
                     // DrugInfo 조회 시도
                     DrugInfo matchedDrug = findDrugInfo(name);
+                    boolean matchedByEditDistance = false;
 
-                    ScanResponseDTO.ScannedMedication.ScannedMedicationBuilder builder =
-                            ScanResponseDTO.ScannedMedication.builder()
-                                    .name(name)
-                                    .dosage(medNode.path("dosage").asInt(1))
-                                    .frequency(medNode.path("frequency").asInt(1))
-                                    .timings(timings)
-                                    .durationDays(medNode.path("durationDays").asInt(7))
-                                    .totalCount(medNode.path("totalCount").asInt(7));
-
-                    // DrugInfo가 매칭되면 추가 정보 설정
                     if (matchedDrug != null) {
-                        builder.name(extractPureDrugName(matchedDrug.getItemName()))
-                               .drugItemSeq(matchedDrug.getItemSeq())
-                               .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))
-                               .efficacy(matchedDrug.getEfficacy())
-                               .imageUrl(matchedDrug.getImageUrl())
-                               .entpName(matchedDrug.getEntpName());
                         log.info("약물 '{}' → DB 매칭: '{}'", name, matchedDrug.getItemName());
-                    }
-
-                    // DB 매칭 실패 시 → 편집거리 검색으로 OCR 오타 보정
-                    if (matchedDrug == null && name != null && !name.isBlank()) {
+                    } else if (name != null && !name.isBlank()) {
+                        // DB 매칭 실패 시 → 편집거리 검색으로 OCR 오타 보정
                         Optional<DrugInfo> editDistanceMatch = drugSearchService.findByEditDistance(name);
                         if (editDistanceMatch.isPresent()) {
-                            DrugInfo foundDrug = editDistanceMatch.get();
-                            builder.name(extractPureDrugName(foundDrug.getItemName()))
-                                   .drugItemSeq(foundDrug.getItemSeq())
-                                   .ingredient(resolveIngredient(foundDrug.getItemName(), foundDrug.getIngredientName()))
-                                   .efficacy(foundDrug.getEfficacy())
-                                   .imageUrl(foundDrug.getImageUrl())
-                                   .entpName(foundDrug.getEntpName())
-                                   .matchedByEditDistance(true);
-                            log.info("약물 '{}' → 편집거리 매칭: '{}'", name, foundDrug.getItemName());
+                            matchedDrug = editDistanceMatch.get();
+                            matchedByEditDistance = true;
+                            log.info("약물 '{}' → 편집거리 매칭: '{}'", name, matchedDrug.getItemName());
                         }
                     }
 
-                    medications.add(builder.build());
+                    medications.add(ScanConverter.toScannedMedication(
+                            name,
+                            medNode.path("dosage").asInt(1),
+                            medNode.path("frequency").asInt(1),
+                            timings,
+                            medNode.path("durationDays").asInt(7),
+                            medNode.path("totalCount").asInt(7),
+                            matchedDrug,
+                            matchedDrug != null ? extractPureDrugName(matchedDrug.getItemName()) : null,
+                            matchedDrug != null ? resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()) : null,
+                            matchedByEditDistance));
                 }
             }
 
-            return ScanResponseDTO.ScanResult.builder()
-                    .success(success)
-                    .confidence(confidence)
-                    .medications(medications)
-                    .notes(notes)
-                    .patientName(patientName)
-                    .hospitalName(hospitalName)
-                    .diagnosis(diagnosis)
-                    .durationDays(totalDurationDays)
-                    .build();
+            return ScanConverter.toScanResult(success, confidence, medications, notes,
+                    patientName, hospitalName, diagnosis, totalDurationDays);
 
         } catch (Exception e) {
             log.error("Failed to parse Vision response: ", e);
@@ -559,12 +541,7 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private ScanResponseDTO.ScanResult createLowConfidenceResponse(String notes) {
-        return ScanResponseDTO.ScanResult.builder()
-                .success(false)
-                .confidence("low")
-                .medications(List.of())
-                .notes(notes)
-                .build();
+        return ScanConverter.toFailureResult(notes);
     }
 
     private void saveDebugImage(MultipartFile image) {
@@ -598,30 +575,6 @@ public class ScanServiceImpl implements ScanService {
     }
 
     private ScanResponseDTO.ScanResult createMockResponse() {
-        return ScanResponseDTO.ScanResult.builder()
-                .success(true)
-                .confidence("high")
-                .medications(List.of(
-                        ScanResponseDTO.ScannedMedication.builder()
-                                .name("아스피린프로텍트100mg")
-                                .drugItemSeq("200003933")
-                                .dosage(1)
-                                .frequency(2)
-                                .timings(List.of(MedicationTiming.MORNING, MedicationTiming.EVENING))
-                                .durationDays(30)
-                                .totalCount(60)
-                                .entpName("바이엘코리아(주)")
-                                .build(),
-                        ScanResponseDTO.ScannedMedication.builder()
-                                .name("메트포민500mg")
-                                .dosage(1)
-                                .frequency(2)
-                                .timings(List.of(MedicationTiming.MORNING, MedicationTiming.EVENING))
-                                .durationDays(30)
-                                .totalCount(60)
-                                .build()
-                ))
-                .notes(null)
-                .build();
+        return ScanConverter.toMockScanResult();
     }
 }

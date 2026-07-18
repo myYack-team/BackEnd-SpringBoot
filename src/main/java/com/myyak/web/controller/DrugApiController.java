@@ -6,6 +6,7 @@ import com.myyak.domain.DrugInfo;
 import com.myyak.repository.DrugInfoRepository;
 import com.myyak.service.drugApiService.DrugApiService;
 import com.myyak.service.drugSearchService.DrugSearchService;
+import com.myyak.web.dto.DrugApiDTO.DrugApiResponseDTO;
 import com.myyak.web.dto.DrugApiDTO.DrugPermitApiResponse;
 import com.myyak.web.dto.DrugApiDTO.EasyDrugApiResponse;
 import com.myyak.web.dto.DrugInfoDTO.DrugInfoResponseDTO;
@@ -91,9 +92,11 @@ public class DrugApiController {
 
     @Operation(summary = "DB 통계", description = "현재 DB에 저장된 약물 정보 통계")
     @GetMapping("/stats")
-    public ApiResponse<StatsResult> getStats() {
+    public ApiResponse<DrugApiResponseDTO.StatsResult> getStats() {
         long count = drugInfoRepository.count();
-        return ApiResponse.onSuccess(new StatsResult(count));
+        return ApiResponse.onSuccess(DrugApiResponseDTO.StatsResult.builder()
+                .totalCount(count)
+                .build());
     }
 
     // === 의약품 허가정보 API (전문의약품 포함) ===
@@ -106,53 +109,4 @@ public class DrugApiController {
         List<DrugPermitApiResponse.DrugPermitItem> items = drugApiService.searchFromPermitApi(name);
         return ApiResponse.onSuccess(items);
     }
-
-    /*
-     * ========================================================================
-     * 기존 분리된 배치 API들 (Deprecated)
-     * 통합 배치 API로 대체됨 - /api/drugs/batch/full-sync 사용
-     * ========================================================================
-     */
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
-    // @Operation(summary = "전체 데이터 배치 수집", description = "e약은요 API에서 전체 데이터를 수집합니다")
-    // @PostMapping("/batch/all")
-    // public ApiResponse<BatchResult> fetchAllDrugs() { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
-    // @Operation(summary = "페이지 범위 배치 수집")
-    // @PostMapping("/batch/range")
-    // public ApiResponse<BatchResult> fetchDrugsByRange(...) { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
-    // @Operation(summary = "허가정보 전체 배치 수집")
-    // @PostMapping("/batch/permit/all")
-    // public ApiResponse<BatchResult> fetchAllFromPermitApi() { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
-    // @Operation(summary = "허가정보 페이지 범위 배치 수집")
-    // @PostMapping("/batch/permit/range")
-    // public ApiResponse<BatchResult> fetchFromPermitApiByRange(...) { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync?includeEfficacyCrawling=true
-    // @Operation(summary = "효능 크롤링")
-    // @PostMapping("/batch/crawl/efficacy")
-    // public ApiResponse<BatchResult> crawlEfficacy() { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync
-    // @Operation(summary = "통합 배치 수집")
-    // @PostMapping("/batch/all-sources")
-    // public ApiResponse<String> fetchFromAllSources() { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/full-sync (Stage 3에서 자동 실행)
-    // @Operation(summary = "성분명 재파싱")
-    // @PostMapping("/batch/reparse/ingredient")
-    // public ApiResponse<BatchResult> reparseIngredientKr() { ... }
-
-    // @Deprecated - 통합 API 사용: POST /api/drugs/batch/csv-upload
-    // @Operation(summary = "Excel PDF 파싱 배치")
-    // @PostMapping("/batch/pdf/import")
-    // public ApiResponse<PdfBatchResult> importPdfFromExcel(...) { ... }
-
-    public record StatsResult(long totalCount) {}
 }

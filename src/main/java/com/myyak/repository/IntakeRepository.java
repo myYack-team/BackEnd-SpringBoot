@@ -4,6 +4,7 @@ import com.myyak.domain.Intake;
 import com.myyak.domain.UserMedication;
 import com.myyak.domain.enums.MedicationTiming;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -63,4 +64,13 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
             @Param("userId") Long userId,
             @Param("after") LocalDateTime after
     );
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 복용 기록 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM Intake i " +
+           "WHERE i.userMedication.id IN (SELECT m.id FROM UserMedication m WHERE m.user.id = :userId) " +
+           "OR i.userSupplement.id IN (SELECT s.id FROM UserSupplement s WHERE s.user.id = :userId)")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

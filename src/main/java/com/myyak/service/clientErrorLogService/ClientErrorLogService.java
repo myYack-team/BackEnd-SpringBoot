@@ -1,4 +1,4 @@
-package com.myyak.service.errorLogService;
+package com.myyak.service.clientErrorLogService;
 
 import java.time.LocalDate;
 import java.util.List;

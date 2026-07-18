@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.ScanConverter;
 import com.myyak.domain.DrugInfo;
 import com.myyak.domain.enums.MedicationTiming;
 import com.myyak.service.drugSearchService.DrugSearchService;
@@ -20,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,6 +61,7 @@ public class OcrLlmScanService implements ScanService {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
 
     // OCR 텍스트를 구조화하는 LLM 프롬프트
     private static final String STRUCTURE_PROMPT = """
@@ -201,7 +204,7 @@ public class OcrLlmScanService implements ScanService {
                                         return new RuntimeException("Gemini API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseGeminiResponse(response);
 
@@ -237,7 +240,7 @@ public class OcrLlmScanService implements ScanService {
                                         return new RuntimeException("OpenAI API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseOpenAIResponse(response);
 
@@ -334,16 +337,9 @@ public class OcrLlmScanService implements ScanService {
             }
         }
 
-        ScanResponseDTO.ScanResult result = ScanResponseDTO.ScanResult.builder()
-                .success(true)
-                .confidence(medications.isEmpty() ? "low" : "high")
-                .patientName(patientName)
-                .hospitalName(hospitalName)
-                .diagnosis(diagnosis)
-                .durationDays(durationDays)
-                .medications(medications)
-                .notes(null)
-                .build();
+        ScanResponseDTO.ScanResult result = ScanConverter.toScanResult(
+                true, medications.isEmpty() ? "low" : "high",
+                medications, null, patientName, hospitalName, diagnosis, durationDays);
 
         return maskResponseSensitiveInfo(result);
     }
@@ -442,16 +438,9 @@ public class OcrLlmScanService implements ScanService {
                 }
             }
 
-            ScanResponseDTO.ScanResult result = ScanResponseDTO.ScanResult.builder()
-                    .success(true)
-                    .confidence(medications.isEmpty() ? "low" : "high")
-                    .patientName(patientName)
-                    .hospitalName(hospitalName)
-                    .diagnosis(diagnosis)
-                    .durationDays(durationDays)
-                    .medications(medications)
-                    .notes(null)
-                    .build();
+            ScanResponseDTO.ScanResult result = ScanConverter.toScanResult(
+                    true, medications.isEmpty() ? "low" : "high",
+                    medications, null, patientName, hospitalName, diagnosis, durationDays);
 
             return maskResponseSensitiveInfo(result);
 
@@ -486,46 +475,36 @@ public class OcrLlmScanService implements ScanService {
                 timings.add(MedicationTiming.MORNING);
             }
 
-            // 빌더 생성
-            ScanResponseDTO.ScannedMedication.ScannedMedicationBuilder builder = ScanResponseDTO.ScannedMedication.builder()
-                    .name(name)
-                    .dosage(getIntOrNull(node, "dosage"))
-                    .frequency(getIntOrNull(node, "frequency"))
-                    .timings(timings)
-                    .durationDays(getIntOrNull(node, "durationDays"))
-                    .totalCount(getIntOrNull(node, "totalCount"));
-
-            // DB 매칭 로직 추가
+            // DB 매칭 로직
             DrugInfo matchedDrug = matchDrugFromDatabase(name);
+            boolean matchedByEditDistance = false;
 
             if (matchedDrug != null) {
                 // DB 매칭 성공 - 정확한 약물 정보로 보강
-                builder.name(extractPureDrugName(matchedDrug.getItemName()))
-                       .drugItemSeq(matchedDrug.getItemSeq())
-                       .ingredient(resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()))
-                       .efficacy(matchedDrug.getEfficacy())
-                       .imageUrl(matchedDrug.getImageUrl())
-                       .entpName(matchedDrug.getEntpName());
                 log.info("약물 '{}' → DB 매칭: '{}'", name, matchedDrug.getItemName());
             } else {
                 // DB 매칭 실패 → 편집거리 검색으로 OCR 오타 보정
                 Optional<DrugInfo> editDistanceMatch = drugSearchService.findByEditDistance(name);
                 if (editDistanceMatch.isPresent()) {
-                    DrugInfo foundDrug = editDistanceMatch.get();
-                    builder.name(extractPureDrugName(foundDrug.getItemName()))
-                           .drugItemSeq(foundDrug.getItemSeq())
-                           .ingredient(resolveIngredient(foundDrug.getItemName(), foundDrug.getIngredientName()))
-                           .efficacy(foundDrug.getEfficacy())
-                           .imageUrl(foundDrug.getImageUrl())
-                           .entpName(foundDrug.getEntpName())
-                           .matchedByEditDistance(true);
-                    log.info("약물 '{}' → 편집거리 매칭: '{}'", name, foundDrug.getItemName());
+                    matchedDrug = editDistanceMatch.get();
+                    matchedByEditDistance = true;
+                    log.info("약물 '{}' → 편집거리 매칭: '{}'", name, matchedDrug.getItemName());
                 } else {
                     log.warn("약물 '{}' → DB 매칭 실패", name);
                 }
             }
 
-            return builder.build();
+            return ScanConverter.toScannedMedication(
+                    name,
+                    getIntOrNull(node, "dosage"),
+                    getIntOrNull(node, "frequency"),
+                    timings,
+                    getIntOrNull(node, "durationDays"),
+                    getIntOrNull(node, "totalCount"),
+                    matchedDrug,
+                    matchedDrug != null ? extractPureDrugName(matchedDrug.getItemName()) : null,
+                    matchedDrug != null ? resolveIngredient(matchedDrug.getItemName(), matchedDrug.getIngredientName()) : null,
+                    matchedByEditDistance);
 
         } catch (Exception e) {
             log.warn("약물 파싱 실패: ", e);
@@ -700,12 +679,7 @@ public class OcrLlmScanService implements ScanService {
     }
 
     private ScanResponseDTO.ScanResult createErrorResponse(String message) {
-        return ScanResponseDTO.ScanResult.builder()
-                .success(false)
-                .confidence("low")
-                .medications(List.of())
-                .notes(message)
-                .build();
+        return ScanConverter.toFailureResult(message);
     }
 
     /**
@@ -716,18 +690,7 @@ public class OcrLlmScanService implements ScanService {
             return null;
         }
 
-        String maskedName = maskPatientName(result.getPatientName());
-
-        return ScanResponseDTO.ScanResult.builder()
-                .success(result.getSuccess())
-                .confidence(result.getConfidence())
-                .patientName(maskedName)
-                .hospitalName(result.getHospitalName())
-                .diagnosis("***")  // 진단명은 민감 정보이므로 마스킹
-                .durationDays(result.getDurationDays())
-                .medications(result.getMedications())
-                .notes(result.getNotes())
-                .build();
+        return ScanConverter.toMaskedResult(result, maskPatientName(result.getPatientName()));
     }
 
     /**

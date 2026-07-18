@@ -3,6 +3,7 @@ package com.myyak.repository;
 import com.myyak.domain.HealthNote;
 import com.myyak.domain.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -55,4 +56,11 @@ public interface HealthNoteRepository extends JpaRepository<HealthNote, Long> {
             @Param("userId") Long userId,
             @Param("afterDate") LocalDate afterDate
     );
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 건강 노트 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM HealthNote h WHERE h.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

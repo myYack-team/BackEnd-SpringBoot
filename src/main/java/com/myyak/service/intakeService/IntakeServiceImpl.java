@@ -6,7 +6,6 @@ import com.myyak.converter.IntakeConverter;
 import com.myyak.domain.Intake;
 import com.myyak.domain.Reminder;
 import com.myyak.domain.UserMedication;
-import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.IntakeDayStatus;
 import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
@@ -14,6 +13,7 @@ import com.myyak.repository.IntakeRepository;
 import com.myyak.repository.ReminderRepository;
 import com.myyak.repository.UserMedicationRepository;
 import com.myyak.service.userService.UserService;
+import com.myyak.util.MedicationCalculator;
 import com.myyak.web.dto.IntakeDTO.IntakeRequestDTO;
 import com.myyak.web.dto.IntakeDTO.IntakeResponseDTO;
 import lombok.RequiredArgsConstructor;
@@ -41,37 +41,36 @@ public class IntakeServiceImpl implements IntakeService {
 
     @Override
     @Transactional
-    public IntakeResponseDTO.CreateResult recordIntake(Long userId, IntakeRequestDTO.CreateRequest request) {
+    public IntakeResponseDTO.CreateResult createIntake(Long userId, IntakeRequestDTO.CreateRequest request) {
         userService.findById(userId);
 
-        List<Intake> intakes = new ArrayList<>();
-        List<UserMedication> medications = new ArrayList<>();
-
         MedicationTiming timing = request.getTiming();
-
         IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
 
-        for (Long medicationId : request.getMedicationIds()) {
-            UserMedication medication = userMedicationRepository.findById(medicationId)
-                    .orElseThrow(() -> new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND));
+        // 대상 약물 일괄 조회 후 존재/소유권 검증
+        List<UserMedication> medications = userMedicationRepository.findAllById(request.getMedicationIds());
+        if (medications.size() != request.getMedicationIds().size()) {
+            throw new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND);
+        }
+        boolean allOwned = medications.stream()
+                .allMatch(m -> m.getUser().getId().equals(userId));
+        if (!allOwned) {
+            throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
+        }
 
-            if (!medication.getUser().getId().equals(userId)) {
-                throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
-            }
-
+        List<Intake> intakes = new ArrayList<>();
+        for (UserMedication medication : medications) {
             Intake intake = IntakeConverter.toEntity(medication, timing, request.getTakenAt(), status);
             intakes.add(intake);
 
             // TAKEN 상태일 때만 남은 개수 차감
             if (status == IntakeStatus.TAKEN) {
-                String dosageStr = medication.getDosage().replaceAll("[^0-9]", "");
-                int dosage = dosageStr.isEmpty() ? 1 : Integer.parseInt(dosageStr);
+                int dosage = MedicationCalculator.parseDosage(medication.getDosage());
                 medication.decreaseRemainingCount(dosage);
                 if (medication.getRemainingCount() <= 0) {
                     medication.completeOn(request.getTakenAt().toLocalDate());
                 }
             }
-            medications.add(medication);
         }
 
         // 배치 저장 (개별 save 대신 saveAll 사용)
@@ -90,7 +89,7 @@ public class IntakeServiceImpl implements IntakeService {
         // 약물 + 영양제 리마인더 통합 조회 (날짜 기준 필터링)
         List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetailsIncludingInactive(userId);
         List<Reminder> reminders = allReminders.stream()
-                .filter(r -> isReminderActiveOnDate(r, date))
+                .filter(r -> r.isScheduledOn(date))
                 .collect(Collectors.toList());
 
         // 약물 + 영양제 복용 기록 통합 조회
@@ -165,32 +164,8 @@ public class IntakeServiceImpl implements IntakeService {
     private int calculateTotalScheduledForDate(List<Reminder> reminders, LocalDate date) {
         return (int) reminders.stream()
                 .filter(Reminder::getEnabled)
-                .filter(r -> isReminderActiveOnDate(r, date))
+                .filter(r -> r.isScheduledOn(date))
                 .count();
-    }
-
-    /**
-     * 리마인더가 해당 날짜에 활성화 상태인지 확인 (약물/영양제 모두 지원)
-     */
-    private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
-        if (reminder.isMedicationReminder()) {
-            UserMedication um = reminder.getUserMedication();
-            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
-            if (!um.getIsActive() && um.getEndDate() == null) return false;
-            LocalDate startDate = um.getStartDate();
-            LocalDate endDate = um.getEndDate();
-            if (date.isBefore(startDate)) return false;
-            if (endDate == null) return um.getIsActive();
-            return um.getIsActive() ? date.isBefore(endDate) : !date.isAfter(endDate);
-        } else if (reminder.isSupplementReminder()) {
-            UserSupplement us = reminder.getUserSupplement();
-            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
-            if (!us.getIsActive() && us.getEndDate() == null) return false;
-            LocalDate startDate = us.getStartDate();
-            LocalDate endDate = us.getEndDate();
-            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
-        }
-        return false;
     }
 
     private String determineStatus(int totalScheduled, int totalTaken, LocalDate date, LocalDate today) {

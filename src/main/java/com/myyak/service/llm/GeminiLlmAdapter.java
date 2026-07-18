@@ -12,9 +12,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Gemini LLM 어댑터
@@ -41,12 +43,20 @@ public class GeminiLlmAdapter implements LlmClient {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
+
+    /** 모델 설정 캐시 TTL (관리자가 설정을 변경하면 이 시간 내에 반영됨) */
+    private static final long SETTINGS_CACHE_TTL_MILLIS = 30_000L;
+
+    /** 모델 설정 캐시 (TTL 내 재사용, 만료 시 DB에서 1회 일괄 재조회) */
+    private volatile ModelSettings cachedSettings;
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
-        String primaryModel = getAnalysisModel();
-        String fallbackModel = getFallbackModel();
-        boolean fallbackEnabled = isFallbackEnabled();
+        ModelSettings settings = getModelSettings();
+        String primaryModel = settings.analysisModel();
+        String fallbackModel = settings.fallbackModel();
+        boolean fallbackEnabled = settings.fallbackEnabled();
 
         log.info("[Gemini] 모델 설정 - primary: {}, fallback: {}, enabled: {}",
                 primaryModel, fallbackModel, fallbackEnabled);
@@ -89,30 +99,46 @@ public class GeminiLlmAdapter implements LlmClient {
     }
 
     /**
-     * DB에서 분석 모델 설정 조회, 없으면 config 기본값 사용
+     * 모델 설정 조회 (TTL 캐시 적용)
+     * TTL 내에는 캐시를 재사용하고, 만료 시 DB에서 1회 일괄 조회합니다.
      */
-    private String getAnalysisModel() {
-        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_MODEL)
-                .map(AppSetting::getSettingValue)
-                .orElse(configAnalysisModel);
+    private ModelSettings getModelSettings() {
+        ModelSettings settings = cachedSettings;
+        long now = System.currentTimeMillis();
+        if (settings != null && now - settings.loadedAt() < SETTINGS_CACHE_TTL_MILLIS) {
+            return settings;
+        }
+        settings = loadModelSettings(now);
+        cachedSettings = settings;
+        return settings;
     }
 
     /**
-     * DB에서 폴백 모델 설정 조회
+     * DB에서 모델 관련 설정을 1회 쿼리로 일괄 조회, 없는 키는 기본값 사용
      */
-    private String getFallbackModel() {
-        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL)
-                .map(AppSetting::getSettingValue)
-                .orElse(DEFAULT_FALLBACK_MODEL);
+    private ModelSettings loadModelSettings(long now) {
+        Map<String, String> values = appSettingRepository.findBySettingKeyIn(List.of(
+                        AppSetting.KEY_GEMINI_ANALYSIS_MODEL,
+                        AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL,
+                        AppSetting.KEY_GEMINI_FALLBACK_ENABLED)).stream()
+                .collect(Collectors.toMap(AppSetting::getSettingKey, AppSetting::getSettingValue));
+
+        String analysisModel = values.getOrDefault(AppSetting.KEY_GEMINI_ANALYSIS_MODEL, configAnalysisModel);
+        String fallbackModel = values.getOrDefault(AppSetting.KEY_GEMINI_ANALYSIS_FALLBACK_MODEL, DEFAULT_FALLBACK_MODEL);
+        String fallbackEnabledValue = values.get(AppSetting.KEY_GEMINI_FALLBACK_ENABLED);
+        boolean fallbackEnabled = fallbackEnabledValue == null || Boolean.parseBoolean(fallbackEnabledValue);
+
+        return new ModelSettings(analysisModel, fallbackModel, fallbackEnabled, now);
     }
 
     /**
-     * DB에서 폴백 활성화 설정 조회
+     * 모델 설정 스냅샷 (캐시 항목)
      */
-    private boolean isFallbackEnabled() {
-        return appSettingRepository.findBySettingKey(AppSetting.KEY_GEMINI_FALLBACK_ENABLED)
-                .map(s -> Boolean.parseBoolean(s.getSettingValue()))
-                .orElse(true);
+    private record ModelSettings(
+            String analysisModel,
+            String fallbackModel,
+            boolean fallbackEnabled,
+            long loadedAt) {
     }
 
     /**
@@ -144,7 +170,7 @@ public class GeminiLlmAdapter implements LlmClient {
                                         return new RuntimeException("Gemini API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("[Gemini] 응답 완료: {}ms", elapsed);
@@ -164,7 +190,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
     @Override
     public String getModelName() {
-        return getAnalysisModel();
+        return getModelSettings().analysisModel();
     }
 
     private String buildCombinedPrompt(String systemPrompt, String userPrompt) {
