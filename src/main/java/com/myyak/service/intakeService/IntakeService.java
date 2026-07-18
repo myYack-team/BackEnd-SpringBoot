@@ -7,7 +7,7 @@ import java.time.LocalDate;
 
 public interface IntakeService {
 
-    IntakeResponseDTO.CreateResult recordIntake(Long userId, IntakeRequestDTO.CreateRequest request);
+    IntakeResponseDTO.CreateResult createIntake(Long userId, IntakeRequestDTO.CreateRequest request);
 
     IntakeResponseDTO.DailyIntakeResult getIntakes(Long userId, LocalDate date);
 
