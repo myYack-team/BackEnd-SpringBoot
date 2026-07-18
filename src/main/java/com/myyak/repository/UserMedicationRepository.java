@@ -3,6 +3,7 @@ package com.myyak.repository;
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -76,4 +77,11 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     // 여러 처방전 ID로 약물 목록 조회 (DrugInfo 제외) - 목록 조회용 (성능 최적화)
     @Query("SELECT um FROM UserMedication um WHERE um.prescriptionId IN :prescriptionIds")
     List<UserMedication> findByPrescriptionIdInLight(@Param("prescriptionIds") List<Long> prescriptionIds);
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 약물 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM UserMedication m WHERE m.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }
