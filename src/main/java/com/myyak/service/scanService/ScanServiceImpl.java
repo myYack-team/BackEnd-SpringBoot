@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -60,6 +61,7 @@ public class ScanServiceImpl implements ScanService {
 
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
 
     private static final String VISION_PROMPT = """
             당신은 한국 처방전/약봉투 이미지를 분석하는 전문 약사입니다.
@@ -217,7 +219,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseOpenAIResponse(response);
         } catch (GeneralException e) {
@@ -253,7 +255,7 @@ public class ScanServiceImpl implements ScanService {
                     .bodyValue(requestBody)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("Gemini API 응답 시간: {}ms ({}초)", elapsed, elapsed / 1000.0);
