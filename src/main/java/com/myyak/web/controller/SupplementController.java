@@ -110,11 +110,11 @@ public class SupplementController {
 
     @Operation(summary = "내 영양제 추가", description = "영양제를 내 복용 목록에 추가합니다.")
     @PostMapping("/my")
-    public ApiResponse<SupplementResponseDTO.AddUserSupplementResult> addUserSupplement(
+    public ApiResponse<SupplementResponseDTO.AddUserSupplementResult> createUserSupplement(
             Authentication authentication,
             @Valid @RequestBody SupplementRequestDTO.AddUserSupplementRequest request) {
         Long userId = (Long) authentication.getPrincipal();
-        return ApiResponse.of(SuccessStatus.USER_SUPPLEMENT_CREATED, supplementService.addUserSupplement(userId, request));
+        return ApiResponse.of(SuccessStatus.USER_SUPPLEMENT_CREATED, supplementService.createUserSupplement(userId, request));
     }
 
     @Operation(summary = "내 영양제 목록 조회", description = "내 영양제 목록을 조회합니다.")

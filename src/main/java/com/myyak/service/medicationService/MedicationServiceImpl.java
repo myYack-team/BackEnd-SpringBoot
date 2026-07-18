@@ -64,17 +64,18 @@ public class MedicationServiceImpl implements MedicationService {
         List<String> reminderTimes = request.getReminderTimes();
 
         if (reminderTimes != null && !reminderTimes.isEmpty()) {
-            // reminderTimes 기반으로 Timing 자동 계산 및 리마인더 생성
+            // reminderTimes 기반으로 Timing 자동 계산 및 리마인더 일괄 생성
+            List<Reminder> reminders = new ArrayList<>();
             for (String timeStr : reminderTimes) {
                 LocalTime time = LocalTime.parse(timeStr, TIME_FORMATTER);
                 MedicationTiming timing = MedicationTiming.fromTime(time);
                 timings.add(timing);
 
                 if (timing != MedicationTiming.AS_NEEDED) {
-                    Reminder reminder = ReminderConverter.toEntity(userMedication, timing, time);
-                    reminderRepository.save(reminder);
+                    reminders.add(ReminderConverter.toEntity(userMedication, timing, time));
                 }
             }
+            reminderRepository.saveAll(reminders);
         }
 
         return MedicationConverter.toCreateResult(userMedication, timings);
@@ -148,15 +149,16 @@ public class MedicationServiceImpl implements MedicationService {
 
         List<MedicationTiming> timings;
         if (request.getTimings() != null) {
-            // 기존 리마인더 삭제 후 새로 생성
+            // 기존 리마인더 삭제 후 일괄 생성
             reminderRepository.deleteByUserMedication(medication);
 
+            List<Reminder> reminders = new ArrayList<>();
             for (MedicationTiming timing : request.getTimings()) {
                 if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder = ReminderConverter.toEntity(medication, timing);
-                    reminderRepository.save(reminder);
+                    reminders.add(ReminderConverter.toEntity(medication, timing));
                 }
             }
+            reminderRepository.saveAll(reminders);
             timings = request.getTimings();
         } else {
             List<Reminder> reminders = reminderRepository.findByUserMedication(medication);
@@ -184,11 +186,8 @@ public class MedicationServiceImpl implements MedicationService {
     public MedicationResponseDTO.BatchDeleteResult deleteMedicationsBatch(Long userId, List<Long> ids) {
         User user = userService.findById(userId);
 
-        // 사용자 소유의 활성 약물만 조회
-        List<UserMedication> medications = userMedicationRepository.findAllById(ids).stream()
-                .filter(med -> med.getUser().getId().equals(user.getId()))
-                .filter(UserMedication::getIsActive)
-                .toList();
+        // 사용자 소유의 활성 약물만 조회 (소유권 검증을 쿼리 조건으로 수행)
+        List<UserMedication> medications = userMedicationRepository.findActiveByIdInAndUserId(ids, user.getId());
 
         // 비활성화 처리
         medications.forEach(UserMedication::deactivate);

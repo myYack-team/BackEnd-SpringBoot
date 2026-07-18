@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -169,7 +170,7 @@ public class SupplementServiceImpl implements SupplementService {
 
     @Override
     @Transactional
-    public SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
+    public SupplementResponseDTO.AddUserSupplementResult createUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request) {
         User user = userService.findById(userId);
         Supplement supplement = findById(request.getSupplementId());
 
@@ -188,16 +189,17 @@ public class SupplementServiceImpl implements SupplementService {
         // 캐시 갱신 (선택 횟수 변경됨)
         supplementSearchService.addOrUpdateCache(supplement);
 
-        // 리마인더 생성
+        // 리마인더 일괄 생성
         List<MedicationTiming> timings = request.getTimings();
         List<String> reminderTimes = request.getReminderTimes();
+        List<Reminder> reminders = new ArrayList<>();
         for (int i = 0; i < timings.size(); i++) {
             MedicationTiming timing = timings.get(i);
             if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
-                reminderRepository.save(reminder);
+                reminders.add(createReminderForSupplement(userSupplement, timing, reminderTimes, i));
             }
         }
+        reminderRepository.saveAll(reminders);
 
         return SupplementConverter.toAddResult(userSupplement, timings);
     }
@@ -250,17 +252,18 @@ public class SupplementServiceImpl implements SupplementService {
 
         List<MedicationTiming> timings;
         if (request.getTimings() != null) {
-            // 기존 리마인더 삭제 후 새로 생성
+            // 기존 리마인더 삭제 후 일괄 생성
             reminderRepository.deleteByUserSupplement(userSupplement);
 
             List<String> reminderTimes = request.getReminderTimes();
+            List<Reminder> reminders = new ArrayList<>();
             for (int i = 0; i < request.getTimings().size(); i++) {
                 MedicationTiming timing = request.getTimings().get(i);
                 if (timing != MedicationTiming.AS_NEEDED && timing.getDefaultTime() != null) {
-                    Reminder reminder = createReminderForSupplement(userSupplement, timing, reminderTimes, i);
-                    reminderRepository.save(reminder);
+                    reminders.add(createReminderForSupplement(userSupplement, timing, reminderTimes, i));
                 }
             }
+            reminderRepository.saveAll(reminders);
             timings = request.getTimings();
         } else {
             List<Reminder> reminders = reminderRepository.findByUserSupplement(userSupplement);
