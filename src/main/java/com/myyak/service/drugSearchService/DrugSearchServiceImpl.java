@@ -118,16 +118,14 @@ public class DrugSearchServiceImpl implements DrugSearchService {
             return Optional.empty();
         }
 
-        // 공백 제거 (DB의 약물명은 공백 없이 저장됨)
-        String normalizedKeyword = keyword.replaceAll("\\s+", "");
+        // 공백 제거 + 소문자 변환 (캐시에 미리 계산된 정규화 이름과 동일한 규칙)
+        String normalizedKeyword = DrugSearchCache.normalize(keyword);
 
-        // 메모리 캐시에서 부분 일치 검색
+        // 메모리 캐시에서 부분 일치 검색 (캐시 적재 시 정규화된 이름 사용 → 재계산 없음)
         Optional<DrugSearchCache> cached = drugSearchCache.values().parallelStream()
                 .filter(cache -> {
-                    String itemName = cache.getItemName();
-                    if (itemName == null) return false;
-                    String normalizedName = itemName.replaceAll("\\s+", "");
-                    return normalizedName.contains(normalizedKeyword);
+                    String normalizedName = cache.getNormalizedItemName();
+                    return normalizedName != null && normalizedName.contains(normalizedKeyword);
                 })
                 .findFirst();
 
@@ -195,7 +193,7 @@ public class DrugSearchServiceImpl implements DrugSearchService {
             return List.of();
         }
 
-        String normalizedKeyword = keyword.replaceAll("\\s+", "").toLowerCase();
+        String normalizedKeyword = DrugSearchCache.normalize(keyword);
         String cacheKey = normalizedKeyword + ":" + page + ":" + size;
 
         // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
@@ -224,7 +222,7 @@ public class DrugSearchServiceImpl implements DrugSearchService {
             return 0;
         }
 
-        String normalizedKeyword = keyword.replaceAll("\\s+", "").toLowerCase();
+        String normalizedKeyword = DrugSearchCache.normalize(keyword);
 
         // Caffeine 캐시에서 조회, 없으면 계산 후 캐싱
         return searchCountCache.get(normalizedKeyword, key ->
@@ -236,26 +234,16 @@ public class DrugSearchServiceImpl implements DrugSearchService {
 
     /**
      * 약물이 키워드와 매칭되는지 확인 (경량 캐시용)
+     * 캐시 적재 시 미리 계산된 정규화 이름을 사용하여 검색 시 재계산하지 않음
      */
     private boolean matchesKeyword(DrugSearchCache cache, String normalizedKeyword) {
-        String itemName = cache.getItemName();
-        String displayName = cache.getDisplayName();
-
-        if (itemName != null) {
-            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
-            if (normalizedName.contains(normalizedKeyword)) {
-                return true;
-            }
+        String normalizedName = cache.getNormalizedItemName();
+        if (normalizedName != null && normalizedName.contains(normalizedKeyword)) {
+            return true;
         }
 
-        if (displayName != null) {
-            String normalizedDisplayName = displayName.replaceAll("\\s+", "").toLowerCase();
-            if (normalizedDisplayName.contains(normalizedKeyword)) {
-                return true;
-            }
-        }
-
-        return false;
+        String normalizedDisplayName = cache.getNormalizedDisplayName();
+        return normalizedDisplayName != null && normalizedDisplayName.contains(normalizedKeyword);
     }
 
     /**
@@ -266,28 +254,19 @@ public class DrugSearchServiceImpl implements DrugSearchService {
      * 3: displayName에 키워드 포함
      */
     private int getRelevanceScore(DrugSearchCache cache, String normalizedKeyword) {
-        String itemName = cache.getItemName();
-        String displayName = cache.getDisplayName();
+        String normalizedName = cache.getNormalizedItemName();
+        String normalizedDisplayName = cache.getNormalizedDisplayName();
 
-        if (itemName != null) {
-            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
-            if (normalizedName.startsWith(normalizedKeyword)) {
-                return 0;
-            }
+        if (normalizedName != null && normalizedName.startsWith(normalizedKeyword)) {
+            return 0;
         }
 
-        if (displayName != null) {
-            String normalizedDisplayName = displayName.replaceAll("\\s+", "").toLowerCase();
-            if (normalizedDisplayName.startsWith(normalizedKeyword)) {
-                return 1;
-            }
+        if (normalizedDisplayName != null && normalizedDisplayName.startsWith(normalizedKeyword)) {
+            return 1;
         }
 
-        if (itemName != null) {
-            String normalizedName = itemName.replaceAll("\\s+", "").toLowerCase();
-            if (normalizedName.contains(normalizedKeyword)) {
-                return 2;
-            }
+        if (normalizedName != null && normalizedName.contains(normalizedKeyword)) {
+            return 2;
         }
 
         return 3;
