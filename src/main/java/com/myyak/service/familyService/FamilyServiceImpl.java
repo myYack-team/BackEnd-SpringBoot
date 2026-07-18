@@ -347,9 +347,9 @@ public class FamilyServiceImpl implements FamilyService {
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
-        List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetails(userId);
+        List<Reminder> allReminders = reminderRepository.findAllEnabledByUserIdWithDetailsIncludingInactive(userId);
         List<Reminder> reminders = allReminders.stream()
-                .filter(r -> isReminderActiveOnDate(r, date))
+                .filter(r -> r.isScheduledOn(date))
                 .collect(Collectors.toList());
 
         List<Intake> intakes = intakeRepository.findAllByUserIdAndDateRangeWithDetails(userId, startOfDay, endOfDay);
@@ -371,31 +371,7 @@ public class FamilyServiceImpl implements FamilyService {
     private int calculateTotalScheduledForDate(List<Reminder> reminders, LocalDate date) {
         return (int) reminders.stream()
                 .filter(Reminder::getEnabled)
-                .filter(r -> isReminderActiveOnDate(r, date))
+                .filter(r -> r.isScheduledOn(date))
                 .count();
-    }
-
-    /**
-     * 리마인더가 해당 날짜에 활성화 상태인지 확인
-     */
-    private boolean isReminderActiveOnDate(Reminder reminder, LocalDate date) {
-        if (reminder.isMedicationReminder()) {
-            UserMedication um = reminder.getUserMedication();
-            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
-            if (!um.getIsActive() && um.getEndDate() == null) return false;
-            LocalDate startDate = um.getStartDate();
-            LocalDate endDate = um.getEndDate();
-            if (date.isBefore(startDate)) return false;
-            if (endDate == null) return um.getIsActive();
-            return um.getIsActive() ? date.isBefore(endDate) : !date.isAfter(endDate);
-        } else if (reminder.isSupplementReminder()) {
-            UserSupplement us = reminder.getUserSupplement();
-            // 비활성화되었으나 endDate 미설정된 기존 데이터 방어
-            if (!us.getIsActive() && us.getEndDate() == null) return false;
-            LocalDate startDate = us.getStartDate();
-            LocalDate endDate = us.getEndDate();
-            return !date.isBefore(startDate) && (endDate == null || !date.isAfter(endDate));
-        }
-        return false;
     }
 }

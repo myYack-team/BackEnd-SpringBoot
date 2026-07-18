@@ -119,6 +119,17 @@ public class UserMedication extends BaseEntity {
         }
     }
 
+    /**
+     * 해당 날짜에 복용이 예정되어 있는지 확인
+     * 완료/중단된 약도 종료일까지는 일정에 포함하여 조회 화면 간 기준을 일치시킨다
+     */
+    public boolean isScheduledOn(LocalDate date) {
+        if (!isActive && endDate == null) return false;
+        if (date.isBefore(startDate)) return false;
+        if (endDate == null) return isActive;
+        return isActive ? date.isBefore(endDate) : !date.isAfter(endDate);
+    }
+
     public boolean isLowStock() {
         int dailyDose = calculateDailyDose();
         return this.remainingCount <= dailyDose * 3;
