@@ -63,5 +63,5 @@ public interface PrescriptionService {
      * @param request 처방전 및 약물 정보
      * @return 등록 결과
      */
-    PrescriptionResponseDTO.RegisterResult registerPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request);
+    PrescriptionResponseDTO.RegisterResult createPrescription(Long userId, MultipartFile file, PrescriptionRequestDTO.RegisterRequest request);
 }

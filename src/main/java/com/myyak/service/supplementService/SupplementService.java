@@ -31,7 +31,7 @@ public interface SupplementService {
 
     UserSupplement findUserSupplementById(Long userSupplementId);
 
-    SupplementResponseDTO.AddUserSupplementResult addUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request);
+    SupplementResponseDTO.AddUserSupplementResult createUserSupplement(Long userId, SupplementRequestDTO.AddUserSupplementRequest request);
 
     SupplementResponseDTO.UserSupplementList getUserSupplements(Long userId);
 

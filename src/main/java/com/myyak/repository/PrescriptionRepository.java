@@ -46,6 +46,12 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, Long
     List<Prescription> findByUserId(@Param("userId") Long userId);
 
     /**
+     * 일괄 삭제용: 사용자 소유의 처방전만 조회 (소유권 검증을 쿼리 조건으로 수행)
+     */
+    @Query("SELECT p FROM Prescription p WHERE p.id IN :ids AND p.user.id = :userId")
+    List<Prescription> findByIdInAndUserId(@Param("ids") List<Long> ids, @Param("userId") Long userId);
+
+    /**
      * 회원 탈퇴 시 사용자의 모든 처방전 일괄 삭제
      */
     @Modifying

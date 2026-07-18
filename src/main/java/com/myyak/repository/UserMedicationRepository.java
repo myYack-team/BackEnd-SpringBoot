@@ -78,6 +78,13 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     @Query("SELECT um FROM UserMedication um WHERE um.prescriptionId IN :prescriptionIds")
     List<UserMedication> findByPrescriptionIdInLight(@Param("prescriptionIds") List<Long> prescriptionIds);
 
+    // 일괄 삭제용: 사용자 소유의 활성 약물만 조회 (소유권 검증을 쿼리 조건으로 수행)
+    @Query("SELECT um FROM UserMedication um " +
+            "WHERE um.id IN :ids " +
+            "AND um.user.id = :userId " +
+            "AND um.isActive = true")
+    List<UserMedication> findActiveByIdInAndUserId(@Param("ids") List<Long> ids, @Param("userId") Long userId);
+
     // 여러 사용자의 약물 수 한 번에 집계 (N+1 방지)
     @Query("SELECT um.user.id, COUNT(um) FROM UserMedication um WHERE um.user.id IN :userIds GROUP BY um.user.id")
     List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
