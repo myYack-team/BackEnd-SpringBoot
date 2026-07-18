@@ -27,12 +27,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class DrugApiServiceImpl implements DrugApiService {
 
     private final WebClient webClient;
     private final DrugInfoRepository drugInfoRepository;
     private final DrugCrawlerService drugCrawlerService;
+    private final DrugInfoPersistenceService drugInfoPersistenceService;
 
     @Value("${api.data.go.kr.key:}")
     private String apiKey;
@@ -43,8 +43,10 @@ public class DrugApiServiceImpl implements DrugApiService {
     private static final DateTimeFormatter PERMIT_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final Duration DRUG_API_TIMEOUT = Duration.ofSeconds(30);
 
+    /** 공공데이터 API 레이트리밋 대기 시간 (ms) */
+    private static final long API_RATE_LIMIT_DELAY_MS = 1000;
+
     @Override
-    @Transactional(readOnly = true)
     public List<EasyDrugApiResponse.EasyDrugItem> searchFromApi(String itemName) {
         String url = UriComponentsBuilder.fromHttpUrl(E_DRUG_API_URL)
                 .queryParam("serviceKey", apiKey)
@@ -78,7 +80,6 @@ public class DrugApiServiceImpl implements DrugApiService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public EasyDrugApiResponse.EasyDrugItem searchByItemSeqFromApi(String itemSeq) {
         String url = UriComponentsBuilder.fromHttpUrl(E_DRUG_API_URL)
                 .queryParam("serviceKey", apiKey)
@@ -111,6 +112,7 @@ public class DrugApiServiceImpl implements DrugApiService {
     }
 
     @Override
+    @Transactional
     public List<DrugInfo> searchAndSave(String itemName) {
         List<EasyDrugApiResponse.EasyDrugItem> items = searchFromApi(itemName);
 
@@ -122,35 +124,15 @@ public class DrugApiServiceImpl implements DrugApiService {
                 .map(this::convertToDrugInfo)
                 .collect(Collectors.toList());
 
-        // 기존 데이터가 있으면 업데이트, 없으면 새로 저장
-        for (DrugInfo drugInfo : drugInfos) {
-            drugInfoRepository.findById(drugInfo.getItemSeq())
-                    .ifPresentOrElse(
-                            existing -> existing.updateFromApi(
-                                    drugInfo.getItemName(),
-                                    drugInfo.getDisplayName(),
-                                    drugInfo.getIngredientKr(),
-                                    drugInfo.getEntpName(),
-                                    drugInfo.getEfficacy(),
-                                    drugInfo.getUsage(),
-                                    drugInfo.getWarning(),
-                                    drugInfo.getCaution(),
-                                    drugInfo.getInteraction(),
-                                    drugInfo.getSideEffect(),
-                                    drugInfo.getStorageMethod(),
-                                    drugInfo.getImageUrl(),
-                                    drugInfo.getOpenDate(),
-                                    drugInfo.getApiUpdateDate()
-                            ),
-                            () -> drugInfoRepository.save(drugInfo)
-                    );
-        }
+        // 기존 데이터가 있으면 업데이트, 없으면 새로 저장 (itemSeq 목록 1회 조회)
+        int savedCount = drugInfoPersistenceService.saveEasyDrugPage(drugInfos);
 
-        log.info("약물 정보 저장 완료: {}건", drugInfos.size());
+        log.info("약물 정보 저장 완료: {}건", savedCount);
         return drugInfos;
     }
 
     @Override
+    @Transactional
     public DrugInfo searchByItemSeqAndSave(String itemSeq) {
         // 먼저 DB에서 조회
         return drugInfoRepository.findById(itemSeq)
@@ -203,15 +185,15 @@ public class DrugApiServiceImpl implements DrugApiService {
                         .map(this::convertToDrugInfo)
                         .collect(Collectors.toList());
 
-                drugInfoRepository.saveAll(drugInfos);
-                totalSaved += drugInfos.size();
+                // 페이지 단위 별도 트랜잭션으로 저장 (커넥션 장시간 점유 방지)
+                totalSaved += drugInfoPersistenceService.saveEasyDrugPage(drugInfos);
 
                 log.info("페이지 {} 저장 완료: {}건 (누적: {}건)", pageNo, drugInfos.size(), totalSaved);
 
                 pageNo++;
 
-                // Rate limiting (1초 대기)
-                Thread.sleep(1000);
+                // Rate limiting
+                Thread.sleep(API_RATE_LIMIT_DELAY_MS);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -264,7 +246,6 @@ public class DrugApiServiceImpl implements DrugApiService {
     // === 의약품 허가정보 API 메서드 ===
 
     @Override
-    @Transactional(readOnly = true)
     public List<DrugPermitApiResponse.DrugPermitItem> searchFromPermitApi(String itemName) {
         String url = UriComponentsBuilder.fromHttpUrl(PERMIT_API_URL)
                 .queryParam("serviceKey", apiKey)
@@ -335,36 +316,15 @@ public class DrugApiServiceImpl implements DrugApiService {
                         .map(this::convertFromPermitApi)
                         .collect(Collectors.toList());
 
-                // 기존 데이터가 있으면 업데이트, 없으면 새로 저장
-                for (DrugInfo drugInfo : drugInfos) {
-                    drugInfoRepository.findById(drugInfo.getItemSeq())
-                            .ifPresentOrElse(
-                                    existing -> existing.updateFromPermitApi(
-                                            drugInfo.getItemName(),
-                                            drugInfo.getDisplayName(),
-                                            drugInfo.getIngredientKr(),
-                                            drugInfo.getEntpName(),
-                                            drugInfo.getDrugType(),
-                                            drugInfo.getIngredientName(),
-                                            drugInfo.getEfficacy(),
-                                            drugInfo.getUsage(),
-                                            drugInfo.getCaution(),
-                                            drugInfo.getStorageMethod(),
-                                            drugInfo.getImageUrl(),
-                                            drugInfo.getPermitDate()
-                                    ),
-                                    () -> drugInfoRepository.save(drugInfo)
-                            );
-                }
-
-                totalSaved += drugInfos.size();
+                // 기존 데이터가 있으면 업데이트, 없으면 새로 저장 (페이지 단위 별도 트랜잭션)
+                totalSaved += drugInfoPersistenceService.savePermitDrugPage(drugInfos);
 
                 log.info("허가정보 페이지 {} 저장 완료: {}건 (누적: {}건)", pageNo, drugInfos.size(), totalSaved);
 
                 pageNo++;
 
-                // Rate limiting (1초 대기)
-                Thread.sleep(1000);
+                // Rate limiting
+                Thread.sleep(API_RATE_LIMIT_DELAY_MS);
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -468,6 +428,7 @@ public class DrugApiServiceImpl implements DrugApiService {
     // === 배치 파싱 메서드 ===
 
     @Override
+    @Transactional
     public int reparseIngredientKr() {
         List<DrugInfo> drugsWithoutIngredient = drugInfoRepository.findByIngredientKrIsNull();
         log.info("ingredientKr이 NULL인 약물 수: {}건", drugsWithoutIngredient.size());
