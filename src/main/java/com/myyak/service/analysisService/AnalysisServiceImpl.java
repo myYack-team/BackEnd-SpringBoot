@@ -18,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,7 +33,7 @@ import java.util.*;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class AnalysisServiceImpl implements AnalysisService {
 
     private final UserRepository userRepository;
@@ -46,6 +48,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     private final AnalysisTemporaryNoteRepository analysisTemporaryNoteRepository;
     private final LlmClient llmClient;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${analysis.monthly-limit}")
     private int monthlyLimit;
@@ -306,7 +309,41 @@ public class AnalysisServiceImpl implements AnalysisService {
             """;
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AnalysisResponseDTO.AnalysisResult requestAnalysis(Long userId) {
+        // 1. 데이터 조회/집계 (짧은 트랜잭션 - 쿼터 확인/리셋 포함)
+        AnalysisPreparation prep = transactionTemplate.execute(status -> prepareAnalysis(userId));
+        log.info("[Analysis] LLM 입력 프롬프트 길이: {}", prep.userPrompt().length());
+
+        // 2. LLM 호출 (트랜잭션 외부 - DB 커넥션 미점유)
+        String llmResponse;
+        try {
+            llmResponse = llmClient.generate(SYSTEM_PROMPT, prep.userPrompt());
+            log.info("[Analysis] LLM 응답 길이: {}", llmResponse.length());
+        } catch (Exception e) {
+            log.error("[Analysis] LLM 호출 실패: ", e);
+            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
+        }
+
+        // 3. JSON 추출 및 검증
+        String cleanedResponse = extractJsonFromResponse(llmResponse);
+
+        // 4. 패턴 분석 LLM 호출 (트랜잭션 외부, 실패해도 기본 분석은 진행)
+        String patternAnalysisJson = prep.patternPrompt() != null
+                ? callPatternAnalysisLlm(prep.patternPrompt())
+                : null;
+
+        // 5. 레포트 저장 및 쿼터 사용량 증가 (짧은 쓰기 트랜잭션)
+        return transactionTemplate.execute(status -> completeAnalysis(
+                userId, cleanedResponse, patternAnalysisJson, prep.medicationSnapshot(),
+                prep.startDate(), prep.endDate(), false, null));
+    }
+
+    /**
+     * 분석에 필요한 데이터 조회/집계 및 프롬프트 생성 (트랜잭션 내 수행)
+     * 쿼터 생성/리셋이 발생할 수 있으므로 쓰기 트랜잭션에서 호출되어야 합니다.
+     */
+    private AnalysisPreparation prepareAnalysis(Long userId) {
         User user = findUserById(userId);
 
         // 1. 월간 쿼터 확인 및 리셋 처리
@@ -346,30 +383,31 @@ public class AnalysisServiceImpl implements AnalysisService {
         // 6. 사용자 복용 영양제 조회
         List<UserSupplement> userSupplements = userSupplementRepository.findByUserWithSupplement(user);
 
-        // 7. LLM 입력 JSON 생성
+        // 7. LLM 입력 JSON 생성 (지연 로딩 접근이 있으므로 트랜잭션 내에서 생성)
         String userPrompt = buildUserPrompt(medications, drugInteractions, foodInteractions, userSupplements);
-        log.info("[Analysis] LLM 입력 프롬프트 길이: {}", userPrompt.length());
 
-        // 8. LLM 호출
-        String llmResponse;
-        try {
-            llmResponse = llmClient.generate(SYSTEM_PROMPT, userPrompt);
-            log.info("[Analysis] LLM 응답 길이: {}", llmResponse.length());
-        } catch (Exception e) {
-            log.error("[Analysis] LLM 호출 실패: ", e);
-            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
-        }
-
-        // 9. JSON 추출 및 검증
-        String cleanedResponse = extractJsonFromResponse(llmResponse);
-
-        // 10. 패턴 분석 수행
+        // 8. 패턴 분석 프롬프트 생성 (데이터 부족 시 null)
         LocalDate endDate = LocalDate.now();
         LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
-        String patternAnalysisJson = performPatternAnalysis(userId, startDate, endDate);
+        String patternPrompt = preparePatternAnalysisPrompt(user, startDate, endDate);
 
-        // 11. 레포트 저장
+        // 9. 약물 스냅샷 생성
         String medicationSnapshot = buildMedicationSnapshot(medications);
+
+        return new AnalysisPreparation(userPrompt, patternPrompt, medicationSnapshot, startDate, endDate);
+    }
+
+    /**
+     * 분석 결과 저장 및 쿼터 사용량 증가 (짧은 쓰기 트랜잭션에서 수행)
+     * LLM 호출 동안 트랜잭션이 끊겼으므로 사용자/쿼터를 다시 조회합니다.
+     */
+    private AnalysisResponseDTO.AnalysisResult completeAnalysis(
+            Long userId, String cleanedResponse, String patternAnalysisJson,
+            String medicationSnapshot, LocalDate startDate, LocalDate endDate,
+            boolean isPreviewData, List<AnalysisResponseDTO.DailyCondition> dailyConditions) {
+        User user = findUserById(userId);
+        UserAnalysisQuota quota = getOrCreateQuota(user);
+
         int mechanismGroupCount = countMechanismGroups(cleanedResponse);
         int foodInteractionCount = countFoodInteractions(cleanedResponse);
 
@@ -383,22 +421,46 @@ public class AnalysisServiceImpl implements AnalysisService {
                 .patternAnalysis(patternAnalysisJson)
                 .analysisStartDate(startDate)
                 .analysisEndDate(endDate)
-                .isPreviewData(false)
+                .isPreviewData(isPreviewData)
                 .build();
 
         analysisReportRepository.save(report);
 
-        // 12. 월간 쿼터 사용량 증가
+        // 월간 쿼터 사용량 증가 (레포트 저장 성공 시에만 차감)
         quota.incrementMonthlyUsedCount();
 
-        log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
-                userId, report.getId(), mechanismGroupCount, foodInteractionCount);
+        if (isPreviewData) {
+            log.info("[TestAnalysis] 테스트 분석 완료 - userId: {}, reportId: {}", userId, report.getId());
+        } else {
+            log.info("[Analysis] 분석 완료 - userId: {}, reportId: {}, mechanisms: {}, foods: {}",
+                    userId, report.getId(), mechanismGroupCount, foodInteractionCount);
+        }
 
-        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit);
+        return dailyConditions == null
+                ? AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit)
+                : AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, dailyConditions);
+    }
+
+    /**
+     * 분석 준비 데이터 (트랜잭션 내 조회/집계 결과 - LLM 호출 구간으로 전달)
+     */
+    private record AnalysisPreparation(
+            String userPrompt,
+            String patternPrompt,
+            String medicationSnapshot,
+            LocalDate startDate,
+            LocalDate endDate) {
+    }
+
+    /**
+     * 테스트 분석 준비 데이터 (트랜잭션 내 조회 결과)
+     */
+    private record TestAnalysisPreparation(
+            TestAnalysisScenario scenario,
+            String tempNotesJson) {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AnalysisResponseDTO.ReportList getReportList(Long userId) {
         User user = findUserById(userId);
         List<AnalysisReport> reports = analysisReportRepository.findByUserOrderByAnalysisDateDesc(user);
@@ -406,7 +468,6 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AnalysisResponseDTO.AnalysisResult getReportDetail(Long userId, Long reportId) {
         User user = findUserById(userId);
 
@@ -431,6 +492,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
+    @Transactional
     public void deleteReport(Long userId, Long reportId) {
         User user = findUserById(userId);
 
@@ -443,7 +505,6 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AnalysisResponseDTO.QuotaInfo getQuotaInfo(Long userId) {
         User user = findUserById(userId);
         UserAnalysisQuota quota = userAnalysisQuotaRepository.findByUser(user).orElse(null);
@@ -451,7 +512,6 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public AnalysisResponseDTO.DataSufficiencyCheck checkDataSufficiency(Long userId) {
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         LocalDate thirtyDaysAgoDate = thirtyDaysAgo.toLocalDate();
@@ -493,7 +553,53 @@ public class AnalysisServiceImpl implements AnalysisService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AnalysisResponseDTO.AnalysisResult requestTestAnalysis(Long userId) {
+        // 1. 쿼터 확인 및 임시 메모 조회 (짧은 트랜잭션)
+        TestAnalysisPreparation prep = transactionTemplate.execute(status -> prepareTestAnalysis(userId));
+        TestAnalysisScenario scenario = prep.scenario();
+
+        // 2. LLM 호출 1: 기본 분석 (작용 기전, 음식 상호작용) - 트랜잭션 외부
+        String llmResponse;
+        try {
+            llmResponse = llmClient.generate(SYSTEM_PROMPT, scenario.getUserPromptJson());
+            log.info("[TestAnalysis] 기본 LLM 응답 길이: {}", llmResponse.length());
+        } catch (Exception e) {
+            log.error("[TestAnalysis] 기본 LLM 호출 실패: ", e);
+            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
+        }
+        String cleanedResponse = extractJsonFromResponse(llmResponse);
+
+        // 3. LLM 호출 2: 패턴 분석 - 트랜잭션 외부 (실패해도 기본 분석은 진행)
+        String patternPrompt = scenario.getPatternPromptJson(prep.tempNotesJson());
+        String patternResponse;
+        try {
+            patternResponse = llmClient.generate(PATTERN_ANALYSIS_SYSTEM_PROMPT, patternPrompt);
+            log.info("[TestAnalysis] 패턴 LLM 응답 길이: {}", patternResponse.length());
+        } catch (Exception e) {
+            log.error("[TestAnalysis] 패턴 LLM 호출 실패: ", e);
+            patternResponse = null;
+        }
+        String patternAnalysisJson = patternResponse != null ? extractJsonFromResponse(patternResponse) : null;
+
+        // 4. 레포트 저장 및 쿼터 사용량 증가 (짧은 쓰기 트랜잭션, isPreviewData = true)
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
+        String medicationSnapshot = buildTestMedicationSnapshot(scenario);
+
+        // Mock dailyConditions 생성 (DB에 실제 기록이 없으므로 시나리오에서 직접 생성)
+        List<AnalysisResponseDTO.DailyCondition> mockDailyConditions = scenario.buildDailyConditions();
+
+        return transactionTemplate.execute(status -> completeAnalysis(
+                userId, cleanedResponse, patternAnalysisJson, medicationSnapshot,
+                startDate, endDate, true, mockDailyConditions));
+    }
+
+    /**
+     * 테스트 분석 준비 (트랜잭션 내 수행)
+     * 쿼터 확인/리셋 및 임시 메모 기반 시나리오 선택
+     */
+    private TestAnalysisPreparation prepareTestAnalysis(Long userId) {
         User user = findUserById(userId);
 
         // 1. 월간 쿼터 확인
@@ -511,61 +617,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
         String tempNotesJson = buildTempNotesJsonForTest(tempNotes);
 
-        // 5. LLM 호출 1: 기본 분석 (작용 기전, 음식 상호작용)
-        String llmResponse;
-        try {
-            llmResponse = llmClient.generate(SYSTEM_PROMPT, scenario.getUserPromptJson());
-            log.info("[TestAnalysis] 기본 LLM 응답 길이: {}", llmResponse.length());
-        } catch (Exception e) {
-            log.error("[TestAnalysis] 기본 LLM 호출 실패: ", e);
-            throw new GeneralException(ErrorStatus.ANALYSIS_LLM_ERROR);
-        }
-        String cleanedResponse = extractJsonFromResponse(llmResponse);
-
-        // 6. LLM 호출 2: 패턴 분석
-        String patternPrompt = scenario.getPatternPromptJson(tempNotesJson);
-        String patternResponse;
-        try {
-            patternResponse = llmClient.generate(PATTERN_ANALYSIS_SYSTEM_PROMPT, patternPrompt);
-            log.info("[TestAnalysis] 패턴 LLM 응답 길이: {}", patternResponse.length());
-        } catch (Exception e) {
-            log.error("[TestAnalysis] 패턴 LLM 호출 실패: ", e);
-            patternResponse = null;
-        }
-        String patternAnalysisJson = patternResponse != null ? extractJsonFromResponse(patternResponse) : null;
-
-        // 7. 레포트 저장 (isPreviewData = true)
-        LocalDate endDate = LocalDate.now();
-        LocalDate startDate = endDate.minusDays(PATTERN_ANALYSIS_DAYS - 1);
-        String medicationSnapshot = buildTestMedicationSnapshot(scenario);
-
-        int mechanismGroupCount = countMechanismGroups(cleanedResponse);
-        int foodInteractionCount = countFoodInteractions(cleanedResponse);
-
-        AnalysisReport report = AnalysisReport.builder()
-                .user(user)
-                .analysisDate(LocalDateTime.now())
-                .mechanismGroupCount(mechanismGroupCount)
-                .foodInteractionCount(foodInteractionCount)
-                .medicationSnapshot(medicationSnapshot)
-                .llmResponse(cleanedResponse)
-                .patternAnalysis(patternAnalysisJson)
-                .analysisStartDate(startDate)
-                .analysisEndDate(endDate)
-                .isPreviewData(true)
-                .build();
-
-        analysisReportRepository.save(report);
-
-        // 8. 월간 쿼터 사용량 증가
-        quota.incrementMonthlyUsedCount();
-
-        log.info("[TestAnalysis] 테스트 분석 완료 - userId: {}, reportId: {}", userId, report.getId());
-
-        // 9. Mock dailyConditions 생성 (DB에 실제 기록이 없으므로 시나리오에서 직접 생성)
-        List<AnalysisResponseDTO.DailyCondition> mockDailyConditions = scenario.buildDailyConditions();
-
-        return AnalysisConverter.toAnalysisResult(report, quota, monthlyLimit, mockDailyConditions);
+        return new TestAnalysisPreparation(scenario, tempNotesJson);
     }
 
     // ===== Private Methods =====
@@ -848,11 +900,12 @@ public class AnalysisServiceImpl implements AnalysisService {
     // ===== Pattern Analysis Methods =====
 
     /**
-     * 패턴 분석 수행
-     * 30일간의 복약 기록과 건강 메모를 수집하여 LLM으로 분석
+     * 패턴 분석용 프롬프트 준비 (트랜잭션 내 데이터 조회/집계)
+     * 30일간의 복약 기록과 건강 메모를 수집하여 프롬프트를 생성합니다.
+     * 데이터가 부족한 경우 null 반환 (패턴 분석 생략)
      */
-    private String performPatternAnalysis(Long userId, LocalDate startDate, LocalDate endDate) {
-        User user = findUserById(userId);
+    private String preparePatternAnalysisPrompt(User user, LocalDate startDate, LocalDate endDate) {
+        Long userId = user.getId();
 
         // 1. 30일간 복약 기록 조회
         LocalDateTime startDateTime = startDate.atStartOfDay();
@@ -867,17 +920,24 @@ public class AnalysisServiceImpl implements AnalysisService {
         // 3. 임시 건강 메모 조회
         List<AnalysisTemporaryNote> tempNotes = analysisTemporaryNoteRepository.findByUserOrderByNoteDateDesc(user);
 
-        // 4. 데이터가 부족한 경우 빈 응답 반환
+        // 4. 데이터가 부족한 경우 패턴 분석 생략
         if (intakes.isEmpty() && healthNotes.isEmpty() && tempNotes.isEmpty()) {
             log.info("[PatternAnalysis] 분석할 데이터 부족 - userId: {}", userId);
             return null;
         }
 
-        // 5. LLM 입력 JSON 생성 (임시 메모 포함)
+        // 5. LLM 입력 JSON 생성 (임시 메모 포함, 지연 로딩 접근이 있으므로 트랜잭션 내에서 생성)
         String patternPrompt = buildPatternAnalysisPrompt(intakes, healthNotes, tempNotes, startDate, endDate);
         log.info("[PatternAnalysis] LLM 입력 프롬프트 길이: {}", patternPrompt.length());
 
-        // 5. LLM 호출
+        return patternPrompt;
+    }
+
+    /**
+     * 패턴 분석 LLM 호출 (트랜잭션 외부에서 수행)
+     * 실패해도 기본 분석은 진행되도록 null 반환
+     */
+    private String callPatternAnalysisLlm(String patternPrompt) {
         String patternResponse;
         try {
             patternResponse = llmClient.generate(PATTERN_ANALYSIS_SYSTEM_PROMPT, patternPrompt);
@@ -887,7 +947,6 @@ public class AnalysisServiceImpl implements AnalysisService {
             return null;  // 패턴 분석 실패해도 기본 분석은 진행
         }
 
-        // 6. JSON 추출
         return extractJsonFromResponse(patternResponse);
     }
 
@@ -980,7 +1039,9 @@ public class AnalysisServiceImpl implements AnalysisService {
             return um.getCustomDrugName();
         }
         if (intake.getUserSupplement() != null) {
-            return intake.getUserSupplement().getSupplement().getName();
+            // 영양제 마스터 데이터가 없는 경우 NPE 방지
+            String supplementName = intake.getUserSupplement().getSupplementName();
+            return supplementName != null ? supplementName : "알 수 없는 영양제";
         }
         return null;
     }

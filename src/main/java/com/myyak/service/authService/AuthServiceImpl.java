@@ -2,6 +2,7 @@ package com.myyak.service.authService;
 
 import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
+import com.myyak.converter.AuthConverter;
 import com.myyak.domain.AppSetting;
 import com.myyak.domain.RefreshToken;
 import com.myyak.domain.User;
@@ -28,7 +29,7 @@ import java.util.Optional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class AuthServiceImpl implements AuthService {
 
     public static final String TEST_KAKAO_ID = "TEST_REVIEW_ACCOUNT";
@@ -45,6 +46,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponseDTO.LoginResponse loginWithKakaoCode(String code, String baseUrl) {
         // 1. 인가 코드로 카카오 액세스 토큰 교환 (동적 redirect_uri 사용)
         var kakaoToken = kakaoOAuthService.exchangeCodeForToken(code, baseUrl);
@@ -57,6 +59,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponseDTO.LoginResponse loginWithKakao(AuthRequestDTO.KakaoLoginRequest request) {
         // 카카오에서 사용자 정보 조회 (하위 호환용)
         KakaoUserInfo kakaoUserInfo = kakaoOAuthService.getUserInfo(request.getAccessToken());
@@ -97,18 +100,12 @@ public class AuthServiceImpl implements AuthService {
         saveRefreshToken(user, refreshToken);
 
         // 응답 생성
-        return AuthResponseDTO.LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .accessTokenExpiresIn(jwtProvider.getAccessTokenExpiry())
-                .user(toUserInfo(user))
-                .isNewUser(isNewUser)
-                .termsAgreed(user.getTermsAgreed())
-                .privacyAgreed(user.getPrivacyAgreed())
-                .build();
+        return AuthConverter.toLoginResponse(
+                accessToken, refreshToken, jwtProvider.getAccessTokenExpiry(), user, isNewUser);
     }
 
     @Override
+    @Transactional
     public AuthResponseDTO.TokenResponse refreshToken(AuthRequestDTO.RefreshRequest request) {
         String refreshTokenValue = request.getRefreshToken();
 
@@ -141,14 +138,12 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("토큰 갱신 완료: userId={}", user.getId());
 
-        return AuthResponseDTO.TokenResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .accessTokenExpiresIn(jwtProvider.getAccessTokenExpiry())
-                .build();
+        return AuthConverter.toTokenResponse(
+                newAccessToken, newRefreshToken, jwtProvider.getAccessTokenExpiry());
     }
 
     @Override
+    @Transactional
     public void logout(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
@@ -158,6 +153,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponseDTO.LoginResponse testLogin() {
         // 1. 테스트 로그인 활성화 여부 확인
         boolean isEnabled = appSettingRepository.findBySettingKey(AppSetting.KEY_TEST_LOGIN_ENABLED)
@@ -186,15 +182,8 @@ public class AuthServiceImpl implements AuthService {
         log.info("테스트 로그인 성공: userId={}", user.getId());
 
         // 5. 응답 생성
-        return AuthResponseDTO.LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .accessTokenExpiresIn(jwtProvider.getTestTokenExpiry())
-                .user(toUserInfo(user))
-                .isNewUser(false)
-                .termsAgreed(user.getTermsAgreed())
-                .privacyAgreed(user.getPrivacyAgreed())
-                .build();
+        return AuthConverter.toLoginResponse(
+                accessToken, refreshToken, jwtProvider.getTestTokenExpiry(), user, false);
     }
 
     private void saveTestRefreshToken(User user, String refreshToken) {
@@ -259,21 +248,6 @@ public class AuthServiceImpl implements AuthService {
                     .build();
             refreshTokenRepository.save(newToken);
         }
-    }
-
-    private AuthResponseDTO.UserInfo toUserInfo(User user) {
-        return AuthResponseDTO.UserInfo.builder()
-                .id(user.getId())
-                .kakaoId(user.getKakaoId())
-                .name(user.getName())
-                .email(user.getEmail())
-                .profileImage(user.getProfileImage())
-                .gender(user.getGender())
-                .ageRange(user.getAgeRange())
-                .signupPurposes(user.getSignupPurposes())
-                .fontSize(user.getFontSize())
-                .createdAt(user.getCreatedAt())
-                .build();
     }
 
     /**
