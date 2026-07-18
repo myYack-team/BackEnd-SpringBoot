@@ -2,6 +2,7 @@ package com.myyak.repository;
 
 import com.myyak.domain.FamilyLink;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -42,4 +43,11 @@ public interface FamilyLinkRepository extends JpaRepository<FamilyLink, Long> {
      */
     @Query("SELECT fl FROM FamilyLink fl WHERE fl.guardian.id = :userId OR fl.protectedUser.id = :userId")
     List<FamilyLink> findByGuardianIdOrProtectedUserId(@Param("userId") Long userId);
+
+    /**
+     * 회원 탈퇴 시 보호자/피보호자로 연결된 모든 가족 링크 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM FamilyLink f WHERE f.guardian.id = :userId OR f.protectedUser.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

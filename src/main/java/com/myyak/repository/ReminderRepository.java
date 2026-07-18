@@ -5,6 +5,7 @@ import com.myyak.domain.UserMedication;
 import com.myyak.domain.UserSupplement;
 import com.myyak.domain.enums.MedicationTiming;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -115,4 +116,13 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
            "  OR (us IS NOT NULL AND us.isActive = true))")
     List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time);
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 리마인더 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM Reminder r " +
+           "WHERE r.userMedication.id IN (SELECT m.id FROM UserMedication m WHERE m.user.id = :userId) " +
+           "OR r.userSupplement.id IN (SELECT s.id FROM UserSupplement s WHERE s.user.id = :userId)")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }
