@@ -3,6 +3,7 @@ package com.myyak.repository;
 import com.myyak.domain.FamilyLinkRequest;
 import com.myyak.domain.enums.FamilyLinkRequestStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -37,4 +38,11 @@ public interface FamilyLinkRequestRepository extends JpaRepository<FamilyLinkReq
      * 요청 ID와 요청자 ID로 조회 (취소용)
      */
     Optional<FamilyLinkRequest> findByIdAndRequesterId(Long id, Long requesterId);
+
+    /**
+     * 회원 탈퇴 시 요청자/대상자로 연결된 모든 가족 연결 요청 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM FamilyLinkRequest fr WHERE fr.requester.id = :userId OR fr.target.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

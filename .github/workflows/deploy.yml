@@ -6,6 +6,11 @@ on:
       - main
   workflow_dispatch:  # 수동 실행 허용
 
+# 배포 동시 실행 방지 (연속 머지 시 배포가 겹치지 않도록 직렬화)
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     name: Build and Deploy

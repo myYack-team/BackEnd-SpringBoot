@@ -49,4 +49,11 @@ public interface UserSupplementRepository extends JpaRepository<UserSupplement, 
     // 여러 사용자의 영양제 수 한 번에 집계 (N+1 방지)
     @Query("SELECT us.user.id, COUNT(us) FROM UserSupplement us WHERE us.user.id IN :userIds GROUP BY us.user.id")
     List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
+
+    /**
+     * 회원 탈퇴 시 사용자의 모든 영양제 일괄 삭제
+     */
+    @Modifying
+    @Query("DELETE FROM UserSupplement s WHERE s.user.id = :userId")
+    void deleteAllByUserId(@Param("userId") Long userId);
 }

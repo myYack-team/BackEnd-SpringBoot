@@ -4,8 +4,6 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.converter.UserConverter;
 import com.myyak.domain.User;
-import com.myyak.domain.UserMedication;
-import com.myyak.domain.UserSupplement;
 import com.myyak.repository.*;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
 import com.myyak.util.PhoneHashUtil;
@@ -30,6 +28,14 @@ public class UserServiceImpl implements UserService {
     private final IntakeRepository intakeRepository;
     private final ReminderRepository reminderRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final AnalysisReportRepository analysisReportRepository;
+    private final AnalysisTemporaryNoteRepository analysisTemporaryNoteRepository;
+    private final UserAnalysisQuotaRepository userAnalysisQuotaRepository;
+    private final HealthNoteRepository healthNoteRepository;
+    private final QnAReplyRepository qnAReplyRepository;
+    private final QnARepository qnARepository;
+    private final FamilyLinkRepository familyLinkRepository;
+    private final FamilyLinkRequestRepository familyLinkRequestRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final KakaoOAuthService kakaoOAuthService;
     private final PhoneHashUtil phoneHashUtil;
@@ -81,34 +87,27 @@ public class UserServiceImpl implements UserService {
             kakaoOAuthService.unlinkUserByAdmin(kakaoId);
         }
 
-        // 1. 사용자의 약물 목록 조회
-        List<UserMedication> medications = userMedicationRepository.findByUser(user);
+        // 1. 복용 기록/리마인더 → 약물/영양제/처방전 순으로 벌크 삭제 (FK 참조 순서 준수)
+        intakeRepository.deleteAllByUserId(userId);
+        reminderRepository.deleteAllByUserId(userId);
+        userMedicationRepository.deleteAllByUserId(userId);
+        userSupplementRepository.deleteAllByUserId(userId);
+        prescriptionRepository.deleteAllByUserId(userId);
 
-        // 2. 각 약물의 복용 기록 삭제
-        for (UserMedication medication : medications) {
-            intakeRepository.deleteAll(intakeRepository.findByUserMedication(medication));
-            reminderRepository.deleteByUserMedication(medication);
-        }
+        // 2. 분석/건강 기록 벌크 삭제
+        analysisReportRepository.deleteAllByUserId(userId);
+        analysisTemporaryNoteRepository.deleteAllByUserId(userId);
+        userAnalysisQuotaRepository.deleteAllByUserId(userId);
+        healthNoteRepository.deleteAllByUserId(userId);
 
-        // 3. 사용자의 영양제 목록 조회 및 리마인더 삭제
-        List<UserSupplement> supplements = userSupplementRepository.findByUser(user);
-        for (UserSupplement supplement : supplements) {
-            reminderRepository.deleteByUserSupplement(supplement);
-        }
+        // 3. 문의/가족 연결 벌크 삭제
+        qnAReplyRepository.deleteAllByUserId(userId);
+        qnARepository.deleteAllByUserId(userId);
+        familyLinkRepository.deleteAllByUserId(userId);
+        familyLinkRequestRepository.deleteAllByUserId(userId);
 
-        // 4. 약물 삭제
-        userMedicationRepository.deleteAll(medications);
-
-        // 5. 영양제 삭제
-        userSupplementRepository.deleteAll(supplements);
-
-        // 6. 처방전 삭제
-        prescriptionRepository.deleteAll(prescriptionRepository.findByUserOrderByPrescriptionDateDesc(user));
-
-        // 7. RefreshToken 삭제
+        // 4. RefreshToken 및 사용자 삭제
         refreshTokenRepository.deleteByUser(user);
-
-        // 8. 사용자 삭제
         userRepository.delete(user);
 
         log.info("회원 탈퇴 완료 - userId: {}", userId);
@@ -117,9 +116,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserResponseDTO.NotificationSettings getNotificationSettings(Long userId) {
         User user = findById(userId);
-        return UserResponseDTO.NotificationSettings.builder()
-                .notificationEnabled(user.getNotificationEnabled())
-                .build();
+        return UserConverter.toNotificationSettings(user);
     }
 
     @Override
@@ -128,9 +125,7 @@ public class UserServiceImpl implements UserService {
         User user = findById(userId);
         user.updateNotificationEnabled(request.getNotificationEnabled());
         log.info("알림 설정 변경 - userId: {}, notificationEnabled: {}", userId, request.getNotificationEnabled());
-        return UserResponseDTO.NotificationSettings.builder()
-                .notificationEnabled(user.getNotificationEnabled())
-                .build();
+        return UserConverter.toNotificationSettings(user);
     }
 
     @Override
@@ -160,22 +155,13 @@ public class UserServiceImpl implements UserService {
         log.info("기본정보 설정 완료 - userId: {}, gender: {}, ageRange: {}, purposes: {}",
                 userId, request.getGender(), request.getAgeRange(), signupPurposesStr);
 
-        return UserResponseDTO.ProfileSetupResult.builder()
-                .id(user.getId())
-                .gender(user.getGender())
-                .ageRange(user.getAgeRange())
-                .signupPurposes(request.getSignupPurposes())
-                .build();
+        return UserConverter.toProfileSetupResult(user, request.getSignupPurposes());
     }
 
     @Override
     public UserResponseDTO.AiConsentStatus getAiConsentStatus(Long userId) {
         User user = findById(userId);
-        return UserResponseDTO.AiConsentStatus.builder()
-                .aiDataAgreed(user.getAiDataAgreed())
-                .consentedAt(user.getConsentedAt())
-                .consentVersion(user.getConsentVersion())
-                .build();
+        return UserConverter.toAiConsentStatus(user);
     }
 
     @Override
@@ -185,11 +171,7 @@ public class UserServiceImpl implements UserService {
         user.updateAiConsent(request.getAiDataAgreed(), request.getConsentVersion());
         log.info("AI 데이터 동의 설정 변경 - userId: {}, aiDataAgreed: {}, consentVersion: {}",
                 userId, request.getAiDataAgreed(), request.getConsentVersion());
-        return UserResponseDTO.AiConsentStatus.builder()
-                .aiDataAgreed(user.getAiDataAgreed())
-                .consentedAt(user.getConsentedAt())
-                .consentVersion(user.getConsentVersion())
-                .build();
+        return UserConverter.toAiConsentStatus(user);
     }
 
     @Override
@@ -231,10 +213,7 @@ public class UserServiceImpl implements UserService {
         user.updatePhone(request.getPhone(), phoneHash);
         log.info("전화번호 수정 - userId: {}, phone: {}", userId, maskPhone(request.getPhone()));
 
-        return UserResponseDTO.PhoneUpdateResult.builder()
-                .id(user.getId())
-                .phone(user.getPhone())
-                .build();
+        return UserConverter.toPhoneUpdateResult(user);
     }
 
     /**
