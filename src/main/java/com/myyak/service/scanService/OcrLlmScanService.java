@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,6 +60,7 @@ public class OcrLlmScanService implements ScanService {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
 
     // OCR 텍스트를 구조화하는 LLM 프롬프트
     private static final String STRUCTURE_PROMPT = """
@@ -201,7 +203,7 @@ public class OcrLlmScanService implements ScanService {
                                         return new RuntimeException("Gemini API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseGeminiResponse(response);
 
@@ -237,7 +239,7 @@ public class OcrLlmScanService implements ScanService {
                                         return new RuntimeException("OpenAI API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             return parseOpenAIResponse(response);
 

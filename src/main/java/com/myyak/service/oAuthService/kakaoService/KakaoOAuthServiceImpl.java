@@ -4,6 +4,7 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.web.dto.AuthDTO.KakaoTokenResponse;
 import com.myyak.web.dto.AuthDTO.KakaoUserInfo;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
@@ -25,6 +26,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
 
     private static final String KAKAO_AUTH_URL = "https://kauth.kakao.com";
     private static final String KAKAO_API_URL = "https://kapi.kakao.com";
+    private static final Duration KAKAO_API_TIMEOUT = Duration.ofSeconds(10);
 
     private final WebClient kakaoAuthClient;
     private final WebClient kakaoApiClient;
@@ -35,6 +37,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
     private final String adminKey;
 
     public KakaoOAuthServiceImpl(
+            WebClient webClient,
             @Value("${oauth.kakao.client-id}") String clientId,
             @Value("${oauth.kakao.client-secret}") String clientSecret,
             @Value("${oauth.kakao.redirect-uri}") String redirectUri,
@@ -44,11 +47,11 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
         this.redirectUri = redirectUri;
         this.adminKey = adminKey;
 
-        this.kakaoAuthClient = WebClient.builder()
+        this.kakaoAuthClient = webClient.mutate()
                 .baseUrl(KAKAO_AUTH_URL)
                 .build();
 
-        this.kakaoApiClient = WebClient.builder()
+        this.kakaoApiClient = webClient.mutate()
                 .baseUrl(KAKAO_API_URL)
                 .build();
     }
@@ -113,7 +116,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
                         return Mono.error(new GeneralException(ErrorStatus.AUTH_KAKAO_LOGIN_FAILED));
                     })
                     .bodyToMono(KakaoTokenResponse.class)
-                    .block();
+                    .block(KAKAO_API_TIMEOUT);
 
             log.info("카카오 토큰 교환 성공");
             return tokenResponse;
@@ -145,7 +148,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
                         return Mono.error(new GeneralException(ErrorStatus.AUTH_KAKAO_LOGIN_FAILED));
                     })
                     .bodyToMono(KakaoUserInfo.class)
-                    .block();
+                    .block(KAKAO_API_TIMEOUT);
 
             log.info("카카오 사용자 정보 조회 성공: kakaoId={}", userInfo != null ? userInfo.getId() : null);
             log.debug("카카오 사용자 정보: {}", userInfo);
@@ -178,7 +181,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
                         return Mono.empty(); // 5xx 에러도 무시 (탈퇴 자체는 진행)
                     })
                     .bodyToMono(java.util.Map.class)
-                    .block();
+                    .block(KAKAO_API_TIMEOUT);
 
             if (response != null && response.containsKey("id")) {
                 Long kakaoId = ((Number) response.get("id")).longValue();
@@ -225,7 +228,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
                         return Mono.empty();
                     })
                     .bodyToMono(java.util.Map.class)
-                    .block();
+                    .block(KAKAO_API_TIMEOUT);
 
             if (response != null && response.containsKey("id")) {
                 Long unlinkedKakaoId = ((Number) response.get("id")).longValue();

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,7 @@ public class GeminiLlmAdapter implements LlmClient {
 
     private static final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/";
     private static final String DEFAULT_FALLBACK_MODEL = "gemini-3.5-flash";
+    private static final Duration LLM_API_TIMEOUT = Duration.ofSeconds(120);
 
     @Override
     public String generate(String systemPrompt, String userPrompt) {
@@ -144,7 +146,7 @@ public class GeminiLlmAdapter implements LlmClient {
                                         return new RuntimeException("Gemini API error: " + body);
                                     }))
                     .bodyToMono(String.class)
-                    .block();
+                    .block(LLM_API_TIMEOUT);
 
             long elapsed = System.currentTimeMillis() - startTime;
             log.info("[Gemini] 응답 완료: {}ms", elapsed);
