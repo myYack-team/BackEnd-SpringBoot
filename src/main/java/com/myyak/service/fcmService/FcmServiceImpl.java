@@ -19,7 +19,7 @@ import java.util.List;
 
 @Slf4j
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class FcmServiceImpl implements FcmService {
 
     private static final String NOTIFICATION_TITLE = "마이약";
@@ -42,6 +42,7 @@ public class FcmServiceImpl implements FcmService {
     }
 
     @Override
+    @Transactional
     public void registerToken(Long userId, String fcmToken) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
@@ -50,7 +51,9 @@ public class FcmServiceImpl implements FcmService {
         log.info("FCM 토큰 등록 완료 - userId: {}", userId);
     }
 
+    // 무효 토큰 감지 시 토큰 삭제(쓰기)가 발생할 수 있음
     @Override
+    @Transactional
     public void sendNotification(User user, String title, String body) {
         if (firebaseMessaging == null) {
             log.warn("Firebase가 초기화되지 않아 알림을 발송할 수 없습니다.");
@@ -101,7 +104,9 @@ public class FcmServiceImpl implements FcmService {
         }
     }
 
+    // 내부에서 sendNotification 호출 → 무효 토큰 삭제(쓰기) 가능
     @Override
+    @Transactional
     public void sendMedicationReminder(Reminder reminder) {
         UserMedication medication = reminder.getUserMedication();
         User user = medication.getUser();
@@ -112,7 +117,9 @@ public class FcmServiceImpl implements FcmService {
         sendNotification(user, title, body);
     }
 
+    // 내부에서 sendNotification 호출 → 무효 토큰 삭제(쓰기) 가능
     @Override
+    @Transactional
     public void sendGroupedMedicationReminder(User user, List<Reminder> reminders) {
         if (reminders == null || reminders.isEmpty()) {
             return;
@@ -128,7 +135,9 @@ public class FcmServiceImpl implements FcmService {
         sendNotification(user, NOTIFICATION_TITLE, body);
     }
 
+    // 내부에서 sendNotification 호출 → 무효 토큰 삭제(쓰기) 가능
     @Override
+    @Transactional
     public void sendMissedMedicationReminder(User user, List<Reminder> reminders, LocalTime originalTime) {
         if (reminders == null || reminders.isEmpty()) {
             return;
@@ -221,7 +230,9 @@ public class FcmServiceImpl implements FcmService {
         }
     }
 
+    // 내부에서 sendNotification 호출 → 무효 토큰 삭제(쓰기) 가능
     @Override
+    @Transactional
     public void sendFamilyMissedMedicationReminder(User guardian, User protectedUser, List<Reminder> reminders, LocalTime originalTime) {
         if (reminders == null || reminders.isEmpty()) {
             return;

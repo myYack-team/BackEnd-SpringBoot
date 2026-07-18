@@ -23,13 +23,14 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+@Transactional(readOnly = true)
 public class HealthNoteServiceImpl implements HealthNoteService {
 
     private final HealthNoteRepository healthNoteRepository;
     private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public HealthNoteResponseDTO.CreateResult createNote(Long userId, HealthNoteRequestDTO.CreateRequest request) {
         User user = findUserById(userId);
 
@@ -48,7 +49,6 @@ public class HealthNoteServiceImpl implements HealthNoteService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public HealthNoteResponseDTO.Detail getNote(Long userId, LocalDate date) {
         User user = findUserById(userId);
 
@@ -58,6 +58,7 @@ public class HealthNoteServiceImpl implements HealthNoteService {
     }
 
     @Override
+    @Transactional
     public HealthNoteResponseDTO.UpdateResult updateNote(Long userId, LocalDate date, HealthNoteRequestDTO.UpdateRequest request) {
         User user = findUserById(userId);
 
@@ -73,6 +74,7 @@ public class HealthNoteServiceImpl implements HealthNoteService {
     }
 
     @Override
+    @Transactional
     public void deleteNote(Long userId, LocalDate date) {
         User user = findUserById(userId);
 
@@ -86,7 +88,6 @@ public class HealthNoteServiceImpl implements HealthNoteService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public HealthNoteResponseDTO.NoteList getNotesByDateRange(Long userId, LocalDate startDate, LocalDate endDate) {
         User user = findUserById(userId);
 
