@@ -20,11 +20,6 @@ public interface AnalysisReportRepository extends JpaRepository<AnalysisReport, 
     Optional<AnalysisReport> findByIdAndUser(Long id, User user);
 
     /**
-     * 사용자의 레포트 개수
-     */
-    long countByUser(User user);
-
-    /**
      * 사용자의 레포트 삭제
      */
     void deleteByIdAndUser(Long id, User user);

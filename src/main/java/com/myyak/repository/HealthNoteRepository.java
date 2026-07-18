@@ -38,16 +38,6 @@ public interface HealthNoteRepository extends JpaRepository<HealthNote, Long> {
     void deleteByUserAndNoteDate(User user, LocalDate noteDate);
 
     /**
-     * 특정 사용자의 날짜 범위 메모 조회 (최신 순)
-     */
-    @Query("SELECT hn FROM HealthNote hn WHERE hn.user = :user AND hn.noteDate BETWEEN :startDate AND :endDate ORDER BY hn.noteDate DESC")
-    List<HealthNote> findByUserAndNoteDateBetweenOrderByNoteDateDesc(
-            @Param("user") User user,
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate
-    );
-
-    /**
      * 사용자 ID로 날짜 범위 메모 조회 (패턴 분석용)
      */
     @Query("SELECT hn FROM HealthNote hn WHERE hn.user.id = :userId AND hn.noteDate BETWEEN :startDate AND :endDate ORDER BY hn.noteDate ASC")

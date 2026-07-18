@@ -10,6 +10,4 @@ import java.util.Optional;
 public interface AppSettingRepository extends JpaRepository<AppSetting, Long> {
 
     Optional<AppSetting> findBySettingKey(String settingKey);
-
-    boolean existsBySettingKey(String settingKey);
 }
