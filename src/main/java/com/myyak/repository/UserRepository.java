@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -46,4 +48,35 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 전화번호 해시 존재 여부 확인
      */
     boolean existsByPhoneHash(String phoneHash);
+
+    /**
+     * 특정 시점 이후 가입한 사용자 수 조회
+     */
+    long countByCreatedAtAfter(LocalDateTime dateTime);
+
+    /**
+     * 성별 분포 집계
+     */
+    @Query("SELECT u.gender, COUNT(u) FROM User u GROUP BY u.gender")
+    List<Object[]> countGroupByGender();
+
+    /**
+     * 연령대 분포 집계
+     */
+    @Query("SELECT u.ageRange, COUNT(u) FROM User u GROUP BY u.ageRange")
+    List<Object[]> countGroupByAgeRange();
+
+    /**
+     * 가입목적 컬럼만 조회 (콤마 구분 문자열이라 집계는 메모리에서 처리)
+     */
+    @Query("SELECT u.signupPurposes FROM User u WHERE u.signupPurposes IS NOT NULL")
+    List<String> findAllSignupPurposes();
+
+    /**
+     * 일자별 가입자 수 집계 - Native Query
+     */
+    @Query(value = "SELECT DATE(created_at) AS signup_date, COUNT(*) AS signup_count " +
+            "FROM users WHERE created_at >= :since " +
+            "GROUP BY DATE(created_at)", nativeQuery = true)
+    List<Object[]> countDailySignups(@Param("since") LocalDateTime since);
 }

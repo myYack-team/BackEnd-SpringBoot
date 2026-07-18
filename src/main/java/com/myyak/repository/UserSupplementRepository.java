@@ -4,6 +4,7 @@ import com.myyak.domain.Supplement;
 import com.myyak.domain.User;
 import com.myyak.domain.UserSupplement;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -39,4 +40,13 @@ public interface UserSupplementRepository extends JpaRepository<UserSupplement, 
     // 특정 영양제를 선택한 사용자 수
     @Query("SELECT COUNT(us) FROM UserSupplement us WHERE us.supplement = :supplement AND us.isActive = true")
     int countActiveUsersBySupplement(@Param("supplement") Supplement supplement);
+
+    // 특정 영양제의 UserSupplement 일괄 삭제 (삭제된 수 반환)
+    @Modifying
+    @Query("DELETE FROM UserSupplement us WHERE us.supplement = :supplement")
+    int deleteBySupplement(@Param("supplement") Supplement supplement);
+
+    // 여러 사용자의 영양제 수 한 번에 집계 (N+1 방지)
+    @Query("SELECT us.user.id, COUNT(us) FROM UserSupplement us WHERE us.user.id IN :userIds GROUP BY us.user.id")
+    List<Object[]> countByUserIds(@Param("userIds") List<Long> userIds);
 }
