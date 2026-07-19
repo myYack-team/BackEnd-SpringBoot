@@ -265,12 +265,12 @@ public class FamilyServiceImpl implements FamilyService {
             List<Intake> dayIntakes = intakesByDate.getOrDefault(date, List.of());
             int dailyTaken = Math.min(dayIntakes.size(), dailyScheduled);
 
-            // 상태 결정
+            // 상태 결정 (예정 복약이 없는 날은 미래/과거 여부와 무관하게 NONE)
             String status;
-            if (date.isAfter(today)) {
-                status = "PENDING";
-            } else if (dailyScheduled == 0) {
+            if (dailyScheduled == 0) {
                 status = "NONE";
+            } else if (date.isAfter(today)) {
+                status = "PENDING";
             } else if (dailyTaken == dailyScheduled) {
                 status = "COMPLETE";
             } else if (dailyTaken > 0) {
