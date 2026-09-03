@@ -29,7 +29,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
            "WHERE ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
            "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > :today)) " +
-           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
+           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true " +
+           "        AND (us.endDate IS NULL OR us.endDate >= :today)))")
     List<Reminder> findByUserId(@Param("userId") Long userId, @Param("today") LocalDate today);
 
     /**
@@ -67,7 +68,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "WHERE r.time = :time AND r.enabled = true " +
            "AND ((um IS NOT NULL AND um.isActive = true " +
            "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > :today)) " +
-           "  OR (us IS NOT NULL AND us.isActive = true))")
+           "  OR (us IS NOT NULL AND us.isActive = true " +
+           "        AND (us.endDate IS NULL OR us.endDate >= :today)))")
     List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time, @Param("today") LocalDate today);
 
     /**
