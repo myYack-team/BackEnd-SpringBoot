@@ -14,6 +14,11 @@ public interface FcmService {
     void registerToken(Long userId, String fcmToken);
 
     /**
+     * FCM 토큰 해제 (로그아웃 등으로 더 이상 이 사용자에게 알림을 보내지 않아야 할 때)
+     */
+    void unregisterToken(Long userId);
+
+    /**
      * 단건 푸시 알림 발송
      */
     void sendNotification(User user, String title, String body);

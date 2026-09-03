@@ -109,6 +109,10 @@ public class User extends BaseEntity {
         this.fcmToken = fcmToken;
     }
 
+    public void clearFcmToken() {
+        this.fcmToken = null;
+    }
+
     public void updateNotificationEnabled(Boolean notificationEnabled) {
         this.notificationEnabled = notificationEnabled;
     }
