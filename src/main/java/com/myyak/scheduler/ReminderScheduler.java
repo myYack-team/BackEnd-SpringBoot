@@ -42,7 +42,10 @@ public class ReminderScheduler {
         LocalTime now = LocalTime.now().truncatedTo(ChronoUnit.MINUTES);
 
         // 의약품 + 영양제 통합 쿼리
-        List<Reminder> reminders = reminderRepository.findAllActiveByTimeAndEnabledTrue(now);
+        LocalDate today = LocalDate.now();
+
+        // 종료일 판정은 DB 시간대가 아닌 애플리케이션 기준일로 수행
+        List<Reminder> reminders = reminderRepository.findAllActiveByTimeAndEnabledTrue(now, today);
 
         if (reminders.isEmpty()) {
             return;
@@ -81,7 +84,7 @@ public class ReminderScheduler {
         LocalDate today = LocalDate.now();
 
         // 30분 전 시간에 알림이 있었던 Reminder 조회
-        List<Reminder> reminders = reminderRepository.findAllActiveByTimeAndEnabledTrue(originalTime);
+        List<Reminder> reminders = reminderRepository.findAllActiveByTimeAndEnabledTrue(originalTime, today);
 
         if (reminders.isEmpty()) {
             return;
