@@ -51,6 +51,16 @@ public class FcmServiceImpl implements FcmService {
         log.info("FCM 토큰 등록 완료 - userId: {}", userId);
     }
 
+    @Override
+    @Transactional
+    public void unregisterToken(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
+
+        user.clearFcmToken();
+        log.info("FCM 토큰 해제 완료 - userId: {}", userId);
+    }
+
     // 무효 토큰 감지 시 토큰 삭제(쓰기)가 발생할 수 있음
     @Override
     @Transactional
@@ -62,7 +72,7 @@ public class FcmServiceImpl implements FcmService {
 
         String fcmToken = user.getFcmToken();
         if (fcmToken == null || fcmToken.isBlank()) {
-            log.warn("FCM 토큰이 없어 알림을 발송할 수 없습니다.");
+            log.warn("FCM 토큰이 없어 알림을 발송할 수 없습니다. - userId: {}", user.getId());
             return;
         }
 

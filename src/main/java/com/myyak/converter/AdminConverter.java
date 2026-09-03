@@ -60,7 +60,8 @@ public class AdminConverter {
     public static AdminResponseDTO.UserStats toUserStats(long total, long today, long week, long month,
                                                          Map<String, Long> byGender,
                                                          Map<String, Long> byAgeGroup,
-                                                         Map<String, Long> bySignupPurpose) {
+                                                         Map<String, Long> bySignupPurpose,
+                                                         long reminderUsers, long pushReachableUsers) {
         return AdminResponseDTO.UserStats.builder()
                 .total(total)
                 .today(today)
@@ -69,6 +70,8 @@ public class AdminConverter {
                 .byGender(byGender)
                 .byAgeGroup(byAgeGroup)
                 .bySignupPurpose(bySignupPurpose)
+                .reminderUsers(reminderUsers)
+                .pushReachableUsers(pushReachableUsers)
                 .build();
     }
 
