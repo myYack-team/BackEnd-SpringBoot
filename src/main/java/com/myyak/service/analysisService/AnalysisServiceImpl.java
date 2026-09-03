@@ -355,7 +355,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         }
 
         // 2. 사용자 복용 약물 조회
-        List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user);
+        List<UserMedication> medications = userMedicationRepository.findByUserWithDrugInfo(user, LocalDate.now());
         if (medications.isEmpty()) {
             throw new GeneralException(ErrorStatus.ANALYSIS_NO_MEDICATIONS);
         }

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.util.List;
 
 public interface ReminderRepository extends JpaRepository<Reminder, Long> {
@@ -27,9 +28,10 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.supplement " +
            "WHERE ((um IS NOT NULL AND um.user.id = :userId AND um.isActive = true " +
-           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
-           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true))")
-    List<Reminder> findByUserId(@Param("userId") Long userId);
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > :today)) " +
+           "  OR (us IS NOT NULL AND us.user.id = :userId AND us.isActive = true " +
+           "        AND (us.endDate IS NULL OR us.endDate >= :today)))")
+    List<Reminder> findByUserId(@Param("userId") Long userId, @Param("today") LocalDate today);
 
     /**
      * 약물 + 영양제 리마인더 통합 조회 (비활성 포함, 캘린더/히스토리용)
@@ -58,15 +60,17 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
     /**
      * 특정 시간의 활성화된 알림 조회 (User, DrugInfo, Supplement까지 Fetch Join)
      * 스케줄러에서 사용 - LazyInitializationException 방지
+     * 날짜 판정은 DB 시간대(UTC)가 아닌 애플리케이션 기준일(:today)로 수행
      */
     @Query("SELECT r FROM Reminder r " +
            "LEFT JOIN FETCH r.userMedication um LEFT JOIN FETCH um.user LEFT JOIN FETCH um.drugInfo " +
            "LEFT JOIN FETCH r.userSupplement us LEFT JOIN FETCH us.user LEFT JOIN FETCH us.supplement " +
            "WHERE r.time = :time AND r.enabled = true " +
            "AND ((um IS NOT NULL AND um.isActive = true " +
-           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)) " +
-           "  OR (us IS NOT NULL AND us.isActive = true))")
-    List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time);
+           "        AND um.remainingCount > 0 AND (um.endDate IS NULL OR um.endDate > :today)) " +
+           "  OR (us IS NOT NULL AND us.isActive = true " +
+           "        AND (us.endDate IS NULL OR us.endDate >= :today)))")
+    List<Reminder> findAllActiveByTimeAndEnabledTrue(@Param("time") LocalTime time, @Param("today") LocalDate today);
 
     /**
      * 회원 탈퇴 시 사용자의 모든 리마인더 일괄 삭제

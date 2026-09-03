@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,7 +87,7 @@ public class MedicationServiceImpl implements MedicationService {
         User user = userService.findById(userId);
 
         // 1. UserMedication만 조회 (DrugInfo의 TEXT 컬럼 제외)
-        List<UserMedication> medications = userMedicationRepository.findByUserActiveOnly(user);
+        List<UserMedication> medications = userMedicationRepository.findByUserActiveOnly(user, LocalDate.now());
 
         if (medications.isEmpty()) {
             return MedicationConverter.toList(medications, Map.of(), Map.of());
@@ -215,7 +216,7 @@ public class MedicationServiceImpl implements MedicationService {
         User user = userService.findById(userId);
 
         // 사용자의 활성 약물 중 drugItemSeq가 일치하는 것 찾기
-        List<UserMedication> userMedications = userMedicationRepository.findByUserWithDrugInfo(user);
+        List<UserMedication> userMedications = userMedicationRepository.findByUserWithDrugInfo(user, LocalDate.now());
 
         List<MedicationResponseDTO.DuplicateMedication> duplicates = drugItemSeqs.stream()
                 .flatMap(itemSeq -> userMedications.stream()

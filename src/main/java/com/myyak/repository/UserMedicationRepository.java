@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface UserMedicationRepository extends JpaRepository<UserMedication, Long> {
@@ -19,16 +20,16 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
             "WHERE um.user = :user " +
             "AND um.isActive = true " +
             "AND um.remainingCount > 0 " +
-            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
-    List<UserMedication> findByUserWithDrugInfo(@Param("user") User user);
+            "AND (um.endDate IS NULL OR um.endDate > :today)")
+    List<UserMedication> findByUserWithDrugInfo(@Param("user") User user, @Param("today") LocalDate today);
 
     // DrugInfo 없이 조회 (목록용) - DrugInfo는 별도 경량 쿼리로 조회
     @Query("SELECT um FROM UserMedication um " +
             "WHERE um.user = :user " +
             "AND um.isActive = true " +
             "AND um.remainingCount > 0 " +
-            "AND (um.endDate IS NULL OR um.endDate > CURRENT_DATE)")
-    List<UserMedication> findByUserActiveOnly(@Param("user") User user);
+            "AND (um.endDate IS NULL OR um.endDate > :today)")
+    List<UserMedication> findByUserActiveOnly(@Param("user") User user, @Param("today") LocalDate today);
 
     // 처방전 ID로 약물 목록 조회
     @Query("SELECT um FROM UserMedication um LEFT JOIN FETCH um.drugInfo WHERE um.prescriptionId = :prescriptionId")

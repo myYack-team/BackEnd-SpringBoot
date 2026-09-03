@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -29,7 +30,7 @@ public class ReminderServiceImpl implements ReminderService {
     @Override
     public ReminderResponseDTO.ReminderList getReminders(Long userId) {
         userService.findById(userId);
-        List<Reminder> reminders = reminderRepository.findByUserId(userId);
+        List<Reminder> reminders = reminderRepository.findByUserId(userId, LocalDate.now());
         return ReminderConverter.toList(reminders);
     }
 
