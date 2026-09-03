@@ -72,7 +72,7 @@ public class FcmServiceImpl implements FcmService {
 
         String fcmToken = user.getFcmToken();
         if (fcmToken == null || fcmToken.isBlank()) {
-            log.warn("FCM 토큰이 없어 알림을 발송할 수 없습니다.");
+            log.warn("FCM 토큰이 없어 알림을 발송할 수 없습니다. - userId: {}", user.getId());
             return;
         }
 
