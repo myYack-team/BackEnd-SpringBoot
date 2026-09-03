@@ -187,7 +187,12 @@ public class AdminServiceImpl implements AdminService {
             bySignupPurpose.put(purpose.name(), count);
         }
 
-        return AdminConverter.toUserStats(total, today, week, month, byGender, byAgeGroup, bySignupPurpose);
+        // 알림 도달 가능 지표 (활성 리마인더 보유자 중 FCM 토큰 등록자)
+        long reminderUsers = userRepository.countUsersWithActiveReminder();
+        long pushReachableUsers = userRepository.countPushReachableUsersWithActiveReminder();
+
+        return AdminConverter.toUserStats(total, today, week, month, byGender, byAgeGroup, bySignupPurpose,
+                reminderUsers, pushReachableUsers);
     }
 
     @Override

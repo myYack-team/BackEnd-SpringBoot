@@ -72,4 +72,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
             "FROM users WHERE created_at >= :since " +
             "GROUP BY DATE(created_at)", nativeQuery = true)
     List<Object[]> countDailySignups(@Param("since") LocalDateTime since);
+
+    /**
+     * 활성 리마인더를 보유한 사용자 수
+     */
+    @Query("SELECT COUNT(DISTINCT u.id) FROM User u WHERE u.id IN " +
+           "(SELECT um.user.id FROM Reminder r JOIN r.userMedication um WHERE r.enabled = true AND um.isActive = true) " +
+           "OR u.id IN (SELECT us.user.id FROM Reminder r2 JOIN r2.userSupplement us WHERE r2.enabled = true AND us.isActive = true)")
+    long countUsersWithActiveReminder();
+
+    /**
+     * 활성 리마인더를 보유하고 FCM 토큰이 등록된 사용자 수 (푸시 도달 가능)
+     */
+    @Query("SELECT COUNT(DISTINCT u.id) FROM User u WHERE u.fcmToken IS NOT NULL AND (u.id IN " +
+           "(SELECT um.user.id FROM Reminder r JOIN r.userMedication um WHERE r.enabled = true AND um.isActive = true) " +
+           "OR u.id IN (SELECT us.user.id FROM Reminder r2 JOIN r2.userSupplement us WHERE r2.enabled = true AND us.isActive = true))")
+    long countPushReachableUsersWithActiveReminder();
 }

@@ -73,6 +73,8 @@ public class AdminResponseDTO {
         private Map<String, Long> byGender;
         private Map<String, Long> byAgeGroup;
         private Map<String, Long> bySignupPurpose;
+        private long reminderUsers;        // 활성 리마인더 보유 사용자 수
+        private long pushReachableUsers;   // 그중 FCM 토큰 등록 사용자 수
     }
 
     /**
