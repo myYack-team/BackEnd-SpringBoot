@@ -148,6 +148,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
 
+        // 공용 기기에서 다음 사용자에게 알림이 전달되지 않도록 토큰 해제
+        user.clearFcmToken();
         refreshTokenRepository.deleteByUser(user);
         log.info("로그아웃 완료: userId={}", userId);
     }
