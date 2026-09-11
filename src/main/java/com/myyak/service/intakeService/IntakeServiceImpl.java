@@ -47,8 +47,8 @@ public class IntakeServiceImpl implements IntakeService {
         MedicationTiming timing = request.getTiming();
         IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
 
-        // 대상 약물 일괄 조회 후 존재/소유권 검증
-        List<UserMedication> medications = userMedicationRepository.findAllById(request.getMedicationIds());
+        // 대상 약물을 배타 락으로 일괄 조회해 동시 요청을 직렬화한 뒤 존재/소유권 검증
+        List<UserMedication> medications = userMedicationRepository.findAllByIdInForUpdate(request.getMedicationIds());
         if (medications.size() != request.getMedicationIds().size()) {
             throw new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND);
         }
