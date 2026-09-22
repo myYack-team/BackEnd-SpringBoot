@@ -34,9 +34,24 @@ spring:
       name: disabled
       password: disabled
 
+  # Redis 설정 (OAuth state 및 일회성 인증 코드)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD:YOUR_REDIS_PASSWORD}
+      connect-timeout: 2s
+      timeout: 2s
+
 # 서버 설정
 server:
   port: 8080
+
+# 임시 인증 데이터 키 네임스페이스 (환경별로 고정)
+auth:
+  temporary-store:
+    key-prefix: ${AUTH_REDIS_KEY_PREFIX:myyak:local:auth:v1}
 
 # JWT 설정
 jwt:

@@ -1,0 +1,63 @@
+name: Redis Auth Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'build.gradle'
+      - 'compose.redis.yaml'
+      - 'docs/REDIS_AUTH_OPERATIONS.md'
+      - 'scripts/redis/**'
+      - 'src/main/java/com/myyak/apiPayload/code/status/ErrorStatus.java'
+      - 'src/main/java/com/myyak/service/authService/**'
+      - 'src/main/java/com/myyak/service/oAuthService/kakaoService/KakaoOAuthServiceImpl.java'
+      - 'src/main/java/com/myyak/web/controller/AuthController.java'
+      - 'src/main/resources/application.yaml.example'
+      - 'src/test/java/com/myyak/service/authService/**'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/redis-auth-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redis-auth-test:
+    name: Redis authentication store
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Run Redis authentication tests
+        env:
+          REDIS_INTEGRATION_TEST: 'true'
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: '6379'
+        run: |
+          chmod +x ./gradlew
+          ./gradlew test \
+            --tests "com.myyak.service.authService.OAuthStateStoreTest" \
+            --tests "com.myyak.service.authService.AuthCodeStoreTest" \
+            --tests "com.myyak.service.authService.RedisTemporaryAuthStoreIntegrationTest" \
+            --no-daemon

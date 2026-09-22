@@ -1,21 +1,22 @@
 package com.myyak.service.authService;
 
+import com.myyak.service.authService.store.TemporaryAuthStore;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
+import java.time.Duration;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OAuthStateStore {
 
-    private static final long STATE_EXPIRY_SECONDS = 600; // 10 minutes
-    private final ConcurrentHashMap<String, StateEntry> stateStore = new ConcurrentHashMap<>();
+    static final Duration STATE_TTL = Duration.ofMinutes(10);
+    static final String KEY_PREFIX = "oauth-state:";
 
-    public record StateEntry(String appRedirectUri, Instant createdAt) {}
+    private final TemporaryAuthStore temporaryAuthStore;
 
     /**
      * Creates a new state token and stores it with the app redirect URI
@@ -24,9 +25,8 @@ public class OAuthStateStore {
      */
     public String createState(String appRedirectUri) {
         String state = UUID.randomUUID().toString();
-        StateEntry entry = new StateEntry(appRedirectUri, Instant.now());
-        stateStore.put(state, entry);
-        log.debug("Created OAuth state: {} for redirect URI: {}", state, appRedirectUri);
+        temporaryAuthStore.put(KEY_PREFIX + state, appRedirectUri, STATE_TTL);
+        log.debug("Created OAuth state");
         return state;
     }
 
@@ -36,42 +36,18 @@ public class OAuthStateStore {
      * @return The associated app redirect URI, or null if invalid/expired
      */
     public String validateAndConsume(String state) {
-        if (state == null) {
-            log.warn("Null state token provided");
+        if (state == null || state.isBlank()) {
+            log.warn("Empty OAuth state provided");
             return null;
         }
 
-        StateEntry entry = stateStore.remove(state);
-        if (entry == null) {
-            log.warn("State token not found or already used: {}", state);
+        String appRedirectUri = temporaryAuthStore.consume(KEY_PREFIX + state);
+        if (appRedirectUri == null) {
+            log.warn("OAuth state not found, expired, or already used");
             return null;
         }
 
-        Instant now = Instant.now();
-        if (now.isAfter(entry.createdAt().plusSeconds(STATE_EXPIRY_SECONDS))) {
-            log.warn("State token expired: {}", state);
-            return null;
-        }
-
-        log.debug("State token validated and consumed: {}", state);
-        return entry.appRedirectUri();
-    }
-
-    /**
-     * Cleanup expired state entries every 5 minutes
-     */
-    @Scheduled(fixedRate = 300000)
-    public void cleanupExpiredStates() {
-        Instant now = Instant.now();
-        long initialSize = stateStore.size();
-
-        stateStore.entrySet().removeIf(entry ->
-                now.isAfter(entry.getValue().createdAt().plusSeconds(STATE_EXPIRY_SECONDS))
-        );
-
-        long removedCount = initialSize - stateStore.size();
-        if (removedCount > 0) {
-            log.info("Cleaned up {} expired OAuth state entries", removedCount);
-        }
+        log.debug("OAuth state validated and consumed");
+        return appRedirectUri;
     }
 }

@@ -7,6 +7,7 @@ import com.myyak.service.authService.AuthCodeStore;
 import com.myyak.service.authService.AuthService;
 import com.myyak.service.authService.OAuthStateStore;
 import com.myyak.service.authService.RedirectUriValidator;
+import com.myyak.service.authService.store.TemporaryAuthStoreException;
 import com.myyak.web.dto.AuthDTO.AuthRequestDTO;
 import com.myyak.web.dto.AuthDTO.AuthResponseDTO;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,15 +57,15 @@ public class AuthController {
         String validatedUri = app_redirect_uri;
         if (validatedUri == null || validatedUri.isBlank() || !redirectUriValidator.isAllowed(validatedUri)) {
             validatedUri = redirectUriValidator.getDefaultRedirectUri();
-            log.warn("Invalid or missing app_redirect_uri, using default: {}", validatedUri);
+            log.warn("Invalid or missing app_redirect_uri, using default redirect URI");
         }
 
         // 2. Create state with validated URI
         String state = oAuthStateStore.createState(validatedUri);
-        log.info("Created OAuth state for redirect URI: {}", validatedUri);
+        log.info("Created OAuth state");
 
         String authUrl = authService.getKakaoAuthorizationUrl(baseUrl, state);
-        log.info("카카오 로그인 페이지로 리다이렉트: {}, baseUrl: {}", authUrl, baseUrl);
+        log.info("카카오 로그인 페이지로 리다이렉트: baseUrl={}", baseUrl);
         response.sendRedirect(authUrl);
     }
 
@@ -110,13 +111,13 @@ public class AuthController {
         // 1. Validate and consume state (CSRF protection)
         String appRedirectUri = oAuthStateStore.validateAndConsume(state);
         if (appRedirectUri == null) {
-            log.error("Invalid or expired OAuth state: {}", state);
+            log.error("Invalid or expired OAuth state");
             String fallbackUri = redirectUriValidator.getDefaultRedirectUri();
             String redirectUrl = fallbackUri + "?error=" + URLEncoder.encode("잘못된 요청입니다", StandardCharsets.UTF_8);
             response.sendRedirect(redirectUrl);
             return;
         }
-        log.info("OAuth state validated, redirect URI: {}", appRedirectUri);
+        log.info("OAuth state validated");
 
         // 2. Handle OAuth errors from Kakao
         if (error != null) {
@@ -152,13 +153,15 @@ public class AuthController {
 
             // 6. Redirect with auth code only (NO tokens in URL)
             String redirectUrl = appRedirectUri + "?code=" + authCode;
-            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}, code={}", loginResponse.isNewUser(), authCode);
+            log.info("카카오 로그인 성공, 앱으로 리다이렉트: isNewUser={}", loginResponse.isNewUser());
             response.sendRedirect(redirectUrl);
 
+        } catch (TemporaryAuthStoreException e) {
+            throw e;
         } catch (Exception e) {
             log.error("카카오 로그인 처리 실패", e);
-            String errorMessage = e.getMessage() != null ? e.getMessage() : "로그인 처리 실패";
-            String redirectUrl = appRedirectUri + "?error=" + URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+            String redirectUrl = appRedirectUri + "?error="
+                    + URLEncoder.encode("로그인 처리에 실패했습니다", StandardCharsets.UTF_8);
             response.sendRedirect(redirectUrl);
         }
     }
