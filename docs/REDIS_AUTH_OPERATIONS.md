@@ -6,16 +6,35 @@
 
 운영 EC2는 `t4g.micro`(ARM64, RAM 약 1 GiB)다. Redis는 Docker 없이 네이티브 systemd 서비스로 실행하고 `maxmemory 32mb`, `noeviction`, RDB/AOF 비활성화로 시작한다. `maxmemory`는 Redis 프로세스 전체 RSS 제한이 아니므로 배포 후 RSS, swap in/out, 지연, OOM을 함께 확인한다.
 
-2026-09-22 기준 Redis 7.4 계열의 보안 패치 버전은 7.4.11이다. 설치 전에 공식 패키지 저장소에서 ARM64용 7.4.11 후보가 제공되는지 확인하고 해당 버전을 고정한다. 다른 버전을 사용할 경우 GETDEL(6.2 이상), ACL, 현재 보안 지원 여부를 다시 확인한다.
+2026-09-22 기준 Redis 7.4 계열의 보안 패치 버전은 7.4.11이다. Redis 공식 APT 저장소의 Ubuntu 22.04 ARM64 인덱스에서 `redis-server`와 `redis-tools`의 `6:7.4.11` 패키지를 확인했다. 설치 직전에도 후보가 남아 있는지 다시 확인하고 해당 버전을 고정한다. 다른 버전을 사용할 경우 GETDEL(6.2 이상), ACL, 현재 보안 지원 여부를 다시 확인한다.
 
 ## 운영 설치 준비
 
-1. Redis 공식 APT 저장소를 등록한 뒤 `apt-cache madison redis-server`로 설치 가능한 버전과 아키텍처를 확인한다.
-2. 검증한 7.4.11 패키지를 버전 지정해 설치한다. 최신 버전으로 자동 이동하는 무고정 설치는 사용하지 않는다.
+1. Redis 공식 APT 저장소를 등록한다.
+
+   ```bash
+   sudo apt-get install lsb-release curl gpg
+   curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+   sudo chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+   echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+   sudo apt-get update
+   ```
+
+2. 후보와 아키텍처를 확인하고 검증한 버전을 지정해 설치·고정한다.
+
+   ```bash
+   dpkg --print-architecture
+   apt-cache madison redis-server redis-tools
+   sudo apt-get install redis-server=6:7.4.11 redis-tools=6:7.4.11
+   sudo apt-mark hold redis-server redis-tools
+   ```
+
 3. [myyak-redis.conf](../scripts/redis/myyak-redis.conf)를 `/etc/redis/myyak-redis.conf`에 설치한다.
 4. [myyak-users.acl.example](../scripts/redis/myyak-users.acl.example)을 `/etc/redis/myyak-users.acl`로 복사하고 `CHANGE_ME`를 `openssl rand -base64 32`로 생성한 값으로 교체한다. 실제 값은 저장소, 명령 이력, 로그에 남기지 않는다.
 5. 두 파일 소유권을 `root:redis`, 권한을 각각 `640`으로 설정한다.
-6. systemd의 Redis 실행 설정이 `/etc/redis/myyak-redis.conf`를 사용하게 한 뒤 `daemon-reload`, enable, restart 순서로 적용한다.
+6. [redis-server.override.conf](../scripts/redis/redis-server.override.conf)를 `/etc/systemd/system/redis-server.service.d/override.conf`에 설치한다.
+7. [myyak.service.override.conf](../scripts/redis/myyak.service.override.conf)를 `/etc/systemd/system/myyak.service.d/redis.conf`에 설치한다. 이 단계는 의존성만 추가하며 애플리케이션 JAR을 바꾸지 않는다.
+8. `systemctl daemon-reload`, Redis enable, Redis restart 순서로 적용한다. 앱은 Secret과 코드가 준비되기 전까지 재시작하지 않는다.
 
 앱 계정에는 `myyak:prod:auth:v1:*` 키와 연결 명령, `SET`, `GETDEL`만 허용한다. 6379 포트는 `127.0.0.1`에만 바인딩하며 EC2 보안 그룹 규칙을 추가하지 않는다.
 

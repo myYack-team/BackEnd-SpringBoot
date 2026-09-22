@@ -6,8 +6,16 @@ on:
       - main
     paths:
       - 'build.gradle'
+      - 'compose.redis.yaml'
+      - 'docs/REDIS_AUTH_OPERATIONS.md'
+      - 'scripts/redis/**'
+      - 'src/main/java/com/myyak/apiPayload/code/status/ErrorStatus.java'
       - 'src/main/java/com/myyak/service/authService/**'
+      - 'src/main/java/com/myyak/service/oAuthService/kakaoService/KakaoOAuthServiceImpl.java'
+      - 'src/main/java/com/myyak/web/controller/AuthController.java'
+      - 'src/main/resources/application.yaml.example'
       - 'src/test/java/com/myyak/service/authService/**'
+      - '.github/workflows/deploy.yml'
       - '.github/workflows/redis-auth-test.yml'
   workflow_dispatch:
 
