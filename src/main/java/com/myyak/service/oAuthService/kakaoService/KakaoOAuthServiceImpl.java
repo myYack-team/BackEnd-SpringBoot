@@ -59,7 +59,7 @@ public class KakaoOAuthServiceImpl implements KakaoOAuthService {
     @Override
     public String getAuthorizationUrl(String baseUrl, String state) {
         String dynamicRedirectUri = buildRedirectUri(baseUrl);
-        log.debug("동적 redirect_uri 생성: {}, state: {}", dynamicRedirectUri, state);
+        log.debug("카카오 OAuth redirect URI 생성");
 
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(KAKAO_AUTH_URL + "/oauth/authorize")
                 .queryParam("client_id", clientId)

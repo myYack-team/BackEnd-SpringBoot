@@ -1,19 +1,27 @@
 package com.myyak.service.authService;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.myyak.service.authService.store.TemporaryAuthStore;
+import com.myyak.service.authService.store.TemporaryAuthStoreException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class AuthCodeStore {
 
-    private static final long CODE_EXPIRY_SECONDS = 300; // 5 minutes
-    private final ConcurrentHashMap<String, CodeEntry> codeStore = new ConcurrentHashMap<>();
+    static final Duration CODE_TTL = Duration.ofMinutes(5);
+    static final String KEY_PREFIX = "code:";
+
+    private final TemporaryAuthStore temporaryAuthStore;
+    private final ObjectMapper objectMapper;
 
     public record CodeEntry(
             String accessToken,
@@ -37,8 +45,8 @@ public class AuthCodeStore {
                              Boolean termsAgreed, Boolean privacyAgreed) {
         String code = UUID.randomUUID().toString();
         CodeEntry entry = new CodeEntry(accessToken, refreshToken, isNewUser, termsAgreed, privacyAgreed, Instant.now());
-        codeStore.put(code, entry);
-        log.debug("Created auth code: {} (isNewUser: {})", code, isNewUser);
+        temporaryAuthStore.put(KEY_PREFIX + code, serialize(entry), CODE_TTL);
+        log.debug("Created one-time auth code: isNewUser={}", isNewUser);
         return code;
     }
 
@@ -48,42 +56,34 @@ public class AuthCodeStore {
      * @return The associated token information, or null if invalid/expired
      */
     public CodeEntry exchangeCode(String code) {
-        if (code == null) {
-            log.warn("Null auth code provided");
+        if (code == null || code.isBlank()) {
+            log.warn("Empty auth code provided");
             return null;
         }
 
-        CodeEntry entry = codeStore.remove(code);
-        if (entry == null) {
-            log.warn("Auth code not found or already used: {}", code);
+        String serializedEntry = temporaryAuthStore.consume(KEY_PREFIX + code);
+        if (serializedEntry == null) {
+            log.warn("Auth code not found, expired, or already used");
             return null;
         }
 
-        Instant now = Instant.now();
-        if (now.isAfter(entry.createdAt().plusSeconds(CODE_EXPIRY_SECONDS))) {
-            log.warn("Auth code expired: {}", code);
-            return null;
-        }
-
-        log.debug("Auth code exchanged: {}", code);
-        return entry;
+        log.debug("One-time auth code consumed");
+        return deserialize(serializedEntry);
     }
 
-    /**
-     * Cleanup expired auth code entries every 1 minute
-     */
-    @Scheduled(fixedRate = 60000)
-    public void cleanupExpiredCodes() {
-        Instant now = Instant.now();
-        long initialSize = codeStore.size();
+    private String serialize(CodeEntry entry) {
+        try {
+            return objectMapper.writeValueAsString(entry);
+        } catch (JsonProcessingException e) {
+            throw new TemporaryAuthStoreException(e);
+        }
+    }
 
-        codeStore.entrySet().removeIf(entry ->
-                now.isAfter(entry.getValue().createdAt().plusSeconds(CODE_EXPIRY_SECONDS))
-        );
-
-        long removedCount = initialSize - codeStore.size();
-        if (removedCount > 0) {
-            log.info("Cleaned up {} expired auth code entries", removedCount);
+    private CodeEntry deserialize(String serializedEntry) {
+        try {
+            return objectMapper.readValue(serializedEntry, CodeEntry.class);
+        } catch (JsonProcessingException e) {
+            throw new TemporaryAuthStoreException(e);
         }
     }
 }
