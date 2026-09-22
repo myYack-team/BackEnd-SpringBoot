@@ -10,6 +10,7 @@
 | Language | Java 21 |
 | Build Tool | Gradle |
 | Database | MySQL 8 (AWS RDS) |
+| Temporary Store | Redis 7.4 (OAuth state, 일회성 인증 코드) |
 | ORM | Spring Data JPA + Hibernate |
 | Security | Spring Security + JWT |
 | API Docs | SpringDoc OpenAPI (Swagger) |
@@ -24,6 +25,7 @@
 - **poi** 5.2.5 - Excel 파싱
 - **pdfbox** 3.0.3 - PDF 파싱
 - **caffeine** 3.1.8 - 인메모리 캐시
+- **spring-boot-starter-data-redis** - 임시 인증 상태 저장
 - **aws-java-sdk-s3** - 이미지 저장
 
 ---
@@ -34,15 +36,23 @@
 
 - Java 21
 - MySQL 8.0+
+- Redis 7.4+ 또는 Docker
 - Gradle 8+
 
 ### 실행
 
-```bash
+```powershell
+# 저장소 루트에서 로컬 Redis 실행
+$env:REDIS_PASSWORD = '<local-only-password>'
+$env:REDIS_USERNAME = 'default'
+$env:AUTH_REDIS_KEY_PREFIX = 'myyak:local:auth:v1'
+docker compose -f compose.redis.yaml up -d
+
 # 로컬 프로필로 실행
-cd myyak-server
-./gradlew bootRun --args='--spring.profiles.active=local'
+./gradlew.bat bootRun --args='--spring.profiles.active=local' --no-daemon
 ```
+
+세부 운영·검증 절차는 [Redis 임시 인증 저장소 운영](REDIS_AUTH_OPERATIONS.md)을 참고하세요.
 
 ### 프로필 구분
 
@@ -82,7 +92,7 @@ src/main/java/com/myyak/
 ├── repository/              # JPA Repository
 ├── scheduler/               # ReminderScheduler (FCM 발송)
 ├── service/                 # 비즈니스 로직 (기능별 폴더)
-│   ├── authService/         # 카카오 OAuth + JWT
+│   ├── authService/         # 카카오 OAuth + JWT + Redis 임시 상태
 │   ├── medicationService/   # 약물 CRUD
 │   ├── intakeService/       # 복용 기록
 │   ├── scanService/         # 처방전 OCR + LLM 분석
@@ -311,6 +321,13 @@ User (사용자)
 
 ### Kakao OAuth
 - 카카오 로그인 + 회원탈퇴 시 카카오 연동 해제
+- OAuth state(10분)와 일회성 인증 코드(5분)는 Redis에 저장하고 `GETDEL`로 한 번만 소비
+- Refresh token은 RDS에 저장
+
+### Redis
+- 임시 인증 상태만 저장하며 JVM 메모리 fallback을 사용하지 않음
+- 운영에서는 localhost 바인딩, 키 범위 ACL, 32 MB/noeviction, RDB/AOF 비활성화 적용
+- 장애 시 인증 흐름은 `AUTH503`/HTTP 503으로 실패
 
 ### Firebase FCM
 - 복약 알림 푸시
@@ -398,6 +415,7 @@ User (사용자)
 |------|------|
 | Compute | AWS EC2 (ap-northeast-2) |
 | Database | AWS RDS MySQL 8 |
+| Temporary Store | Redis 7.4 (EC2 localhost, systemd) |
 | Storage | AWS S3 (`myyak-uploads`) |
 | Domain | api.myyak.xyz |
 
