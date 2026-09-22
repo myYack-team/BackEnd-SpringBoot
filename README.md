@@ -12,6 +12,7 @@
 ![Java](https://img.shields.io/badge/Java%2021-007396?style=flat-square&logo=openjdk&logoColor=white)
 ![React Native](https://img.shields.io/badge/React%20Native%20(Expo)-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![MySQL](https://img.shields.io/badge/MySQL%208-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis%207.4-FF4438?style=flat-square&logo=redis&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS%20EC2%20·%20RDS%20·%20S3-FF9900?style=flat-square&logo=amazonwebservices&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini%20API-4285F4?style=flat-square&logo=googlegemini&logoColor=white)
 
@@ -105,9 +106,9 @@ flowchart LR
 
 | 영역 | 기술 |
 |------|------|
-| **Backend** | Spring Boot 3.5, Java 21, Spring Data JPA, Spring Security + JWT |
+| **Backend** | Spring Boot 3.5, Java 21, Spring Data JPA/Redis, Spring Security + JWT |
 | **Client** | React Native (Expo SDK 54), TypeScript, Expo Router, Zustand, Axios |
-| **Database** | MySQL 8 (AWS RDS), Caffeine (인메모리 캐시) |
+| **Data Store** | MySQL 8 (AWS RDS), Redis 7.4 (임시 인증 상태), Caffeine (검색 캐시) |
 | **AI** | Gemini API (기본) · OpenAI API (폴백), Google Vision OCR |
 | **Infra** | AWS EC2 · S3, GitHub Actions CI/CD, EAS Build |
 | **Push 알림** | Firebase Admin SDK (FCM) |
@@ -192,6 +193,6 @@ LlmClient (interface)
 | [BackEnd-SpringBoot](https://github.com/myYack-team/BackEnd-SpringBoot) (현재 리포) | Spring Boot API 서버 — 22개 엔티티, 110+ REST 엔드포인트 |
 | [Client-ReactNative](https://github.com/myYack-team/Client-ReactNative) | React Native (Expo) 모바일 앱 — 57개 화면, Zustand 스토어 6개 |
 
-**백엔드 상세 문서**: 전체 API 명세, 엔티티 관계도, 폴더 구조는 [docs/BACKEND_GUIDE.md](docs/BACKEND_GUIDE.md) 참고
+**백엔드 상세 문서**: 전체 API 명세, 엔티티 관계도, 폴더 구조는 [docs/BACKEND_GUIDE.md](docs/BACKEND_GUIDE.md), Redis 임시 인증 저장소는 [docs/REDIS_AUTH_OPERATIONS.md](docs/REDIS_AUTH_OPERATIONS.md) 참고
 
 **문의**: myyakk1@gmail.com
