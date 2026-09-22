@@ -1,0 +1,4 @@
+# Copy to /etc/redis/myyak-users.acl, replace CHANGE_ME with a generated secret,
+# set ownership root:redis and mode 640, then remove this comment.
+user default off
+user myyak-app on >CHANGE_ME ~myyak:prod:auth:v1:* +ping +hello +select +client|setname +client|setinfo +set +getdel

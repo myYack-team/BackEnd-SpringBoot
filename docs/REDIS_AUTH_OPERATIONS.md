@@ -1,0 +1,94 @@
+# Redis 임시 인증 저장소 운영
+
+이 문서는 OAuth state와 일회성 인증 코드만 Redis로 이전하는 1단계 운영 절차다. 리프레시 토큰은 계속 RDS에 저장한다.
+
+## 용량과 실행 방식
+
+운영 EC2는 `t4g.micro`(ARM64, RAM 약 1 GiB)다. Redis는 Docker 없이 네이티브 systemd 서비스로 실행하고 `maxmemory 32mb`, `noeviction`, RDB/AOF 비활성화로 시작한다. `maxmemory`는 Redis 프로세스 전체 RSS 제한이 아니므로 배포 후 RSS, swap in/out, 지연, OOM을 함께 확인한다.
+
+2026-09-22 기준 Redis 7.4 계열의 보안 패치 버전은 7.4.11이다. 설치 전에 공식 패키지 저장소에서 ARM64용 7.4.11 후보가 제공되는지 확인하고 해당 버전을 고정한다. 다른 버전을 사용할 경우 GETDEL(6.2 이상), ACL, 현재 보안 지원 여부를 다시 확인한다.
+
+## 운영 설치 준비
+
+1. Redis 공식 APT 저장소를 등록한 뒤 `apt-cache madison redis-server`로 설치 가능한 버전과 아키텍처를 확인한다.
+2. 검증한 7.4.11 패키지를 버전 지정해 설치한다. 최신 버전으로 자동 이동하는 무고정 설치는 사용하지 않는다.
+3. [myyak-redis.conf](../scripts/redis/myyak-redis.conf)를 `/etc/redis/myyak-redis.conf`에 설치한다.
+4. [myyak-users.acl.example](../scripts/redis/myyak-users.acl.example)을 `/etc/redis/myyak-users.acl`로 복사하고 `CHANGE_ME`를 `openssl rand -base64 32`로 생성한 값으로 교체한다. 실제 값은 저장소, 명령 이력, 로그에 남기지 않는다.
+5. 두 파일 소유권을 `root:redis`, 권한을 각각 `640`으로 설정한다.
+6. systemd의 Redis 실행 설정이 `/etc/redis/myyak-redis.conf`를 사용하게 한 뒤 `daemon-reload`, enable, restart 순서로 적용한다.
+
+앱 계정에는 `myyak:prod:auth:v1:*` 키와 연결 명령, `SET`, `GETDEL`만 허용한다. 6379 포트는 `127.0.0.1`에만 바인딩하며 EC2 보안 그룹 규칙을 추가하지 않는다.
+
+## APPLICATION_YAML 변경
+
+GitHub Actions의 `APPLICATION_YAML`은 전체 파일 Secret이다. 기존 `spring` 루트 아래에 다음 항목을 병합하고, 파일 일부만 Secret에 덮어쓰지 않는다.
+
+```yaml
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      username: myyak-app
+      password: <ACL 파일과 같은 값>
+      connect-timeout: 2s
+      timeout: 2s
+
+auth:
+  temporary-store:
+    key-prefix: myyak:prod:auth:v1
+```
+
+Redis 비밀번호는 운영 보안 원본과 GitHub Secret에만 둔다. 저장소나 이 문서에 기록하지 않는다.
+
+## 배포 전 검증
+
+Redis 프로세스와 접근 범위를 먼저 확인한다.
+
+```bash
+systemctl is-active redis-server
+ss -ltnp | grep 6379
+redis-cli --user myyak-app --askpass PING
+redis-cli -h <EC2_PRIVATE_IP> -p 6379 PING  # 연결 실패가 정상
+```
+
+그 다음 전체 `APPLICATION_YAML` Secret을 갱신하고 코드 PR을 배포한다. 최초 Map에서 Redis로 전환되는 순간 기존 JVM 안의 진행 중 state/code는 이관되지 않으므로 해당 로그인은 다시 시작해야 한다.
+
+배포 워크플로우는 `/v3/api-docs`와 `/api/auth/kakao/login`의 상태 코드를 모두 확인한다. 후자가 302여야 Redis 쓰기까지 성공한 것이다. 응답의 Location 헤더에는 state가 있으므로 배포 로그에 출력하지 않는다.
+
+## 기능 검증
+
+1. 카카오 로그인 시작 후 앱 서버만 재시작하고 TTL 안에 callback을 완료한다.
+2. callback으로 일회성 코드를 받은 뒤 앱 서버만 재시작하고 TTL 안에 `/api/auth/exchange`를 호출한다.
+3. 같은 state와 code를 재사용했을 때 기존 실패 계약을 유지하는지 확인한다.
+4. Redis를 중지했을 때 로그인 시작과 코드 교환이 `AUTH503`/HTTP 503으로 실패하고 메모리 우회가 없는지 확인한다.
+5. Redis를 다시 시작하면 무영속 정책에 따라 진행 중 로그인이 소실되고 새 로그인은 정상 동작하는지 확인한다.
+
+## 자원 관찰과 롤백
+
+배포 직후와 실제 로그인 부하 중 다음을 확인한다.
+
+```bash
+free -m
+vmstat 1 10
+systemctl show myyak redis-server -p MemoryCurrent -p MemoryPeak
+redis-cli --user myyak-app --askpass INFO memory
+redis-cli --user myyak-app --askpass INFO stats
+journalctl -u redis-server --since "30 minutes ago" --no-pager
+```
+
+`used_memory`, `used_memory_rss`, `evicted_keys`, `rejected_connections`, swap in/out, 앱 응답 시간을 기록한다. 현재 정책에서는 `evicted_keys`가 0이어야 하며 메모리 한도 도달 시 인증 쓰기가 503으로 거절되어야 한다.
+
+롤백 시 이전 JAR은 Redis 상태를 읽지 못하므로 진행 중 로그인은 재시도해야 한다. Redis 자체가 장애 상태라면 JAR 롤백만으로 공유 상태가 복구되지 않는다. Redis 복구, 이전 JAR 복원, 새 로그인 확인 순서로 처리한다.
+
+## 로컬 실행
+
+Docker Desktop을 시작한 뒤 개발용 비밀번호를 환경 변수에 설정하고 Redis만 실행한다.
+
+```powershell
+$env:REDIS_PASSWORD = '<local-only-password>'
+docker compose -f compose.redis.yaml up -d
+docker compose -f compose.redis.yaml ps
+```
+
+로컬 애플리케이션에는 `REDIS_USERNAME=default`, 같은 `REDIS_PASSWORD`, `AUTH_REDIS_KEY_PREFIX=myyak:local:auth:v1`을 사용한다. 종료할 때 `docker compose -f compose.redis.yaml down`을 실행한다. 이 Compose는 무영속이므로 컨테이너 재시작 후 진행 중 로그인 소실이 정상이다.
