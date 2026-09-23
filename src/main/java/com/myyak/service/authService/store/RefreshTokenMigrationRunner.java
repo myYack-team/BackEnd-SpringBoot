@@ -28,10 +28,15 @@ public class RefreshTokenMigrationRunner implements ApplicationRunner {
     private final RefreshTokenRepository repository;
     private final RedisRefreshTokenSessionStore store;
     private final JwtProvider jwtProvider;
+    private final RefreshTokenMigrationState migrationState;
 
     @Override
     @Transactional(readOnly = true)
     public void run(ApplicationArguments args) {
+        if (!migrationState.begin()) {
+            log.info("Refresh Token migration already complete; skipping RDS token import");
+            return;
+        }
         int migrated = 0;
         int skipped = 0;
         for (RefreshToken row : repository.findAll()) {
@@ -61,6 +66,7 @@ public class RefreshTokenMigrationRunner implements ApplicationRunner {
             store.issue(userId, row.getToken(), family, expiry);
             migrated++;
         }
+        migrationState.complete();
         log.info("Refresh Token migration complete: migrated={}, skipped={}", migrated, skipped);
     }
 }

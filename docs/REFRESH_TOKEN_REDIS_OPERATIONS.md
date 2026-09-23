@@ -12,13 +12,15 @@ Refresh Token 세션 전환은 코드 배포와 운영 설정 변경을 분리�
 
 ## 기존 토큰 이관
 
-`auth.refresh-store.migrate-legacy=true`는 시작 시 RDS의 활성 Refresh Token을 읽어 Redis에 digest와 남은 TTL을 저장한다. 토큰 원문은 이관 과정의 입력으로만 사용하고 Redis에는 보관하지 않는다.
+`auth.refresh-store.migrate-legacy=true`는 시작 시 RDS의 활성 Refresh Token을 읽어 Redis에 digest와 남은 TTL을 저장한다. 토큰 원문은 이관 과정의 입력으로만 사용하고 Redis에는 보관하지 않는다. RDS `app_settings`의 `auth.refresh-store.legacy-migration-state`를 `IN_PROGRESS`로 먼저 기록하고 완료 후 `COMPLETE`로 바꾼다. 완료 후 재시작하면 이관을 반복하지 않으므로 이미 폐기한 토큰이 되살아나지 않는다.
 
 1. 유지보수 창에서 로그인·재발급 요청 유입과 기존 앱의 토큰 쓰기를 중지한다.
 2. 영속 Redis와 ACL을 확인한다.
 3. `mode=redis`, `migrate-legacy=true`인 전체 설정으로 새 JAR을 배포한다. 시작 로그의 이관 건수와 누락 건수를 확인한다. 누락된 토큰은 재로그인이 필요하다.
 4. 정상 로그인·재발급·로그아웃과 실제 Redis TTL을 확인한 뒤 `migrate-legacy=false`로 재배포한다.
 5. 이관 후 RDS fallback을 켜지 않는다. Redis에서 폐기·회전한 옛 토큰이 RDS에 남아 다시 유효해질 수 있다.
+
+이관 도중 실패하면 상태가 `IN_PROGRESS`로 남고 다음 시작은 실패한다. 원인을 해결한 뒤 요청 유입을 계속 차단하고, 이관용 Redis 세션·사용 기록을 정리한 후 상태를 운영자가 확인하여 초기화하고 다시 실행한다. `COMPLETE` 상태와 Redis 데이터가 유실된 경우 옛 RDS 토큰을 재이관하지 않는다. 기존 세션은 재로그인시키고 새로운 세션만 발급한다.
 
 현재 배포 workflow는 `main` 머지 시 자동 배포하며 실패 시 이전 JAR로 롤백한다. Redis 모드로 실제 전환한 뒤 RDS 모드 JAR로 자동 롤백하면 폐기된 옛 토큰이 재사용될 수 있다. **운영 전환 전에 배포 롤백을 Redis 모드 호환 버전으로 제한하거나, 롤백 시 전체 세션 재로그인 정책을 적용해야 한다.** 코드 PR 머지만으로 Redis 모드를 활성화하지 않는다.
 
