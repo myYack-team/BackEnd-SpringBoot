@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import java.security.Key;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 토큰 생성 및 검증 유틸리티
@@ -58,6 +59,10 @@ public class JwtProvider {
      * Refresh Token 생성
      */
     public String createRefreshToken(Long userId) {
+        return createRefreshToken(userId, UUID.randomUUID().toString());
+    }
+
+    public String createRefreshToken(Long userId, String familyId) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + refreshTokenExpiry);
 
@@ -66,6 +71,8 @@ public class JwtProvider {
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .claim("type", "refresh")
+                .claim("family", familyId)
+                .setId(UUID.randomUUID().toString())
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -143,7 +150,20 @@ public class JwtProvider {
      * 테스트용 Refresh Token 생성 (1년 만료)
      */
     public String createTestRefreshToken(Long userId) {
-        return createToken(userId, TEST_TOKEN_EXPIRY, "refresh");
+        return createTestRefreshToken(userId, UUID.randomUUID().toString());
+    }
+
+    public String createTestRefreshToken(Long userId, String familyId) {
+        Date now = new Date();
+        return Jwts.builder()
+                .setSubject(String.valueOf(userId))
+                .setIssuedAt(now)
+                .setExpiration(new Date(now.getTime() + TEST_TOKEN_EXPIRY))
+                .claim("type", "refresh")
+                .claim("family", familyId)
+                .setId(UUID.randomUUID().toString())
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
     }
 
     /**
@@ -169,10 +189,7 @@ public class JwtProvider {
                 .compact();
     }
 
-    /**
-     * Refresh Token 전용 검증 - 만료된 토큰도 Claims 추출 가능
-     * 만료 여부는 DB의 expiresAt으로 판단하므로, JWT 만료는 별도 처리
-     */
+    /** Refresh Token 서명과 JWT 만료를 함께 검증한다. */
     public Claims validateAndParseRefreshToken(String token) {
         try {
             return Jwts.parserBuilder()
@@ -181,10 +198,9 @@ public class JwtProvider {
                     .parseClaimsJws(token)
                     .getBody();
         } catch (ExpiredJwtException e) {
-            log.info("만료된 Refresh Token입니다. DB 만료 확인으로 진행합니다.");
-            return e.getClaims();
+            throw new GeneralException(ErrorStatus.AUTH_EXPIRED_TOKEN);
         } catch (Exception e) {
-            log.warn("유효하지 않은 Refresh Token: {}", e.getMessage());
+            log.warn("유효하지 않은 Refresh Token");
             throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
         }
     }

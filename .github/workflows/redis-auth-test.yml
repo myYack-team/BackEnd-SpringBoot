@@ -11,6 +11,8 @@ on:
       - 'scripts/redis/**'
       - 'src/main/java/com/myyak/apiPayload/code/status/ErrorStatus.java'
       - 'src/main/java/com/myyak/service/authService/**'
+      - 'src/main/java/com/myyak/util/JwtProvider.java'
+      - 'src/main/java/com/myyak/repository/RefreshTokenRepository.java'
       - 'src/main/java/com/myyak/service/oAuthService/kakaoService/KakaoOAuthServiceImpl.java'
       - 'src/main/java/com/myyak/web/controller/AuthController.java'
       - 'src/main/resources/application.yaml.example'
@@ -60,4 +62,9 @@ jobs:
             --tests "com.myyak.service.authService.OAuthStateStoreTest" \
             --tests "com.myyak.service.authService.AuthCodeStoreTest" \
             --tests "com.myyak.service.authService.RedisTemporaryAuthStoreIntegrationTest" \
+            --tests "com.myyak.service.authService.RedisRefreshTokenSessionStoreIntegrationTest" \
+            --tests "com.myyak.service.authService.JwtProviderRefreshTokenTest" \
+            --tests "com.myyak.service.authService.RefreshTokenMigrationTest" \
+            --tests "com.myyak.service.authService.RefreshTokenMigrationStateIntegrationTest" \
+            --tests "com.myyak.service.authService.JpaRefreshTokenSessionStoreIntegrationTest" \
             --no-daemon

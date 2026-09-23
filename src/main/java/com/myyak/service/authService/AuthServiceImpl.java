@@ -4,11 +4,10 @@ import com.myyak.apiPayload.code.status.ErrorStatus;
 import com.myyak.apiPayload.exception.GeneralException;
 import com.myyak.converter.AuthConverter;
 import com.myyak.domain.AppSetting;
-import com.myyak.domain.RefreshToken;
 import com.myyak.domain.User;
 import com.myyak.repository.AppSettingRepository;
-import com.myyak.repository.RefreshTokenRepository;
 import com.myyak.repository.UserRepository;
+import com.myyak.service.authService.store.RefreshTokenSessionStore;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
 import com.myyak.util.JwtProvider;
 import com.myyak.web.dto.AuthDTO.AuthRequestDTO;
@@ -20,8 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 인증 서비스 구현체
@@ -36,7 +35,7 @@ public class AuthServiceImpl implements AuthService {
 
     private final KakaoOAuthService kakaoOAuthService;
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenSessionStore refreshTokenSessionStore;
     private final JwtProvider jwtProvider;
     private final AppSettingRepository appSettingRepository;
 
@@ -94,10 +93,12 @@ public class AuthServiceImpl implements AuthService {
 
         // JWT 토큰 생성
         String accessToken = jwtProvider.createAccessToken(user.getId());
-        String refreshToken = jwtProvider.createRefreshToken(user.getId());
+        String familyId = UUID.randomUUID().toString();
+        String refreshToken = jwtProvider.createRefreshToken(user.getId(), familyId);
 
         // Refresh Token 저장
-        saveRefreshToken(user, refreshToken);
+        refreshTokenSessionStore.issue(user.getId(), refreshToken, familyId,
+                jwtProvider.getExpiration(refreshToken).toInstant());
 
         // 응답 생성
         return AuthConverter.toLoginResponse(
@@ -109,7 +110,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponseDTO.TokenResponse refreshToken(AuthRequestDTO.RefreshRequest request) {
         String refreshTokenValue = request.getRefreshToken();
 
-        // 1. Refresh Token 검증 및 Claims 추출 (만료된 토큰도 Claims 추출 가능)
+        // 1. Refresh Token 서명 및 만료 검증
         Claims claims = jwtProvider.validateAndParseRefreshToken(refreshTokenValue);
 
         // 2. Refresh Token이 access 타입이 아닌지 확인
@@ -117,24 +118,30 @@ public class AuthServiceImpl implements AuthService {
             throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
         }
 
-        // 3. DB에서 Refresh Token 조회
-        RefreshToken storedToken = refreshTokenRepository.findByToken(refreshTokenValue)
+        Long userId;
+        try {
+            userId = Long.valueOf(claims.getSubject());
+        } catch (NumberFormatException e) {
+            throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
+        }
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN));
 
-        // 4. 토큰 만료 확인
-        if (storedToken.isExpired()) {
-            refreshTokenRepository.delete(storedToken);
-            throw new GeneralException(ErrorStatus.AUTH_EXPIRED_TOKEN);
+        // Redis 세션은 현재 family를 보존한다. 기존 RDS 토큰은 다음 회전 때 family를 부여한다.
+        String familyId = refreshTokenSessionStore.currentFamily(userId);
+        if (familyId == null) {
+            familyId = claims.get("family", String.class);
+        }
+        if (familyId == null) {
+            familyId = UUID.randomUUID().toString();
         }
 
-        // 5. 새 토큰 생성
-        User user = storedToken.getUser();
         String newAccessToken = jwtProvider.createAccessToken(user.getId());
-        String newRefreshToken = jwtProvider.createRefreshToken(user.getId());
+        String newRefreshToken = jwtProvider.createRefreshToken(user.getId(), familyId);
 
-        // 6. Refresh Token 갱신
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getRefreshTokenExpiry() / 1000);
-        storedToken.updateToken(newRefreshToken, expiresAt);
+        // 저장소에서 이전 토큰 폐기와 새 토큰 저장을 원자적으로 처리한다.
+        refreshTokenSessionStore.rotate(userId, refreshTokenValue, newRefreshToken, familyId,
+                claims.getExpiration().toInstant(), jwtProvider.getExpiration(newRefreshToken).toInstant());
 
         log.info("토큰 갱신 완료: userId={}", user.getId());
 
@@ -150,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
 
         // 공용 기기에서 다음 사용자에게 알림이 전달되지 않도록 토큰 해제
         user.clearFcmToken();
-        refreshTokenRepository.deleteByUser(user);
+        refreshTokenSessionStore.revoke(userId);
         log.info("로그아웃 완료: userId={}", userId);
     }
 
@@ -176,33 +183,18 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. 1년 만료 토큰 생성
         String accessToken = jwtProvider.createTestAccessToken(user.getId());
-        String refreshToken = jwtProvider.createTestRefreshToken(user.getId());
+        String familyId = UUID.randomUUID().toString();
+        String refreshToken = jwtProvider.createTestRefreshToken(user.getId(), familyId);
 
         // 4. Refresh Token 저장
-        saveTestRefreshToken(user, refreshToken);
+        refreshTokenSessionStore.issue(user.getId(), refreshToken, familyId,
+                jwtProvider.getExpiration(refreshToken).toInstant());
 
         log.info("테스트 로그인 성공: userId={}", user.getId());
 
         // 5. 응답 생성
         return AuthConverter.toLoginResponse(
                 accessToken, refreshToken, jwtProvider.getTestTokenExpiry(), user, false);
-    }
-
-    private void saveTestRefreshToken(User user, String refreshToken) {
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getTestTokenExpiry() / 1000);
-
-        Optional<RefreshToken> existingToken = refreshTokenRepository.findByUser(user);
-
-        if (existingToken.isPresent()) {
-            existingToken.get().updateToken(refreshToken, expiresAt);
-        } else {
-            RefreshToken newToken = RefreshToken.builder()
-                    .user(user)
-                    .token(refreshToken)
-                    .expiresAt(expiresAt)
-                    .build();
-            refreshTokenRepository.save(newToken);
-        }
     }
 
     private User createNewUser(String kakaoId, KakaoUserInfo kakaoUserInfo) {
@@ -232,24 +224,6 @@ public class AuthServiceImpl implements AuthService {
         String profileImage = profile != null ? toHttpsUrl(profile.getProfileImageUrl()) : null;
 
         user.updateKakaoInfo(name, email, profileImage);
-    }
-
-    private void saveRefreshToken(User user, String refreshToken) {
-        LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getRefreshTokenExpiry() / 1000);
-
-        // 기존 토큰이 있으면 업데이트, 없으면 새로 생성
-        Optional<RefreshToken> existingToken = refreshTokenRepository.findByUser(user);
-
-        if (existingToken.isPresent()) {
-            existingToken.get().updateToken(refreshToken, expiresAt);
-        } else {
-            RefreshToken newToken = RefreshToken.builder()
-                    .user(user)
-                    .token(refreshToken)
-                    .expiresAt(expiresAt)
-                    .build();
-            refreshTokenRepository.save(newToken);
-        }
     }
 
     /**
