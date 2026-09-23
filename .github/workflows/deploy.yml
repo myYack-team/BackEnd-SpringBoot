@@ -45,6 +45,11 @@ jobs:
           mkdir -p src/main/resources
           echo '${{ secrets.APPLICATION_YAML }}' > src/main/resources/application.yaml
 
+      - name: Detect Refresh Token store mode
+        id: refresh_store
+        run: |
+          echo "mode=$(bash scripts/deploy/refresh-store-mode.sh src/main/resources/application.yaml)" >> "$GITHUB_OUTPUT"
+
       # 5. Firebase 서비스 계정 파일 생성 (classpath에 포함되도록)
       - name: Create Firebase credentials
         run: |
@@ -69,6 +74,16 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Refuse RDS mode after Redis cutover
+        if: steps.refresh_store.outputs.mode != 'redis'
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
+            if test -e /home/ubuntu/.myyak-refresh-redis-cutover; then
+              echo "RDS-mode deployment is blocked after the Redis Refresh Token cutover." >&2
+              exit 1
+            fi
+          '
+
       # 9. 기존 JAR 백업
       - name: Backup existing JAR
         run: |
@@ -81,6 +96,21 @@ jobs:
             fi
           ENDSSH
 
+      # Stop traffic and the old RDS-mode app before starting Redis migration.
+      - name: Quiesce API for Redis-mode deployment
+        if: steps.refresh_store.outputs.mode == 'redis'
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
+            sudo systemctl stop nginx
+            sudo systemctl stop myyak
+            touch /home/ubuntu/.myyak-redis-deploy-in-progress
+            if [ ! -e /home/ubuntu/.myyak-refresh-redis-cutover ]; then
+              touch /home/ubuntu/.myyak-refresh-redis-migration-required
+              touch /home/ubuntu/.myyak-refresh-redis-cutover
+            fi
+          ENDSSH
+
       # 10. JAR 파일 전송
       - name: Transfer JAR to server
         run: |
@@ -90,6 +120,7 @@ jobs:
 
       # 11. Nginx 리버스 프록시 설정 (초기 설치 시에만 설정, 기존 SSL 설정 보호)
       - name: Setup Nginx reverse proxy
+        if: steps.refresh_store.outputs.mode != 'redis'
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
             # Nginx 설치 확인
@@ -157,6 +188,7 @@ jobs:
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            date --iso-8601=seconds > /home/ubuntu/.myyak-deploy-started-at
             # 기존 프로세스 종료
             sudo systemctl stop myyak || true
 
@@ -177,6 +209,12 @@ jobs:
             for i in 1 2 3 4 5 6; do
               sleep 15
               echo "Attempt $i: Checking health..."
+              if [ -e /home/ubuntu/.myyak-refresh-redis-migration-required ]; then
+                if ! sudo journalctl -u myyak --since "$(cat /home/ubuntu/.myyak-deploy-started-at)" --no-pager | grep -Eq 'Refresh Token migration (complete|already complete)'; then
+                  echo "Waiting for Refresh Token migration..."
+                  continue
+                fi
+              fi
               HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/v3/api-docs)
               AUTH_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/auth/kakao/login)
               echo "API docs HTTP Status: $HTTP_CODE"
@@ -190,9 +228,19 @@ jobs:
             exit 1
           ENDSSH
 
+      - name: Restore API traffic after Redis-mode verification
+        if: steps.refresh_store.outputs.mode == 'redis'
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
+            sudo systemctl start nginx
+            sudo systemctl is-active --quiet nginx
+            rm -f /home/ubuntu/.myyak-refresh-redis-migration-required /home/ubuntu/.myyak-redis-deploy-in-progress
+          ENDSSH
+
       # 14. 헬스체크 실패 시 롤백
       - name: Rollback on failure
-        if: failure() && steps.healthcheck.outcome == 'failure'
+        if: failure() && steps.healthcheck.outcome == 'failure' && steps.refresh_store.outputs.mode != 'redis'
         run: |
           echo "헬스체크 실패! 롤백을 시작합니다..."
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
@@ -223,6 +271,17 @@ jobs:
               fi
             else
               echo "백업 파일이 없습니다. 롤백 불가."
+            fi
+          ENDSSH
+
+      # Redis-mode deployments must not automatically restore an RDS-mode JAR.
+      - name: Stop failed Redis-mode deployment
+        if: failure() && steps.refresh_store.outputs.mode == 'redis'
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            if [ -e /home/ubuntu/.myyak-redis-deploy-in-progress ]; then
+              sudo systemctl stop nginx myyak || true
+              echo "Redis-mode deployment failed; API remains closed for manual recovery."
             fi
           ENDSSH
 

@@ -9,6 +9,7 @@ on:
       - 'compose.redis.yaml'
       - 'docs/REDIS_AUTH_OPERATIONS.md'
       - 'scripts/redis/**'
+      - 'scripts/deploy/**'
       - 'src/main/java/com/myyak/apiPayload/code/status/ErrorStatus.java'
       - 'src/main/java/com/myyak/service/authService/**'
       - 'src/main/java/com/myyak/util/JwtProvider.java'
@@ -50,6 +51,9 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: gradle
+
+      - name: Verify deployment mode detection
+        run: bash scripts/deploy/test-refresh-store-mode.sh
 
       - name: Run Redis authentication tests
         env:
