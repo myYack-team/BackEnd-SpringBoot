@@ -52,6 +52,11 @@ server:
 auth:
   temporary-store:
     key-prefix: ${AUTH_REDIS_KEY_PREFIX:myyak:local:auth:v1}
+  refresh-store:
+    mode: ${AUTH_REFRESH_STORE_MODE:rds} # rds | redis; redis requires durable HA Redis and migration
+    key-prefix: ${AUTH_REFRESH_KEY_PREFIX:myyak:local:refresh:v1}
+    hash-key: ${AUTH_REFRESH_HASH_KEY:} # dedicated secret, 32+ characters; required only in redis mode
+    migrate-legacy: ${AUTH_REFRESH_MIGRATE_LEGACY:false} # maintenance window, one-time only
 
 # JWT 설정
 jwt:

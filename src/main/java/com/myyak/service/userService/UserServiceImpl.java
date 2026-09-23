@@ -6,6 +6,7 @@ import com.myyak.converter.UserConverter;
 import com.myyak.domain.User;
 import com.myyak.repository.*;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
+import com.myyak.service.authService.store.RefreshTokenSessionStore;
 import com.myyak.util.PhoneHashUtil;
 import com.myyak.web.dto.UserDTO.UserRequestDTO;
 import com.myyak.web.dto.UserDTO.UserResponseDTO;
@@ -36,7 +37,7 @@ public class UserServiceImpl implements UserService {
     private final QnARepository qnARepository;
     private final FamilyLinkRepository familyLinkRepository;
     private final FamilyLinkRequestRepository familyLinkRequestRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenSessionStore refreshTokenSessionStore;
     private final KakaoOAuthService kakaoOAuthService;
     private final PhoneHashUtil phoneHashUtil;
 
@@ -107,7 +108,7 @@ public class UserServiceImpl implements UserService {
         familyLinkRequestRepository.deleteAllByUserId(userId);
 
         // 4. RefreshToken 및 사용자 삭제
-        refreshTokenRepository.deleteByUser(user);
+        refreshTokenSessionStore.revoke(userId);
         userRepository.delete(user);
 
         log.info("회원 탈퇴 완료 - userId: {}", userId);

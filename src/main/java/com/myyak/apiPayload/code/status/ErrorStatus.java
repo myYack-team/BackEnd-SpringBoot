@@ -25,6 +25,7 @@ public enum ErrorStatus implements BaseErrorCode {
     AUTH_TEST_LOGIN_DISABLED(HttpStatus.UNAUTHORIZED, "AUTH405", "테스트 로그인이 비활성화 상태입니다."),
     AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "AUTH406", "유효하지 않은 인증 코드입니다."),
     AUTH_TEMPORARY_STORE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH503", "인증 서비스를 일시적으로 사용할 수 없습니다."),
+    AUTH_REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED, "AUTH407", "리프레시 토큰이 재사용되어 다시 로그인해야 합니다."),
 
     // 사용자 관련 에러
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER404", "사용자를 찾을 수 없습니다."),

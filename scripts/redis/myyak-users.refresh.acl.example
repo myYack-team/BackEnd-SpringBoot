@@ -1,0 +1,4 @@
+# Example for a durable Redis deployment after Refresh Token migration.
+# Replace CHANGE_ME with a generated secret and deploy as a protected ACL file.
+user default off
+user myyak-app on >CHANGE_ME ~myyak:prod:auth:v1:* ~myyak:prod:refresh:v1:* +ping +hello +select +client|setname +client|setinfo +set +get +getdel +del +eval +evalsha
