@@ -66,6 +66,18 @@ firebase-service-account.json
 .env.local
 .env.prod
 
+# Local credential material (tracked examples remain explicit)
+.env.*
+!.env.example
+**/*service-account*.json
+**/*credentials*.json
+**/*.pem
+**/*.p12
+**/*.key
+**/myyak-users.acl
+**/application-prod.yml
+**/application-prod.yaml
+
 # 업로드 파일 (개인 의료정보 포함 가능)
 /uploads/
 
