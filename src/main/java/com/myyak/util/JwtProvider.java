@@ -200,7 +200,7 @@ public class JwtProvider {
         } catch (ExpiredJwtException e) {
             throw new GeneralException(ErrorStatus.AUTH_EXPIRED_TOKEN);
         } catch (Exception e) {
-            log.warn("유효하지 않은 Refresh Token: {}", e.getMessage());
+            log.warn("유효하지 않은 Refresh Token");
             throw new GeneralException(ErrorStatus.AUTH_INVALID_REFRESH_TOKEN);
         }
     }
