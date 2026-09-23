@@ -188,7 +188,7 @@ jobs:
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
-            date --iso-8601=seconds > /home/ubuntu/.myyak-deploy-started-at
+            date '+%Y-%m-%d %H:%M:%S' > /home/ubuntu/.myyak-deploy-started-at
             # 기존 프로세스 종료
             sudo systemctl stop myyak || true
 
@@ -285,14 +285,12 @@ jobs:
             fi
           ENDSSH
 
-      # 15. 실패 시 로그 확인
-      - name: Check logs on failure
+      # Journal lines can contain authentication data; keep the public Actions log limited to service status.
+      - name: Check service status on failure
         if: failure()
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
-            echo "=== Application Logs ==="
-            sudo journalctl -u myyak -n 100 --no-pager
-            echo ""
-            echo "=== Service Status ==="
-            sudo systemctl status myyak --no-pager
+            sudo systemctl show myyak -p ActiveState -p SubState -p Result -p ExecMainStatus
+            sudo systemctl show redis-server -p ActiveState -p SubState -p Result
+            sudo systemctl show nginx -p ActiveState -p SubState -p Result
           ENDSSH
