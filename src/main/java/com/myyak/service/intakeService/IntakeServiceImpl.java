@@ -18,6 +18,7 @@ import com.myyak.web.dto.IntakeDTO.IntakeRequestDTO;
 import com.myyak.web.dto.IntakeDTO.IntakeResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -25,8 +26,10 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,15 +43,17 @@ public class IntakeServiceImpl implements IntakeService {
     private final UserService userService;
 
     @Override
-    @Transactional
+    // 배타 락을 기다린 뒤 수행하는 중복 검사 조회가 앞선 트랜잭션의 커밋을 볼 수 있도록 READ COMMITTED 사용
+    // (REPEATABLE READ에서는 첫 조회 시점의 스냅샷이 유지되어 직렬화 이후에도 방금 커밋된 기록을 놓침)
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public IntakeResponseDTO.CreateResult createIntake(Long userId, IntakeRequestDTO.CreateRequest request) {
         userService.findById(userId);
 
         MedicationTiming timing = request.getTiming();
         IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
 
-        // 대상 약물 일괄 조회 후 존재/소유권 검증
-        List<UserMedication> medications = userMedicationRepository.findAllById(request.getMedicationIds());
+        // 대상 약물을 배타 락으로 일괄 조회해 동시 요청을 직렬화한 뒤 존재/소유권 검증
+        List<UserMedication> medications = userMedicationRepository.findAllByIdInForUpdate(request.getMedicationIds());
         if (medications.size() != request.getMedicationIds().size()) {
             throw new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND);
         }
@@ -58,8 +63,18 @@ public class IntakeServiceImpl implements IntakeService {
             throw new GeneralException(ErrorStatus.MEDICATION_ACCESS_DENIED);
         }
 
+        // 같은 약·복용 시점·날짜·상태로 이미 기록된 약물은 중복 요청으로 보고 재기록·재차감하지 않음
+        LocalDate takenDate = request.getTakenAt().toLocalDate();
+        Set<Long> recordedIds = new HashSet<>(intakeRepository.findRecordedMedicationIds(
+                request.getMedicationIds(), timing, status,
+                takenDate.atStartOfDay(), takenDate.atTime(LocalTime.MAX)));
+
         List<Intake> intakes = new ArrayList<>();
         for (UserMedication medication : medications) {
+            if (recordedIds.contains(medication.getId())) {
+                continue;
+            }
+
             Intake intake = IntakeConverter.toEntity(medication, timing, request.getTakenAt(), status);
             intakes.add(intake);
 
@@ -68,7 +83,7 @@ public class IntakeServiceImpl implements IntakeService {
                 int dosage = MedicationCalculator.parseDosage(medication.getDosage());
                 medication.decreaseRemainingCount(dosage);
                 if (medication.getRemainingCount() <= 0) {
-                    medication.completeOn(request.getTakenAt().toLocalDate());
+                    medication.completeOn(takenDate);
                 }
             }
         }
