@@ -12,6 +12,22 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class IncidentReadTest {
+    @Test void firstPageOmitsStartingKeyAndNextPagePreservesIndexCursor() {
+        for (String cursor : Arrays.asList(null, "", " ")) {
+            var request = DynamoIncidentReadStore.createQueryRequest("incidents", cursor);
+            assertFalse(request.hasExclusiveStartKey(), "DynamoDB rejects an explicitly empty starting key");
+            assertEquals("incidents", request.tableName());
+            assertEquals("IncidentIndex", request.indexName());
+            assertEquals(20, request.limit());
+            assertFalse(request.scanIndexForward());
+        }
+        String cursor = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                "1234567890:12345678-abcd-abcd-abcd-123456789012".getBytes(StandardCharsets.UTF_8));
+        var next = DynamoIncidentReadStore.createQueryRequest("incidents", cursor);
+        assertTrue(next.hasExclusiveStartKey());
+        assertEquals(DynamoIncidentReadStore.decodeCursor(cursor), next.exclusiveStartKey());
+        assertThrows(GeneralException.class, () -> DynamoIncidentReadStore.createQueryRequest("incidents", "#bad"));
+    }
     @Test void projectionDoesNotExposeApprovalOrStorageSecrets() throws Exception {
         var item = new HashMap<String, AttributeValue>();
         item.put("id", AttributeValue.builder().s("12345678-abcd-abcd-abcd-123456789012").build());
