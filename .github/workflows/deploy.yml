@@ -11,8 +11,12 @@ concurrency:
   group: production-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   build-and-deploy:
+    if: github.ref == 'refs/heads/main'
     name: Build and Deploy
     runs-on: ubuntu-latest
 
@@ -41,9 +45,11 @@ jobs:
 
       # 4. application.yaml 생성
       - name: Create application.yaml
+        env:
+          APPLICATION_YAML: ${{ secrets.APPLICATION_YAML }}
         run: |
           mkdir -p src/main/resources
-          echo '${{ secrets.APPLICATION_YAML }}' > src/main/resources/application.yaml
+          printf '%s' "$APPLICATION_YAML" > src/main/resources/application.yaml
 
       - name: Detect Refresh Token store mode
         id: refresh_store
@@ -52,13 +58,17 @@ jobs:
 
       # 5. Firebase 서비스 계정 파일 생성 (classpath에 포함되도록)
       - name: Create Firebase credentials
+        env:
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}' > src/main/resources/firebase-service-account.json
+          printf '%s' "$FIREBASE_CREDENTIALS" > src/main/resources/firebase-service-account.json
 
       # 6. Google Cloud 인증 파일 생성 (classpath에 포함되도록)
       - name: Create Google Cloud credentials
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS_JSON }}
         run: |
-          echo '${{ secrets.GOOGLE_CLOUD_CREDENTIALS_JSON }}' > src/main/resources/google-cloud-credentials.json
+          printf '%s' "$GOOGLE_CREDENTIALS" > src/main/resources/google-cloud-credentials.json
 
       # 7. Gradle 빌드
       - name: Build with Gradle
@@ -88,8 +98,12 @@ jobs:
       - name: Backup existing JAR
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
             if [ -f /home/${{ secrets.EC2_USER }}/myyak-server.jar ]; then
               cp /home/${{ secrets.EC2_USER }}/myyak-server.jar /home/${{ secrets.EC2_USER }}/myyak-server.jar.backup
+              if [ -f /var/lib/myyak-release/commit ]; then
+                sudo cp /var/lib/myyak-release/commit /var/lib/myyak-release/commit.backup
+              fi
               echo "기존 JAR 백업 완료: myyak-server.jar.backup"
             else
               echo "기존 JAR 파일 없음 (첫 배포)"
@@ -188,9 +202,16 @@ jobs:
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
             date '+%Y-%m-%d %H:%M:%S' > /home/ubuntu/.myyak-deploy-started-at
             # 기존 프로세스 종료
             sudo systemctl stop myyak || true
+
+            # Bind new journal events to the exact source of the JAR being started.
+            sudo install -d -m 755 /var/lib/myyak-release
+            printf '%s\n' '${{ github.sha }}' | sudo tee /var/lib/myyak-release/commit.next > /dev/null
+            sudo chmod 644 /var/lib/myyak-release/commit.next
+            sudo mv /var/lib/myyak-release/commit.next /var/lib/myyak-release/commit
 
             # 애플리케이션 시작
             sudo systemctl start myyak
@@ -256,6 +277,12 @@ jobs:
 
               # 백업 파일로 복원
               cp /home/ubuntu/myyak-server.jar.backup /home/ubuntu/myyak-server.jar
+              if [ -f /var/lib/myyak-release/commit.backup ]; then
+                sudo cp /var/lib/myyak-release/commit.backup /var/lib/myyak-release/commit
+                sudo touch /var/lib/myyak-release/commit
+              else
+                sudo rm -f /var/lib/myyak-release/commit
+              fi
 
               # 서비스 다시 활성화 및 시작
               sudo systemctl enable myyak
@@ -267,7 +294,7 @@ jobs:
                 echo "롤백 성공! 이전 버전으로 복구되었습니다."
               else
                 echo "롤백 후에도 서버 시작 실패"
-                sudo journalctl -u myyak -n 50 --no-pager
+                sudo systemctl show myyak -p ActiveState -p SubState -p Result -p ExecMainStatus
               fi
             else
               echo "백업 파일이 없습니다. 롤백 불가."
