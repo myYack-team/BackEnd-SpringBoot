@@ -1,161 +1,34 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>마이약 관리자</title>
-    <link rel="stylesheet" href="css/admin.css">
-    <style>
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-        .dashboard-card {
-            background: white;
-            border-radius: 0.75rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            text-align: center;
-            text-decoration: none;
-            color: inherit;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-        .dashboard-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            border-color: var(--primary);
-        }
-        .dashboard-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .dashboard-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--gray-800);
-            margin-bottom: 0.5rem;
-        }
-        .dashboard-desc {
-            font-size: 0.875rem;
-            color: var(--gray-500);
-        }
-        .welcome-section {
-            text-align: center;
-            padding: 3rem 0;
-        }
-        .welcome-title {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--gray-900);
-            margin-bottom: 0.5rem;
-        }
-        .welcome-subtitle {
-            font-size: 1rem;
-            color: var(--gray-500);
-        }
-    </style>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>운영 개요 · 마이약 관리자</title>
+    <link rel="stylesheet" href="css/admin.css"><link rel="stylesheet" href="css/shell.css">
 </head>
 <body>
-    <!-- 헤더 -->
-    <header class="header">
-        <div class="header-content">
-            <a href="index.html" class="logo">
-                <img src="images/logo.png" alt="마이약" class="logo-img">
-                <span>관리자</span>
-            </a>
-            <nav class="nav">
-                <a href="index.html" class="nav-link active">홈</a>
-                <a href="data-sync.html" class="nav-link">데이터 수집</a>
-                <a href="supplements.html" class="nav-link">영양제</a>
-                <a href="users.html" class="nav-link">가입자</a>
-                <a href="qna.html" class="nav-link">Q&A<span id="nav-qna-badge" class="nav-badge hidden"></span></a>
-                <a href="server-status.html" class="nav-link">서버 상태</a>
-                <a href="client-errors.html" class="nav-link">클라이언트 에러</a>
-            </nav>
-        </div>
-    </header>
-
-    <!-- 메인 컨텐츠 -->
-    <main class="main">
-        <div class="welcome-section">
-            <h1 class="welcome-title">마이약 관리자 페이지</h1>
-            <p class="welcome-subtitle">복약 관리 앱 운영을 위한 관리 도구입니다.</p>
-        </div>
-
-        <div class="dashboard-grid">
-            <a href="data-sync.html" class="dashboard-card">
-                <div class="dashboard-icon">📊</div>
-                <div class="dashboard-title">데이터 수집 관리</div>
-                <div class="dashboard-desc">
-                    약물 데이터 동기화 실행<br>
-                    진행 상황 모니터링
-                </div>
-            </a>
-
-            <a href="supplements.html" class="dashboard-card">
-                <div class="dashboard-icon">💊</div>
-                <div class="dashboard-title">영양제 모니터링</div>
-                <div class="dashboard-desc">
-                    최근 등록 영양제 확인<br>
-                    영양제 삭제 관리
-                </div>
-            </a>
-
-            <a href="users.html" class="dashboard-card">
-                <div class="dashboard-icon">👥</div>
-                <div class="dashboard-title">가입자 통계</div>
-                <div class="dashboard-desc">
-                    가입자 수 현황<br>
-                    성별/연령대 분포
-                </div>
-            </a>
-
-            <a href="server-status.html" class="dashboard-card">
-                <div class="dashboard-icon">🖥️</div>
-                <div class="dashboard-title">서버 상태</div>
-                <div class="dashboard-desc">
-                    헬스 체크 및 리소스 모니터링<br>
-                    에러 로그 확인 및 AI 분석
-                </div>
-            </a>
-
-            <a href="client-errors.html" class="dashboard-card">
-                <div class="dashboard-icon">📱</div>
-                <div class="dashboard-title">클라이언트 에러</div>
-                <div class="dashboard-desc">
-                    모바일 앱 에러 로그<br>
-                    날짜별 에러 조회
-                </div>
-            </a>
-
-            <a href="qna.html" class="dashboard-card">
-                <div class="dashboard-icon">💬</div>
-                <div class="dashboard-title">Q&A 관리</div>
-                <div class="dashboard-desc">
-                    사용자 문의 관리<br>
-                    답변 및 상태 변경
-                </div>
-            </a>
-
-            <div class="dashboard-card" id="test-login-card" style="cursor: pointer;">
-                <div class="dashboard-icon">🔐</div>
-                <div class="dashboard-title">테스트 로그인</div>
-                <div class="dashboard-desc">
-                    Google Play 심사용<br>
-                    <span id="test-login-status" style="font-weight: bold; color: #ef4444;">로딩 중...</span>
-                </div>
-                <button id="test-login-toggle" class="btn btn-primary" style="margin-top: 1rem; padding: 0.5rem 1.5rem;">
-                    토글
-                </button>
-            </div>
-        </div>
-    </main>
-
-    <script src="js/session.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/index.js"></script>
+<header class="header"></header>
+<main class="main console-main">
+    <div class="page-heading"><div><p class="eyebrow">OVERVIEW</p><h1>운영 개요</h1><p>서비스 상태와 확인이 필요한 장애 대응을 한곳에서 살펴보세요.</p></div>
+        <button class="btn btn-secondary" id="overview-refresh">새로고침</button></div>
+    <p id="overview-error" class="inline-error" role="alert"></p>
+    <section class="metric-grid" aria-label="서비스 상태">
+        <article class="metric"><span>서버</span><strong id="metric-server">확인 중</strong><small id="metric-response">응답 상태 조회 중</small></article>
+        <article class="metric"><span>데이터베이스</span><strong id="metric-db">확인 중</strong><small>현재 연결 상태</small></article>
+        <article class="metric"><span>승인 대기</span><strong id="metric-approval">—</strong><small>최근 조회 20건 기준</small></article>
+        <article class="metric"><span>수동 확인</span><strong id="metric-manual">—</strong><small>최근 조회 20건 기준</small></article>
+    </section>
+    <section class="panel">
+        <div class="panel-heading"><div><h2>최근 장애 대응</h2><p>보고서를 확인하고 승인 요청 메일에 답장해 주세요.</p></div><a href="incidents.html" class="text-link">전체 보기 →</a></div>
+        <div id="recent-incidents" class="incident-list" aria-live="polite"><p class="empty-state">장애 대응 이력을 불러오는 중입니다.</p></div>
+    </section>
+    <section class="quick-grid" aria-label="자주 사용하는 도구">
+        <a class="quick-link" href="server-status.html"><strong>서버 상태와 로그 <span>↗</span></strong><p>리소스 사용량, 서버 오류와 수동 분석</p></a>
+        <a class="quick-link" href="qna.html"><strong>사용자 문의 <span>↗</span></strong><p>문의 내용 확인과 답변 관리</p></a>
+        <a class="quick-link" href="data-sync.html"><strong>데이터 수집 <span>↗</span></strong><p>의약품 동기화 작업과 진행 현황</p></a>
+    </section>
+    <p id="overview-updated" class="muted update-note"></p>
+</main>
+<script src="js/session.js"></script><script src="js/shell.js"></script><script src="js/api.js"></script>
+<script src="js/incidents.js"></script><script src="js/index.js"></script>
 </body>
 </html>

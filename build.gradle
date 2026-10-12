@@ -90,3 +90,10 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Loopback-only browser fixture. The class and its fake adapters are excluded from bootJar.
+tasks.register('adminPreview', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.myyak.fixture.AdminPreview'
+}
