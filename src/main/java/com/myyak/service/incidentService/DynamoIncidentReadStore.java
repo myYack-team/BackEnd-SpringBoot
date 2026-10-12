@@ -29,16 +29,23 @@ public class DynamoIncidentReadStore implements IncidentReadStore {
 
     @Override
     public Page getIncidents(String cursor) {
-        Map<String, AttributeValue> start = decodeCursor(cursor);
+        QueryRequest request = createQueryRequest(properties.getTableName(), cursor);
         try {
-            QueryResponse response = client.query(QueryRequest.builder().tableName(properties.getTableName())
-                    .indexName("IncidentIndex").keyConditionExpression("#scope = :scope")
-                    .expressionAttributeNames(Map.of("#scope", "scope"))
-                    .expressionAttributeValues(Map.of(":scope", text("INCIDENT")))
-                    .scanIndexForward(false).limit(20).exclusiveStartKey(start).build());
+            QueryResponse response = client.query(request);
             List<IncidentSnapshot> items = response.items().stream().filter(this::retained).map(DynamoIncidentReadStore::snapshot).toList();
             return new Page(items, encodeCursor(response.lastEvaluatedKey()));
         } catch (SdkException error) { throw new GeneralException(ErrorStatus.ADMIN_UNAVAILABLE); }
+    }
+
+    static QueryRequest createQueryRequest(String tableName, String cursor) {
+        Map<String, AttributeValue> start = decodeCursor(cursor);
+        QueryRequest.Builder builder = QueryRequest.builder().tableName(tableName)
+                .indexName("IncidentIndex").keyConditionExpression("#scope = :scope")
+                .expressionAttributeNames(Map.of("#scope", "scope"))
+                .expressionAttributeValues(Map.of(":scope", text("INCIDENT")))
+                .scanIndexForward(false).limit(20);
+        if (!start.isEmpty()) builder.exclusiveStartKey(start);
+        return builder.build();
     }
 
     @Override
