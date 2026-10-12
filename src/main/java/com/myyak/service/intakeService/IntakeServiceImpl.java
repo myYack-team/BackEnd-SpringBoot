@@ -47,14 +47,22 @@ public class IntakeServiceImpl implements IntakeService {
     // (REPEATABLE READ에서는 첫 조회 시점의 스냅샷이 유지되어 직렬화 이후에도 방금 커밋된 기록을 놓침)
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public IntakeResponseDTO.CreateResult createIntake(Long userId, IntakeRequestDTO.CreateRequest request) {
+        List<Long> requestedIds = request.getMedicationIds();
+        // A malformed batch fails as a whole; no partial writes or silently discarded duplicate IDs.
+        if (requestedIds == null || requestedIds.isEmpty() || requestedIds.size() > 100
+                || requestedIds.stream().anyMatch(id -> id == null || id <= 0)
+                || new HashSet<>(requestedIds).size() != requestedIds.size()) {
+            throw new GeneralException(ErrorStatus._BAD_REQUEST);
+        }
+        List<Long> orderedIds = requestedIds.stream().sorted().toList();
         userService.findById(userId);
 
         MedicationTiming timing = request.getTiming();
         IntakeStatus status = request.getStatus() != null ? request.getStatus() : IntakeStatus.TAKEN;
 
         // 대상 약물을 배타 락으로 일괄 조회해 동시 요청을 직렬화한 뒤 존재/소유권 검증
-        List<UserMedication> medications = userMedicationRepository.findAllByIdInForUpdate(request.getMedicationIds());
-        if (medications.size() != request.getMedicationIds().size()) {
+        List<UserMedication> medications = userMedicationRepository.findAllByIdInForUpdate(orderedIds);
+        if (medications.size() != orderedIds.size()) {
             throw new GeneralException(ErrorStatus.MEDICATION_NOT_FOUND);
         }
         boolean allOwned = medications.stream()
@@ -66,8 +74,8 @@ public class IntakeServiceImpl implements IntakeService {
         // 같은 약·복용 시점·날짜·상태로 이미 기록된 약물은 중복 요청으로 보고 재기록·재차감하지 않음
         LocalDate takenDate = request.getTakenAt().toLocalDate();
         Set<Long> recordedIds = new HashSet<>(intakeRepository.findRecordedMedicationIds(
-                request.getMedicationIds(), timing, status,
-                takenDate.atStartOfDay(), takenDate.atTime(LocalTime.MAX)));
+                orderedIds, timing, status,
+                takenDate.atStartOfDay(), takenDate.plusDays(1).atStartOfDay()));
 
         List<Intake> intakes = new ArrayList<>();
         for (UserMedication medication : medications) {

@@ -51,7 +51,7 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
     // 복약 기록용: 대상 약물 행에 배타 락을 걸어 동시 요청을 직렬화
     // (복용 기록 INSERT의 FK 공유 락이 잔여 개수 UPDATE의 배타 락으로 승격되며 교착하는 것을 방지)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT um FROM UserMedication um WHERE um.id IN :ids")
+    @Query("SELECT um FROM UserMedication um WHERE um.id IN :ids ORDER BY um.id")
     List<UserMedication> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
 
     // 여러 사용자의 약물 수 한 번에 집계 (N+1 방지)

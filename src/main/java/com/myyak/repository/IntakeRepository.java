@@ -60,7 +60,7 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
     @Query("SELECT i.userMedication.id FROM Intake i " +
            "WHERE i.userMedication.id IN :userMedicationIds " +
            "AND i.timing = :timing AND i.status = :status " +
-           "AND i.takenAt BETWEEN :start AND :end")
+           "AND i.takenAt >= :start AND i.takenAt < :end")
     List<Long> findRecordedMedicationIds(
             @Param("userMedicationIds") List<Long> userMedicationIds,
             @Param("timing") MedicationTiming timing,
