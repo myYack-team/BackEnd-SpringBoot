@@ -1,0 +1,9 @@
+.login-page{min-height:100vh;display:grid;place-items:center;padding:24px;background:#f3f5f8}
+.login-card{width:min(100%,440px);background:white;border:1px solid #e1e6ed;border-radius:20px;padding:36px;box-shadow:0 16px 60px #2035530a}
+.login-eyebrow{font-size:12px;font-weight:700;color:#596579;letter-spacing:.06em;margin:16px 0 8px}
+.login-card h1{font-size:24px;line-height:1.4;margin-bottom:12px;word-break:keep-all}
+.login-card p{color:#596579;font-size:14px}.login-card .btn{width:100%;margin-top:24px}
+.login-card label{display:block;margin-top:24px;font-size:14px;font-weight:600}
+.login-card input{width:100%;border:1px solid #a2adbf;border-radius:8px;padding:12px;font:inherit;font-size:20px;margin:8px 0;letter-spacing:.12em}
+.login-card .login-hint{font-size:12px}.login-card #login-message{margin-top:20px;white-space:pre-line}
+.login-card button:disabled{opacity:.55;cursor:wait}

@@ -73,6 +73,8 @@ dependencies {
 	// AWS SDK for S3 (이미지 저장)
 	implementation platform('software.amazon.awssdk:bom:2.21.0')
 	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:sesv2'
+	implementation 'software.amazon.awssdk:dynamodb'
 
 	// DevTools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -87,4 +89,21 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// Loopback-only browser fixture. The class and its fake adapters are excluded from bootJar.
+tasks.register('adminPreview', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.myyak.fixture.AdminPreview'
+}
+
+// CI uses synthetic databases and does not bootstrap the production-only application context.
+tasks.register('checkServer', Test) {
+	useJUnitPlatform()
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	exclude '**/MyyakServerApplicationTests.class'
+	maxParallelForks = 1
+	systemProperty 'user.timezone', 'Asia/Seoul'
 }

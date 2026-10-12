@@ -1,0 +1,51 @@
+name: Validate server changes
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validation:
+    name: server-validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7.4
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: fixture-root-password
+          MYSQL_DATABASE: myyak_incident_test
+          MYSQL_USER: test
+          MYSQL_PASSWORD: fixture-password
+        ports: ['13306:3306']
+        options: --health-cmd "mysqladmin ping -h 127.0.0.1 -pfixture-root-password" --health-interval 10s --health-timeout 5s --health-retries 15
+    env:
+      REDIS_INTEGRATION_TEST: 'true'
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      MYSQL_INTEGRATION_TEST: 'true'
+      MYSQL_TEST_URL: jdbc:mysql://127.0.0.1:13306/myyak_incident_test?serverTimezone=Asia/Seoul
+      MYSQL_TEST_USER: test
+      MYSQL_TEST_PASSWORD: fixture-password
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          java-version: '21'
+          distribution: temurin
+      - name: Test with disposable Redis and MySQL
+        run: |
+          chmod +x gradlew
+          ./gradlew checkServer --no-daemon
+      - name: Validate administrator scripts
+        run: |
+          for file in src/main/resources/static/admin/js/*.js; do node --check "$file"; done
+      - name: Build without production configuration
+        run: ./gradlew bootJar --no-daemon

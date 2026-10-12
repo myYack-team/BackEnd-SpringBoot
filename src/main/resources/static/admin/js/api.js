@@ -8,7 +8,7 @@ const API = {
      * GET 요청
      */
     async get(endpoint) {
-        const response = await fetch(`${this.baseUrl}${endpoint}`);
+        const response = await AdminSession.fetch(`${this.baseUrl}${endpoint}`);
         return this.handleResponse(response);
     },
 
@@ -25,7 +25,7 @@ const API = {
         if (data) {
             options.body = JSON.stringify(data);
         }
-        const response = await fetch(`${this.baseUrl}${endpoint}`, options);
+        const response = await AdminSession.fetch(`${this.baseUrl}${endpoint}`, options);
         return this.handleResponse(response);
     },
 
@@ -40,7 +40,7 @@ const API = {
             options.headers = { 'Content-Type': 'application/json' };
             options.body = JSON.stringify(data);
         }
-        const response = await fetch(`${this.baseUrl}${endpoint}`, options);
+        const response = await AdminSession.fetch(`${this.baseUrl}${endpoint}`, options);
         return this.handleResponse(response);
     },
 
@@ -127,7 +127,7 @@ const API = {
             formData.append('csvFile', options.csvFile);
         }
 
-        const response = await fetch(`${this.baseUrl}/drugs/batch/full-sync`, {
+        const response = await AdminSession.fetch(`${this.baseUrl}/drugs/batch/full-sync`, {
             method: 'POST',
             body: formData,
         });
@@ -176,7 +176,7 @@ const API = {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${this.baseUrl}/drugs/batch/csv-upload`, {
+        const response = await AdminSession.fetch(`${this.baseUrl}/drugs/batch/csv-upload`, {
             method: 'POST',
             body: formData,
         });
@@ -239,7 +239,7 @@ const AdminAPI = {
      * 문의 상태 변경
      */
     async updateQnAStatus(questionId, status) {
-        const response = await fetch(`${API.baseUrl}/admin/qna/${questionId}/status`, {
+        const response = await AdminSession.fetch(`${API.baseUrl}/admin/qna/${questionId}/status`, {
             method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
@@ -319,7 +319,7 @@ const AdminAPI = {
      * AI 모델 설정 변경
      */
     async updateAiModelSetting(request) {
-        const response = await fetch(`${API.baseUrl}/admin/settings/ai-model`, {
+        const response = await AdminSession.fetch(`${API.baseUrl}/admin/settings/ai-model`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
