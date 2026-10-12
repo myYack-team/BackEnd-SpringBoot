@@ -59,7 +59,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (request !== generation) return;
             IncidentUI.detail(detail, item); history.replaceState(null, '', 'incidents.html?id=' + encodeURIComponent(id));
             container.querySelectorAll('button').forEach(button => { button.classList.toggle('selected', button.dataset.id === id); button.setAttribute('aria-pressed', String(button.dataset.id === id)); });
-            if (focus) detail.focus({ preventScroll: true });
+            if (focus) {
+                detail.focus({ preventScroll: true });
+                if (window.matchMedia('(max-width: 1100px)').matches) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
         } catch (failure) { if (request === generation) detail.textContent = failure.message; }
     }
     async function load(append = false) {
