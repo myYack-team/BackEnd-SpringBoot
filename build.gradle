@@ -73,6 +73,8 @@ dependencies {
 	// AWS SDK for S3 (이미지 저장)
 	implementation platform('software.amazon.awssdk:bom:2.21.0')
 	implementation 'software.amazon.awssdk:s3'
+	implementation 'software.amazon.awssdk:sesv2'
+	implementation 'software.amazon.awssdk:dynamodb'
 
 	// DevTools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'

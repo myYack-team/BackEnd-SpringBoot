@@ -166,7 +166,7 @@ function initTestLogin() {
 async function loadTestLoginStatus() {
     const statusEl = document.getElementById('test-login-status');
     try {
-        const response = await fetch('/api/admin/test-login/status');
+        const response = await AdminSession.fetch('/api/admin/test-login/status');
         const data = await response.json();
         if (data.isSuccess && data.result) {
             updateTestLoginUI(data.result.enabled);
@@ -193,7 +193,7 @@ async function toggleTestLogin(e) {
     toggleBtn.textContent = '처리 중...';
 
     try {
-        const response = await fetch('/api/admin/test-login/toggle', {
+        const response = await AdminSession.fetch('/api/admin/test-login/toggle', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });

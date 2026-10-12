@@ -26,6 +26,9 @@ public enum ErrorStatus implements BaseErrorCode {
     AUTH_INVALID_CODE(HttpStatus.BAD_REQUEST, "AUTH406", "유효하지 않은 인증 코드입니다."),
     AUTH_TEMPORARY_STORE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH503", "인증 서비스를 일시적으로 사용할 수 없습니다."),
     AUTH_REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED, "AUTH407", "리프레시 토큰이 재사용되어 다시 로그인해야 합니다."),
+    ADMIN_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "ADMIN503", "관리자 서비스를 사용할 수 없습니다."),
+    ADMIN_CODE_INVALID(HttpStatus.UNAUTHORIZED, "ADMIN401", "인증 코드가 만료되었거나 올바르지 않습니다."),
+    ADMIN_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ADMIN429", "잠시 후 인증 코드를 다시 요청해주세요."),
 
     // 사용자 관련 에러
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER404", "사용자를 찾을 수 없습니다."),
