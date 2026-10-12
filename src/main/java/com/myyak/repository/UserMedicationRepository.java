@@ -2,7 +2,9 @@ package com.myyak.repository;
 
 import com.myyak.domain.User;
 import com.myyak.domain.UserMedication;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -45,6 +47,12 @@ public interface UserMedicationRepository extends JpaRepository<UserMedication, 
             "AND um.user.id = :userId " +
             "AND um.isActive = true")
     List<UserMedication> findActiveByIdInAndUserId(@Param("ids") List<Long> ids, @Param("userId") Long userId);
+
+    // 복약 기록용: 대상 약물 행에 배타 락을 걸어 동시 요청을 직렬화
+    // (복용 기록 INSERT의 FK 공유 락이 잔여 개수 UPDATE의 배타 락으로 승격되며 교착하는 것을 방지)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT um FROM UserMedication um WHERE um.id IN :ids")
+    List<UserMedication> findAllByIdInForUpdate(@Param("ids") List<Long> ids);
 
     // 여러 사용자의 약물 수 한 번에 집계 (N+1 방지)
     @Query("SELECT um.user.id, COUNT(um) FROM UserMedication um WHERE um.user.id IN :userIds GROUP BY um.user.id")

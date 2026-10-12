@@ -2,6 +2,7 @@ package com.myyak.repository;
 
 import com.myyak.domain.Intake;
 import com.myyak.domain.UserMedication;
+import com.myyak.domain.enums.IntakeStatus;
 import com.myyak.domain.enums.MedicationTiming;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -49,6 +50,21 @@ public interface IntakeRepository extends JpaRepository<Intake, Long> {
     boolean existsByUserSupplementIdAndTimingAndDateRange(
             @Param("userSupplementId") Long userSupplementId,
             @Param("timing") MedicationTiming timing,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
+
+    /**
+     * 같은 복용 시점·상태로 해당 날짜에 이미 기록된 약물 ID 조회 (중복 요청 방어용)
+     */
+    @Query("SELECT i.userMedication.id FROM Intake i " +
+           "WHERE i.userMedication.id IN :userMedicationIds " +
+           "AND i.timing = :timing AND i.status = :status " +
+           "AND i.takenAt BETWEEN :start AND :end")
+    List<Long> findRecordedMedicationIds(
+            @Param("userMedicationIds") List<Long> userMedicationIds,
+            @Param("timing") MedicationTiming timing,
+            @Param("status") IntakeStatus status,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end
     );
