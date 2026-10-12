@@ -97,3 +97,13 @@ tasks.register('adminPreview', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.myyak.fixture.AdminPreview'
 }
+
+// CI uses synthetic databases and does not bootstrap the production-only application context.
+tasks.register('checkServer', Test) {
+	useJUnitPlatform()
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	exclude '**/MyyakServerApplicationTests.class'
+	maxParallelForks = 1
+	systemProperty 'user.timezone', 'Asia/Seoul'
+}
