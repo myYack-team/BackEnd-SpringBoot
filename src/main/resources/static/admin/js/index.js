@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const status = document.createElement('p');
         status.className = 'visitor-status';
         status.setAttribute('role', 'status');
-        status.textContent = loading ? '방문자 수를 불러오는 중입니다.' : '방문자 수를 가져오지 못했습니다.';
+        status.textContent = loading ? '활성 계정 수를 불러오는 중입니다.' : '활성 계정 수를 가져오지 못했습니다.';
         visitorChart.replaceChildren(status);
     }
 
@@ -26,19 +26,19 @@ document.addEventListener('DOMContentLoaded', () => {
             || !validCount(visits.todayVisitors) || !validCount(visits.yesterdayVisitors)
             || !Array.isArray(visits.daily) || visits.daily.length !== 7
             || visits.daily.some(day => !day || !validDate(day.date) || !validCount(day.visitors))) {
-            throw new Error('방문자 응답을 확인할 수 없습니다.');
+            throw new Error('활성 계정 응답을 확인할 수 없습니다.');
         }
         const maximum = Math.max(1, ...visits.daily.map(day => day.visitors));
         const list = document.createElement('ul');
         list.className = 'visitor-bars';
-        list.setAttribute('aria-label', '최근 7일 날짜별 앱 방문자');
+        list.setAttribute('aria-label', '최근 7일 날짜별 활성 계정');
         for (const day of visits.daily) {
             const item = document.createElement('li');
             const today = day.date === visits.today;
             if (today) item.className = 'is-today';
             const count = document.createElement('span');
             count.className = 'visitor-bar-count';
-            count.textContent = numberFormat.format(day.visitors) + '명';
+            count.textContent = numberFormat.format(day.visitors) + '개';
             const track = document.createElement('div');
             track.className = 'visitor-bar-track';
             track.setAttribute('aria-hidden', 'true');
@@ -58,8 +58,8 @@ document.addEventListener('DOMContentLoaded', () => {
             list.append(item);
         }
         visitorChart.replaceChildren(list);
-        document.getElementById('visitor-today').textContent = numberFormat.format(visits.todayVisitors) + '명';
-        document.getElementById('visitor-yesterday').textContent = numberFormat.format(visits.yesterdayVisitors) + '명';
+        document.getElementById('visitor-today').textContent = numberFormat.format(visits.todayVisitors) + '개';
+        document.getElementById('visitor-yesterday').textContent = numberFormat.format(visits.yesterdayVisitors) + '개';
         visitorBody.setAttribute('aria-busy', 'false');
     }
 
@@ -91,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderVisitors(results[2].value);
         } catch (error) {
             resetVisitors(false);
-            visitorError.textContent = '방문 통계 조회에 실패했습니다. 새로고침하여 다시 확인해 주세요.';
+            visitorError.textContent = '활성 계정 통계 조회에 실패했습니다. 새로고침하여 다시 확인해 주세요.';
         }
         const failed = results.slice(0, 2).find(result => result.status === 'rejected');
         if (failed) document.getElementById('overview-error').textContent = failed.reason.message;

@@ -11,10 +11,6 @@ import java.util.stream.IntStream;
 public final class VisitConverter {
     private VisitConverter() {}
 
-    public static VisitResponseDTO.RecordResult toRecordResult(LocalDate date, long nextVisitInSeconds) {
-        return new VisitResponseDTO.RecordResult(date, nextVisitInSeconds);
-    }
-
     public static VisitResponseDTO.Summary toSummary(LocalDate today, List<UserVisitRepository.DailyCount> counts) {
         Map<LocalDate, Long> byDate = counts.stream().collect(Collectors.toMap(
                 UserVisitRepository.DailyCount::getVisitDate, UserVisitRepository.DailyCount::getVisitors));

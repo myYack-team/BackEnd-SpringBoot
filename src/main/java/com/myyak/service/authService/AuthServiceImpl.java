@@ -8,6 +8,7 @@ import com.myyak.domain.User;
 import com.myyak.repository.AppSettingRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.service.authService.store.RefreshTokenSessionStore;
+import com.myyak.service.visitService.VisitTrackingService;
 import com.myyak.service.oAuthService.kakaoService.KakaoOAuthService;
 import com.myyak.util.JwtProvider;
 import com.myyak.web.dto.AuthDTO.AuthRequestDTO;
@@ -38,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final RefreshTokenSessionStore refreshTokenSessionStore;
     private final JwtProvider jwtProvider;
     private final AppSettingRepository appSettingRepository;
+    private final VisitTrackingService visitTrackingService;
 
     @Override
     public String getKakaoAuthorizationUrl(String baseUrl, String state) {
@@ -100,6 +102,8 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenSessionStore.issue(user.getId(), refreshToken, familyId,
                 jwtProvider.getExpiration(refreshToken).toInstant());
 
+        visitTrackingService.recordVisitAfterCommit(user.getId());
+
         // 응답 생성
         return AuthConverter.toLoginResponse(
                 accessToken, refreshToken, jwtProvider.getAccessTokenExpiry(), user, isNewUser);
@@ -142,6 +146,8 @@ public class AuthServiceImpl implements AuthService {
         // 저장소에서 이전 토큰 폐기와 새 토큰 저장을 원자적으로 처리한다.
         refreshTokenSessionStore.rotate(userId, refreshTokenValue, newRefreshToken, familyId,
                 claims.getExpiration().toInstant(), jwtProvider.getExpiration(newRefreshToken).toInstant());
+
+        visitTrackingService.recordVisitAfterCommit(user.getId());
 
         log.info("토큰 갱신 완료: userId={}", user.getId());
 
@@ -189,6 +195,8 @@ public class AuthServiceImpl implements AuthService {
         // 4. Refresh Token 저장
         refreshTokenSessionStore.issue(user.getId(), refreshToken, familyId,
                 jwtProvider.getExpiration(refreshToken).toInstant());
+
+        visitTrackingService.recordVisitAfterCommit(user.getId());
 
         log.info("테스트 로그인 성공: userId={}", user.getId());
 

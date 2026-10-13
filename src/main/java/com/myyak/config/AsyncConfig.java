@@ -2,6 +2,7 @@ package com.myyak.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
@@ -16,6 +17,7 @@ import java.util.concurrent.Executor;
 public class AsyncConfig {
 
     @Bean(name = "drugBatchExecutor")
+    @Primary // Keep the existing executor for unnamed @Async methods.
     public Executor drugBatchExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(1);        // 동시에 1개의 배치 작업만 실행
@@ -23,6 +25,17 @@ public class AsyncConfig {
         executor.setQueueCapacity(5);       // 대기열 5개
         executor.setThreadNamePrefix("DrugBatch-");
         executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "visitStatisticsExecutor")
+    public Executor visitStatisticsExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(256);
+        executor.setThreadNamePrefix("VisitStatistics-");
+        executor.setAwaitTerminationSeconds(5);
         return executor;
     }
 }

@@ -257,6 +257,6 @@ PR 등록·메일 도구는 Lambda에 **비동기 요청을 접수**합니다. �
 | [myYak-website](https://github.com/myYack-team/myYak-website) | 서비스 소개·개인정보·약관·탈퇴 안내 정적 사이트 |
 | 별도 비공개 작업 저장소 | Gemini CLI/MCP 도구, 장애 제어 계층과 분석 워크플로 |
 
-**백엔드 상세 문서**: [백엔드 가이드](docs/BACKEND_GUIDE.md), [Redis 임시 인증 저장소](docs/REDIS_AUTH_OPERATIONS.md), [Refresh Token Redis 운영](docs/REFRESH_TOKEN_REDIS_OPERATIONS.md), [일일 앱 방문자 통계](docs/DAILY_APP_VISITORS.md). 상세 문서는 각 문서의 기준 시점과 함께 확인합니다.
+**백엔드 상세 문서**: [백엔드 가이드](docs/BACKEND_GUIDE.md), [Redis 임시 인증 저장소](docs/REDIS_AUTH_OPERATIONS.md), [Refresh Token Redis 운영](docs/REFRESH_TOKEN_REDIS_OPERATIONS.md), [일일 활성 계정 통계](docs/DAILY_APP_VISITORS.md). 상세 문서는 각 문서의 기준 시점과 함께 확인합니다.
 
 **문의**: [GitHub Issues](https://github.com/myYack-team/BackEnd-SpringBoot/issues)

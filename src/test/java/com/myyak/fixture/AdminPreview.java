@@ -7,6 +7,8 @@ import com.myyak.config.*;
 import com.myyak.domain.incident.IncidentSnapshot;
 import com.myyak.filter.AdminSessionFilter;
 import com.myyak.filter.JwtAuthenticationFilter;
+import com.myyak.filter.UserVisitFilter;
+import com.myyak.service.visitService.VisitTrackingService;
 import com.myyak.service.adminAuthService.AdminAuthService;
 import com.myyak.service.incidentService.*;
 import com.myyak.util.JwtProvider;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.*;
 @TestConfiguration
 @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
         RedisAutoConfiguration.class, RedisRepositoriesAutoConfiguration.class})
-@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class, AdminAuthController.class,
+@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class, UserVisitFilter.class, AdminAuthController.class,
         AdminIncidentController.class, IncidentServiceImpl.class, AdminPreview.Health.class})
 public class AdminPreview {
     public static void main(String[] args) {
@@ -53,6 +55,7 @@ public class AdminPreview {
         when(provider.getTokenType("fixture-user-token")).thenReturn("access");
         when(provider.getUserIdFromToken("fixture-user-token")).thenReturn(7L); return provider;
     }
+    @Bean VisitTrackingService visitTrackingService() { return mock(VisitTrackingService.class); }
     @Bean CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration(); config.setAllowedOrigins(List.of("http://127.0.0.1:8780"));
         config.setAllowedMethods(List.of("GET", "POST")); config.setAllowedHeaders(List.of("*")); config.setAllowCredentials(true);

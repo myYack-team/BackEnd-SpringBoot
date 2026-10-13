@@ -7,12 +7,6 @@ import java.util.List;
 
 public class VisitResponseDTO {
     @Getter @AllArgsConstructor
-    public static class RecordResult {
-        private LocalDate visitDate;
-        private long nextVisitInSeconds;
-    }
-
-    @Getter @AllArgsConstructor
     public static class Summary {
         private LocalDate today;
         private String timeZone;

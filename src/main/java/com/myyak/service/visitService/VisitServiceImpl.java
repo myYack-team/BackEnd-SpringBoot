@@ -11,11 +11,10 @@ import com.myyak.web.dto.VisitDTO.VisitResponseDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.Duration;
 
 @Service
 @Transactional(readOnly = true)
@@ -37,21 +36,15 @@ public class VisitServiceImpl implements VisitService {
     }
 
     @Override
-    @Transactional
-    public VisitResponseDTO.RecordResult createVisit(Long userId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createVisit(Long userId, LocalDate date) {
         // Lock before the first consistent read: concurrent requests observe the committed visit.
         // Account deletion acquires the same parent lock before removing child rows.
         User user = users.findByIdForUpdate(userId)
                 .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
-        ZonedDateTime now = ZonedDateTime.now(clock);
-        LocalDate date = now.toLocalDate();
         if (!visits.existsByUserIdAndVisitDate(userId, date)) {
             visits.save(UserVisit.builder().user(user).visitDate(date).build());
         }
-        // Round up so the app's relative timer does not fire before the server's next day.
-        long remainingMillis = Duration.between(now, date.plusDays(1).atStartOfDay(VISIT_ZONE)).toMillis();
-        long nextVisitInSeconds = Math.max(1, (remainingMillis + 999) / 1000);
-        return VisitConverter.toRecordResult(date, nextVisitInSeconds);
     }
 
     @Override

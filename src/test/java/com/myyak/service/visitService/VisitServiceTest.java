@@ -24,9 +24,9 @@ class VisitServiceTest {
         when(users.findByIdForUpdate(7L)).thenReturn(Optional.of(User.builder().id(7L).build()));
         LocalDate before = LocalDate.of(2026, 10, 12), after = before.plusDays(1);
         when(visits.existsByUserIdAndVisitDate(7L, after)).thenReturn(false, true);
-        assertThat(service("2026-10-12T14:59:59Z").createVisit(7L).getVisitDate()).isEqualTo(before);
-        assertThat(service("2026-10-12T15:00:00Z").createVisit(7L).getVisitDate()).isEqualTo(after);
-        service("2026-10-12T15:00:01Z").createVisit(7L);
+        service("2026-10-12T14:59:59Z").createVisit(7L, before);
+        service("2026-10-12T15:00:00Z").createVisit(7L, after);
+        service("2026-10-12T15:00:01Z").createVisit(7L, after);
         var records = org.mockito.ArgumentCaptor.forClass(UserVisit.class);
         verify(visits, times(2)).save(records.capture());
         assertThat(records.getAllValues()).extracting(UserVisit::getVisitDate).containsExactly(before, after);
@@ -37,16 +37,9 @@ class VisitServiceTest {
 
     @Test void missingUserCannotCreateAVisit() {
         when(users.findByIdForUpdate(7L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service("2026-10-12T15:00:00Z").createVisit(7L))
+        assertThatThrownBy(() -> service("2026-10-12T15:00:00Z").createVisit(7L, LocalDate.of(2026, 10, 13)))
                 .isInstanceOf(GeneralException.class);
         verifyNoInteractions(visits);
-    }
-
-    @Test void nextDayDelayUsesServerClockAndRoundsUpAtMidnight() {
-        when(users.findByIdForUpdate(7L)).thenReturn(Optional.of(User.builder().id(7L).build()));
-        assertThat(service("2026-10-12T14:59:59.500Z").createVisit(7L).getNextVisitInSeconds()).isEqualTo(1);
-        assertThat(service("2026-10-12T15:00:00Z").createVisit(7L).getNextVisitInSeconds()).isEqualTo(86400);
-        assertThat(service("2026-10-12T20:00:00Z").createVisit(7L).getNextVisitInSeconds()).isEqualTo(68400);
     }
 
     @Test void summaryFillsMissingDatesAndQueriesOnlyRecentKoreanDates() {
