@@ -88,6 +88,21 @@ public class AdminPreview {
                 List.of(new IncidentSnapshot.Event(at, "QUEUED"), new IncidentSnapshot.Event(at + 20, "RUNNING"), new IncidentSnapshot.Event(at + 120, state)));
     }
     @RestController static class Health {
+        private volatile boolean visitsUnavailable;
+        @PostMapping("/api/admin/fixture/visits-failure") ApiResponse<?> updateVisitsFailure(@RequestParam boolean enabled) {
+            visitsUnavailable = enabled;
+            return ApiResponse.onSuccess(Map.of("enabled", enabled));
+        }
+        @GetMapping("/api/admin/visits") org.springframework.http.ResponseEntity<?> getVisits() {
+            if (visitsUnavailable) return org.springframework.http.ResponseEntity.status(503)
+                    .body(ApiResponse.onFailure("ADMIN503", "관리자 서비스를 사용할 수 없습니다.", null));
+            var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            var daily = java.util.stream.IntStream.rangeClosed(0, 6).mapToObj(index ->
+                    Map.of("date", today.minusDays(6 - index).toString(), "visitors", new int[]{3, 0, 8, 5, 6, 7, 12}[index])).toList();
+            return org.springframework.http.ResponseEntity.ok(ApiResponse.onSuccess(
+                    Map.of("today", today.toString(), "timeZone", "Asia/Seoul",
+                    "todayVisitors", 12, "yesterdayVisitors", 7, "daily", daily)));
+        }
         @GetMapping("/api/admin/health") ApiResponse<?> getHealth() {
             return ApiResponse.onSuccess(Map.of("serverUp", true, "databaseUp", true, "responseTimeMs", 28));
         }
