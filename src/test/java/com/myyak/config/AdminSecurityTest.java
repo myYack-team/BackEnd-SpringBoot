@@ -2,6 +2,8 @@ package com.myyak.config;
 
 import com.myyak.filter.AdminSessionFilter;
 import com.myyak.filter.JwtAuthenticationFilter;
+import com.myyak.filter.UserVisitFilter;
+import com.myyak.service.visitService.VisitTrackingService;
 import com.myyak.service.adminAuthService.AdminAuthService;
 import com.myyak.util.JwtProvider;
 import jakarta.servlet.http.Cookie;
@@ -25,7 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AdminSecurityTest.Probe.class)
-@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class,
+@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class, UserVisitFilter.class,
         AdminAccessProperties.class, AdminSecurityTest.TestCors.class, AdminSecurityTest.Probe.class})
 class AdminSecurityTest {
     // MockMvc does not populate servletPath by default; Tomcat's default servlet mapping does.
@@ -38,6 +40,7 @@ class AdminSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean AdminAuthService service;
     @MockitoBean JwtProvider jwtProvider;
+    @MockitoBean VisitTrackingService tracking;
     private final Cookie cookie = new Cookie(AdminSessionFilter.COOKIE, "valid-session");
 
     @BeforeEach void setup() {

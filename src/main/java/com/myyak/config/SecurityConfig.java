@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.myyak.apiPayload.ApiResponse;
 import com.myyak.filter.JwtAuthenticationFilter;
 import com.myyak.filter.AdminSessionFilter;
+import com.myyak.filter.UserVisitFilter;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.http.HttpMethod;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final AdminSessionFilter adminSessionFilter;
+    private final UserVisitFilter userVisitFilter;
 
     @Value("${spring.profiles.active:dev}")
     private String activeProfile;
@@ -120,7 +122,8 @@ public class SecurityConfig {
                         })
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(adminSessionFilter, JwtAuthenticationFilter.class);
+                .addFilterAfter(adminSessionFilter, JwtAuthenticationFilter.class)
+                .addFilterAfter(userVisitFilter, AdminSessionFilter.class);
 
         return http.build();
     }
@@ -135,6 +138,13 @@ public class SecurityConfig {
     @Bean
     public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
         FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<UserVisitFilter> visitFilterRegistration(UserVisitFilter filter) {
+        FilterRegistrationBean<UserVisitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }

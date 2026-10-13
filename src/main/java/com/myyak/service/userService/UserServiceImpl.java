@@ -24,6 +24,7 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserVisitRepository userVisitRepository;
     private final UserMedicationRepository userMedicationRepository;
     private final UserSupplementRepository userSupplementRepository;
     private final IntakeRepository intakeRepository;
@@ -79,7 +80,8 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void deleteMe(Long userId) {
-        User user = findById(userId);
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new GeneralException(ErrorStatus.USER_NOT_FOUND));
         log.info("회원 탈퇴 시작 - userId: {}, name: {}", userId, user.getName());
 
         // 0. 카카오 연결 끊기 (Admin API 사용)
@@ -100,6 +102,7 @@ public class UserServiceImpl implements UserService {
         analysisTemporaryNoteRepository.deleteAllByUserId(userId);
         userAnalysisQuotaRepository.deleteAllByUserId(userId);
         healthNoteRepository.deleteAllByUserId(userId);
+        userVisitRepository.deleteAllByUserId(userId);
 
         // 3. 문의/가족 연결 벌크 삭제
         qnAReplyRepository.deleteAllByUserId(userId);

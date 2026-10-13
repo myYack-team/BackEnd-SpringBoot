@@ -7,6 +7,8 @@ import com.myyak.config.*;
 import com.myyak.domain.incident.IncidentSnapshot;
 import com.myyak.filter.AdminSessionFilter;
 import com.myyak.filter.JwtAuthenticationFilter;
+import com.myyak.filter.UserVisitFilter;
+import com.myyak.service.visitService.VisitTrackingService;
 import com.myyak.service.adminAuthService.AdminAuthService;
 import com.myyak.service.incidentService.*;
 import com.myyak.util.JwtProvider;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.*;
 @TestConfiguration
 @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
         RedisAutoConfiguration.class, RedisRepositoriesAutoConfiguration.class})
-@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class, AdminAuthController.class,
+@Import({SecurityConfig.class, AdminSessionFilter.class, JwtAuthenticationFilter.class, UserVisitFilter.class, AdminAuthController.class,
         AdminIncidentController.class, IncidentServiceImpl.class, AdminPreview.Health.class})
 public class AdminPreview {
     public static void main(String[] args) {
@@ -53,6 +55,7 @@ public class AdminPreview {
         when(provider.getTokenType("fixture-user-token")).thenReturn("access");
         when(provider.getUserIdFromToken("fixture-user-token")).thenReturn(7L); return provider;
     }
+    @Bean VisitTrackingService visitTrackingService() { return mock(VisitTrackingService.class); }
     @Bean CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration(); config.setAllowedOrigins(List.of("http://127.0.0.1:8780"));
         config.setAllowedMethods(List.of("GET", "POST")); config.setAllowedHeaders(List.of("*")); config.setAllowCredentials(true);
@@ -88,6 +91,21 @@ public class AdminPreview {
                 List.of(new IncidentSnapshot.Event(at, "QUEUED"), new IncidentSnapshot.Event(at + 20, "RUNNING"), new IncidentSnapshot.Event(at + 120, state)));
     }
     @RestController static class Health {
+        private volatile boolean visitsUnavailable;
+        @PostMapping("/api/admin/fixture/visits-failure") ApiResponse<?> updateVisitsFailure(@RequestParam boolean enabled) {
+            visitsUnavailable = enabled;
+            return ApiResponse.onSuccess(Map.of("enabled", enabled));
+        }
+        @GetMapping("/api/admin/visits") org.springframework.http.ResponseEntity<?> getVisits() {
+            if (visitsUnavailable) return org.springframework.http.ResponseEntity.status(503)
+                    .body(ApiResponse.onFailure("ADMIN503", "관리자 서비스를 사용할 수 없습니다.", null));
+            var today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            var daily = java.util.stream.IntStream.rangeClosed(0, 6).mapToObj(index ->
+                    Map.of("date", today.minusDays(6 - index).toString(), "visitors", new int[]{3, 0, 8, 5, 6, 7, 12}[index])).toList();
+            return org.springframework.http.ResponseEntity.ok(ApiResponse.onSuccess(
+                    Map.of("today", today.toString(), "timeZone", "Asia/Seoul",
+                    "todayVisitors", 12, "yesterdayVisitors", 7, "daily", daily)));
+        }
         @GetMapping("/api/admin/health") ApiResponse<?> getHealth() {
             return ApiResponse.onSuccess(Map.of("serverUp", true, "databaseUp", true, "responseTimeMs", 28));
         }
