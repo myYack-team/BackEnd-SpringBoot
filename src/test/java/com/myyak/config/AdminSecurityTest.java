@@ -53,12 +53,14 @@ class AdminSecurityTest {
     @Test void anonymousPagesRedirectAndApisRequireAuthentication() throws Exception {
         mvc.perform(get("/admin/index.html")).andExpect(status().isFound()).andExpect(redirectedUrlPattern("/admin/login.html?next=*"));
         mvc.perform(get("/api/admin/probe")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/admin/logs")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/error-log/files")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/drugs/batch/probe")).andExpect(status().isUnauthorized());
     }
 
     @Test void normalUserCannotUseAdministratorApisOrBatchBypass() throws Exception {
         mvc.perform(get("/api/admin/probe").header("Authorization", "Bearer user-token")).andExpect(status().isForbidden());
+        mvc.perform(get("/api/admin/logs").header("Authorization", "Bearer user-token")).andExpect(status().isForbidden());
         mvc.perform(post("/api/drugs/batch/probe").header("Authorization", "Bearer user-token")).andExpect(status().isForbidden());
     }
 

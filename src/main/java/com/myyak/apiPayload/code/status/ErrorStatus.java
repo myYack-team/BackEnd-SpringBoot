@@ -27,6 +27,8 @@ public enum ErrorStatus implements BaseErrorCode {
     AUTH_TEMPORARY_STORE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AUTH503", "인증 서비스를 일시적으로 사용할 수 없습니다."),
     AUTH_REFRESH_TOKEN_REUSED(HttpStatus.UNAUTHORIZED, "AUTH407", "리프레시 토큰이 재사용되어 다시 로그인해야 합니다."),
     ADMIN_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "ADMIN503", "관리자 서비스를 사용할 수 없습니다."),
+    ADMIN_LOG_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "LOG503", "서버 로그를 읽을 수 없습니다. 로그 저장 상태를 확인해주세요."),
+    ADMIN_LOG_RANGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "LOG413", "조회할 로그가 너무 많습니다. 조회 시간 범위를 줄여주세요."),
     ADMIN_CODE_INVALID(HttpStatus.UNAUTHORIZED, "ADMIN401", "인증 코드가 만료되었거나 올바르지 않습니다."),
     ADMIN_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ADMIN429", "잠시 후 인증 코드를 다시 요청해주세요."),
 

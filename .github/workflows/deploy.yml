@@ -199,6 +199,13 @@ jobs:
           ENDSSH
 
       # 12. 서버 재시작
+      - name: Prepare private application log directory
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
+            install -d -m 700 /home/ubuntu/.myyak /home/ubuntu/.myyak/logs
+          ENDSSH
+
       - name: Restart application
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
