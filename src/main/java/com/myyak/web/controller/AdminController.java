@@ -99,7 +99,7 @@ public class AdminController {
 
     @Operation(
             summary = "에러 로그 목록 조회",
-            description = "journalctl에서 서버 로그를 조회합니다. 레벨 필터링 및 시간 범위 지정이 가능합니다."
+            description = "회전 파일에서 서버 로그를 조회합니다. 레벨 필터링 및 최근 1~168시간 범위 지정이 가능합니다."
     )
     @GetMapping("/logs")
     public ApiResponse<AdminResponseDTO.ErrorLogList> getErrorLogs(

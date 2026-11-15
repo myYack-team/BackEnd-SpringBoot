@@ -16,6 +16,7 @@ import com.myyak.repository.UserMedicationRepository;
 import com.myyak.repository.UserRepository;
 import com.myyak.repository.UserSupplementRepository;
 import com.myyak.service.llm.LlmClient;
+import com.myyak.service.serverLogService.ServerLogService;
 import com.myyak.service.storage.StorageClient;
 import com.myyak.service.userService.UserService;
 import com.myyak.web.dto.AdminDTO.AdminRequestDTO;
@@ -28,15 +29,16 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import javax.sql.DataSource;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.sql.Connection;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -60,6 +62,7 @@ public class AdminServiceImpl implements AdminService {
     private final UserService userService;
     private final UserMedicationRepository userMedicationRepository;
     private final AppSettingRepository appSettingRepository;
+    private final ServerLogService serverLogService;
 
     // 서버 로그 형식: 2026-01-09T11:44:03.382+09:00  INFO 31804 --- [myyak-server] [           main] c.m.Class : Message
     private static final Pattern LOG_PATTERN = Pattern.compile(
@@ -71,7 +74,7 @@ public class AdminServiceImpl implements AdminService {
             "([^:]+)\\s*:\\s*(.*)");
 
     private static final DateTimeFormatter LOG_DATE_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+            DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
     @Value("${app.version:0.0.1-SNAPSHOT}")
     private String appVersion;
@@ -302,80 +305,14 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AdminResponseDTO.ErrorLogList getErrorLogs(int page, int size, String level, Integer hours) {
-        List<RawLogEntry> rawLogs = new ArrayList<>();
-
-        try {
-            String sinceTime = hours != null ? hours + "h ago" : "24h ago";
-            ProcessBuilder pb = new ProcessBuilder(
-                    "journalctl",
-                    "-u", "myyak",
-                    "--since", sinceTime,
-                    "--no-pager",
-                    "-o", "cat"
-            );
-            pb.redirectErrorStream(true);
-
-            Process process = pb.start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                StringBuilder currentStackTrace = new StringBuilder();
-                RawLogEntry currentEntry = null;
-
-                while ((line = reader.readLine()) != null) {
-                    Matcher matcher = LOG_PATTERN.matcher(line);
-
-                    if (matcher.matches()) {
-                        if (currentEntry != null) {
-                            if (currentStackTrace.length() > 0) {
-                                currentEntry.stackTrace = currentStackTrace.toString();
-                            }
-                            rawLogs.add(currentEntry);
-                        }
-
-                        String timestamp = matcher.group(1);
-                        String logLevel = matcher.group(2);
-                        String threadName = matcher.group(3).trim();
-                        String logger = matcher.group(4).trim();
-                        String message = matcher.group(5);
-
-                        LocalDateTime parsedTime;
-                        try {
-                            OffsetDateTime odt = OffsetDateTime.parse(timestamp, LOG_DATE_FORMATTER);
-                            parsedTime = odt.toLocalDateTime();
-                        } catch (Exception e) {
-                            parsedTime = LocalDateTime.now();
-                        }
-
-                        currentEntry = new RawLogEntry();
-                        currentEntry.timestamp = parsedTime;
-                        currentEntry.level = logLevel;
-                        currentEntry.logger = logger;
-                        currentEntry.message = message;
-                        currentEntry.threadName = threadName;
-                        currentStackTrace = new StringBuilder();
-
-                    } else if (currentEntry != null && (line.startsWith("\t") || line.startsWith("    ") || line.contains("at "))) {
-                        if (currentStackTrace.length() > 0) {
-                            currentStackTrace.append("\n");
-                        }
-                        currentStackTrace.append(line);
-                    }
-                }
-
-                if (currentEntry != null) {
-                    if (currentStackTrace.length() > 0) {
-                        currentEntry.stackTrace = currentStackTrace.toString();
-                    }
-                    rawLogs.add(currentEntry);
-                }
-            }
-
-            process.waitFor();
-
-        } catch (Exception e) {
-            log.error("에러 로그 조회 실패: {}", e.getMessage(), e);
+        int requestedHours = hours == null ? 24 : hours;
+        if (page < 0 || size < 1 || size > 100 || requestedHours < 1 || requestedHours > 168
+                || (level != null && !level.isBlank() && !Set.of("ERROR", "WARN", "INFO", "DEBUG", "TRACE").contains(level))) {
+            throw new GeneralException(ErrorStatus._BAD_REQUEST);
         }
+        List<RawLogEntry> rawLogs = readLogEntries(requestedHours);
 
         // 1. 이벤트 그룹화: 같은 스레드에서 1초 이내 발생한 로그를 묶음
         List<LogEventGroup> eventGroups = groupLogsByEvent(rawLogs);
@@ -395,7 +332,7 @@ public class AdminServiceImpl implements AdminService {
 
         long totalElements = deduplicatedLogs.size();
         int totalPages = (int) Math.ceil((double) totalElements / size);
-        int fromIndex = page * size;
+        int fromIndex = (int) Math.min((long) page * size, deduplicatedLogs.size());
         int toIndex = Math.min(fromIndex + size, deduplicatedLogs.size());
 
         List<AdminResponseDTO.ErrorLogItem> pagedLogs = fromIndex < deduplicatedLogs.size()
@@ -409,6 +346,55 @@ public class AdminServiceImpl implements AdminService {
                 .totalElements(totalElements)
                 .totalPages(totalPages)
                 .build();
+    }
+
+    private List<RawLogEntry> readLogEntries(int hours) {
+        List<RawLogEntry> entries = new ArrayList<>();
+        Instant cutoff = Instant.now().minusSeconds(hours * 3600L);
+        class Collector implements java.util.function.Consumer<String> {
+            private RawLogEntry current;
+            private final StringBuilder stack = new StringBuilder();
+
+            void finish() {
+                if (current != null) {
+                    if (entries.size() >= 10_000) throw new GeneralException(ErrorStatus.ADMIN_LOG_RANGE_TOO_LARGE);
+                    if (!stack.isEmpty()) current.stackTrace = stack.toString();
+                    entries.add(current);
+                    current = null;
+                }
+                stack.setLength(0);
+            }
+
+            @Override
+            public void accept(String line) {
+                Matcher matcher = LOG_PATTERN.matcher(line);
+                if (matcher.matches()) {
+                    finish();
+                    OffsetDateTime timestamp;
+                    try {
+                        timestamp = OffsetDateTime.parse(matcher.group(1), LOG_DATE_FORMATTER);
+                    } catch (java.time.format.DateTimeParseException exception) {
+                        return;
+                    }
+                    if (timestamp.toInstant().isBefore(cutoff)) return;
+                    current = new RawLogEntry();
+                    current.timestamp = timestamp.atZoneSameInstant(ZoneId.of("Asia/Seoul")).toLocalDateTime();
+                    current.level = matcher.group(2);
+                    current.threadName = matcher.group(3).trim();
+                    current.logger = matcher.group(4).trim();
+                    current.message = matcher.group(5);
+                } else if (current != null && (line.startsWith("\t") || line.startsWith("    ")
+                        || line.startsWith("Caused by:") || line.startsWith("Suppressed:") || line.contains("at ")
+                        || line.matches("(?:[\\w$]+\\.)+[\\w$]*(?:Exception|Error)(?::.*)?"))) {
+                    if (!stack.isEmpty()) stack.append("\n");
+                    stack.append(line);
+                }
+            }
+        }
+        Collector collector = new Collector();
+        serverLogService.readLines(hours, collector);
+        collector.finish();
+        return entries;
     }
 
     /**

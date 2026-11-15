@@ -92,6 +92,46 @@ public class AdminPreview {
     }
     @RestController static class Health {
         private volatile boolean visitsUnavailable;
+        private final java.nio.file.Path logFile = createLogFile();
+        private final com.myyak.service.adminService.AdminService logService =
+                new com.myyak.service.adminService.AdminServiceImpl(null, null, null, null, null,
+                        null, null, null, null, null,
+                        new com.myyak.service.serverLogService.ServerLogServiceImpl(logFile.toString()));
+
+        private static java.nio.file.Path createLogFile() {
+            try {
+                var file = java.nio.file.Files.createTempDirectory("myyak-logs-preview-").resolve("application.log");
+                writeLog(file);
+                return file;
+            } catch (java.io.IOException exception) {
+                throw new IllegalStateException("Cannot create synthetic log fixture", exception);
+            }
+        }
+
+        private static void writeLog(java.nio.file.Path file) throws java.io.IOException {
+            String timestamp = java.time.OffsetDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"));
+            java.nio.file.Files.writeString(file, timestamp
+                    + " ERROR 1 --- [myyak-server] [fixture] c.m.Synthetic : 화면 검증용 합성 오류\n"
+                    + "java.lang.IllegalStateException: synthetic\n\tat com.myyak.Synthetic.run(Synthetic.java:1)\n");
+        }
+
+        @PostMapping("/api/admin/fixture/logs-failure") ApiResponse<?> updateLogsFailure(@RequestParam boolean enabled) throws java.io.IOException {
+            if (enabled) java.nio.file.Files.deleteIfExists(logFile); else writeLog(logFile);
+            return ApiResponse.onSuccess(Map.of("enabled", enabled));
+        }
+
+        @GetMapping("/api/admin/logs") org.springframework.http.ResponseEntity<?> getLogs(
+                @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+                @RequestParam(required = false) String level, @RequestParam(required = false) Integer hours) {
+            try {
+                return org.springframework.http.ResponseEntity.ok(ApiResponse.onSuccess(logService.getErrorLogs(page, size, level, hours)));
+            } catch (GeneralException exception) {
+                var reason = exception.getErrorReasonHttpStatus();
+                return org.springframework.http.ResponseEntity.status(reason.getHttpStatus())
+                        .body(ApiResponse.onFailure(reason.getCode(), reason.getMessage(), null));
+            }
+        }
+
         @PostMapping("/api/admin/fixture/visits-failure") ApiResponse<?> updateVisitsFailure(@RequestParam boolean enabled) {
             visitsUnavailable = enabled;
             return ApiResponse.onSuccess(Map.of("enabled", enabled));
@@ -107,7 +147,12 @@ public class AdminPreview {
                     "todayVisitors", 12, "yesterdayVisitors", 7, "daily", daily)));
         }
         @GetMapping("/api/admin/health") ApiResponse<?> getHealth() {
-            return ApiResponse.onSuccess(Map.of("serverUp", true, "databaseUp", true, "responseTimeMs", 28));
+            return ApiResponse.onSuccess(Map.of("serverUp", true, "databaseUp", true, "storageUp", true,
+                    "responseTimeMs", 28, "heapUsedMb", 128, "heapMaxMb", 512, "cpuUsage", 3));
+        }
+        @GetMapping("/api/admin/settings/ai-model") ApiResponse<?> getAiModel() {
+            return ApiResponse.onSuccess(Map.of("analysisModel", "fixture", "fallbackModel", "fixture",
+                    "fallbackEnabled", false, "configAnalysisModel", "fixture", "availableModels", List.of("fixture")));
         }
         @GetMapping("/api/admin/test-login/status") ApiResponse<?> getTestLogin() { return ApiResponse.onSuccess(Map.of("enabled", false)); }
         @PostMapping("/api/admin/test-login/toggle") ApiResponse<?> updateTestLogin() { return ApiResponse.onSuccess(Map.of("enabled", true)); }

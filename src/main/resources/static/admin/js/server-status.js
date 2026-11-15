@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
         logsLoading.style.display = 'flex';
         logsTable.style.display = 'none';
         logsEmpty.style.display = 'none';
+        logsEmpty.querySelector('span').textContent = '조회된 로그가 없습니다.';
         logsPagination.style.display = 'none';
 
         try {
@@ -169,7 +170,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('로그 로드 실패:', error);
             logsLoading.style.display = 'none';
             logsEmpty.style.display = 'flex';
-            logsEmpty.querySelector('span').textContent = '로그를 불러오는데 실패했습니다.';
+            logsEmpty.querySelector('span').textContent = error.message || '로그를 불러오는데 실패했습니다.';
         }
     }
 
